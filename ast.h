@@ -26,6 +26,8 @@ typedef enum {
 	AST_EXPR_OP_NE,
 
 	// bitwise
+	AST_EXPR_OP_SHL,
+	AST_EXPR_OP_SHR,
 	AST_EXPR_OP_BXOR,
 	AST_EXPR_OP_BAND,
 	AST_EXPR_OP_BOR,
@@ -67,5 +69,7 @@ typedef struct ast_expr_t {
 ast_expr_t create_ast_expr_const(unsigned long value);
 ast_expr_t create_ast_expr_variable(const char* id);
 ast_expr_t create_ast_expr_op(ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
+
+void print_ast_expr(ast_expr_t* exp);
 
 #endif

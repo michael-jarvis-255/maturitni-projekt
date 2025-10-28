@@ -23,10 +23,26 @@ ID_CHAR [0-9a-zA-Z]
 <comment>\*\/	BEGIN(INITIAL);
 <comment>\*
 
+if			return TK_IF;
+else		return TK_ELSE;
+for			return TK_FOR;
+while		return TK_WHILE;
+break		return TK_BREAK;
+continue	return TK_CONTINUE;
+
+\<\=	return TK_LE;
+\>\=	return TK_GE;
+\=\=	return TK_EQ;
+\!\=	return TK_NE;
+\&\&	return TK_LAND;
+\|\|	return TK_LOR;
+\>\>	return TK_SHR;
+\<\<	return TK_SHL;
+
 {DIGIT}+				yylval.expr = create_ast_expr_const(atoll(yytext)); return TK_INT;
-{ID_START}{ID_CHAR}+	yylval.str = yytext; return TK_IDENTIFIER;
+{ID_START}{ID_CHAR}*	yylval.str = yytext; return TK_IDENTIFIER;
 \"[^"]*\"				yylval.str = yytext; return TK_STRING;
 
-" \t\r\n"
+[[:space:]]
 <<EOF>>		return YYEOF;
 .			return yytext[0];
