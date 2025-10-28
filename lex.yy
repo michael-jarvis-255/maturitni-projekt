@@ -4,6 +4,7 @@
 	typedef union YYSTYPE {
 		char* str;
 		ast_expr_t expr;
+		ast_stmt_t stmt;
 	} YYSTYPE;
 	#include "parse.tab.h"
 %}
@@ -40,8 +41,16 @@ continue	return TK_CONTINUE;
 \<\<	return TK_SHL;
 
 {DIGIT}+				yylval.expr = create_ast_expr_const(atoll(yytext)); return TK_INT;
-{ID_START}{ID_CHAR}*	yylval.str = yytext; return TK_IDENTIFIER;
-\"[^"]*\"				yylval.str = yytext; return TK_STRING;
+{ID_START}{ID_CHAR}*	{ 
+							yylval.str = malloc(yyleng);
+							strncpy(yylval.str, yytext, yyleng);
+							return TK_IDENTIFIER;
+						}
+\"[^"]*\"				{ 
+							yylval.str = malloc(yyleng);
+							strncpy(yylval.str, yytext, yyleng);
+							return TK_STRING;
+						}
 
 [[:space:]]
 <<EOF>>		return YYEOF;

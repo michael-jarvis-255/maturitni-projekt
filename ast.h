@@ -65,11 +65,61 @@ typedef struct ast_expr_t {
 	};
 } ast_expr_t;
 
+typedef enum {
+	AST_STMT_IF,
+	AST_STMT_IF_ELSE,
+	AST_STMT_EXPR,
+	AST_STMT_BLOCK,
+	AST_STMT_DECLARE,
+	AST_STMT_ASSIGN,
+} ast_stmt_enum_t;
+
+typedef struct ast_stmt_t {
+	ast_stmt_enum_t type;
+	union {
+		struct {
+			struct ast_stmt_t* iftrue;
+			ast_expr_t cond;
+		} if_;
+		struct {
+			struct ast_stmt_t* iftrue;
+			struct ast_stmt_t* iffalse;
+			ast_expr_t cond;
+		} if_else;
+		ast_expr_t expr;
+		struct {
+			unsigned int cap;
+			unsigned int len;
+			struct ast_stmt_t* stmtlist;
+		} block;
+		struct {
+			const char* type;
+			const char* name;
+			ast_expr_t* val;
+		} declare;
+		struct {
+			const char* name;
+			ast_expr_t val;
+		} assign;
+	};
+} ast_stmt_t;
+
 
 ast_expr_t create_ast_expr_const(unsigned long value);
 ast_expr_t create_ast_expr_variable(const char* id);
 ast_expr_t create_ast_expr_op(ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
 
-void print_ast_expr(ast_expr_t* exp);
+void print_ast_expr(const ast_expr_t* exp);
+
+ast_stmt_t create_ast_stmt_block();
+ast_stmt_t create_ast_stmt_expr(ast_expr_t expr);
+ast_stmt_t create_ast_stmt_assign(const char* name, ast_expr_t value);
+ast_stmt_t create_ast_stmt_if(ast_expr_t cond, ast_stmt_t iftrue);
+ast_stmt_t create_ast_stmt_if_else(ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
+ast_stmt_t create_ast_stmt_declare(const char* type, const char* name);
+ast_stmt_t create_ast_stmt_declare_assign(const char* type, const char* name, ast_expr_t value);
+
+void ast_stmt_block_append(ast_stmt_t* block, ast_stmt_t stmt);
+void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
 #endif

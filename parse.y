@@ -9,6 +9,7 @@
 	typedef union YYSTYPE {
 		char* str;
 		ast_expr_t expr;
+		ast_stmt_t stmt;
 	} YYSTYPE;
 %}
 
@@ -35,7 +36,7 @@
 
 %%
 
-main: exp			{ print_ast_expr(&$1); }
+main: stmt			{ print_ast_stmt(&$1, 0); }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
@@ -89,6 +90,45 @@ exp9:
 |	exp8
 
 exp: exp9
+
+
+%nterm <stmt> block block_head stmt non_if_stmt single_assign_stmt single_declare_stmt if_stmt non_if_if_else_stmt if_else_stmt;
+block:
+	block_head '}'
+
+block_head:
+	'{'					{ $$ = create_ast_stmt_block(); }
+|	block_head stmt		{ $$ = $1; ast_stmt_block_append(&$$, $stmt); }
+|	block_head ';'
+
+stmt:
+	non_if_stmt
+|	if_stmt
+|	if_else_stmt
+
+non_if_stmt:
+	single_assign_stmt ';'
+|	single_declare_stmt ';'
+|	non_if_if_else_stmt
+|	exp ';'				{ $$ = create_ast_stmt_expr($exp); }
+|	block
+
+single_assign_stmt:
+	TK_IDENTIFIER[name] '=' exp[val]	{ $$ = create_ast_stmt_assign($name, $val); }
+
+single_declare_stmt:
+	TK_IDENTIFIER[type] TK_IDENTIFIER[name]					{ $$ = create_ast_stmt_declare($type, $name); }
+|	TK_IDENTIFIER[type] TK_IDENTIFIER[name] '=' exp[val]	{ $$ = create_ast_stmt_declare_assign($type, $name, $val); }
+
+// if-else constructs always bind as tightly as possible, so 'if (x) if (y) else z;' will parse as 'if (x) {if (y) else z;}'
+if_stmt:
+	TK_IF '(' exp[cond] ')' stmt[then]									{ $$ = create_ast_stmt_if($cond, $then);}
+non_if_if_else_stmt:
+	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE non_if_stmt[else]	{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
+if_else_stmt:
+	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE if_stmt[else]		{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
+|	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE if_else_stmt[else]{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
+
 
 %%
 
