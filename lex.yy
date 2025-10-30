@@ -30,6 +30,7 @@ for			return TK_FOR;
 while		return TK_WHILE;
 break		return TK_BREAK;
 continue	return TK_CONTINUE;
+return		return TK_RETURN;
 
 \<\=	return TK_LE;
 \>\=	return TK_GE;

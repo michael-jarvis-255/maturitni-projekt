@@ -72,6 +72,11 @@ typedef enum {
 	AST_STMT_BLOCK,
 	AST_STMT_DECLARE,
 	AST_STMT_ASSIGN,
+	AST_STMT_BREAK,
+	AST_STMT_CONTINUE,
+	AST_STMT_RETURN,
+	AST_STMT_FOR,
+	AST_STMT_WHILE,
 } ast_stmt_enum_t;
 
 typedef struct ast_stmt_t {
@@ -101,6 +106,19 @@ typedef struct ast_stmt_t {
 			const char* name;
 			ast_expr_t val;
 		} assign;
+		struct {
+			ast_expr_t val;
+		} return_;
+		struct {
+			ast_expr_t cond;
+			struct ast_stmt_t* body;
+		} while_;
+		struct {
+			ast_expr_t cond;
+			struct ast_stmt_t* init;
+			struct ast_stmt_t* step;
+			struct ast_stmt_t* body;
+		} for_;
 	};
 } ast_stmt_t;
 
@@ -118,6 +136,9 @@ ast_stmt_t create_ast_stmt_if(ast_expr_t cond, ast_stmt_t iftrue);
 ast_stmt_t create_ast_stmt_if_else(ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
 ast_stmt_t create_ast_stmt_declare(const char* type, const char* name);
 ast_stmt_t create_ast_stmt_declare_assign(const char* type, const char* name, ast_expr_t value);
+ast_stmt_t create_ast_stmt_return(ast_expr_t expr);
+ast_stmt_t create_ast_stmt_while(ast_expr_t cond, ast_stmt_t body);
+ast_stmt_t create_ast_stmt_for(ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
 
 void ast_stmt_block_append(ast_stmt_t* block, ast_stmt_t stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);

@@ -22,6 +22,7 @@
 %token TK_WHILE
 %token TK_BREAK
 %token TK_CONTINUE
+%token TK_RETURN
 
 %token TK_LE
 %token TK_GE
@@ -92,43 +93,92 @@ exp9:
 exp: exp9
 
 
-%nterm <stmt> block block_head stmt non_if_stmt single_assign_stmt single_declare_stmt if_stmt non_if_if_else_stmt if_else_stmt;
+%nterm <stmt> block;
 block:
 	block_head '}'
 
+%nterm <stmt> block_head;
 block_head:
 	'{'					{ $$ = create_ast_stmt_block(); }
 |	block_head stmt		{ $$ = $1; ast_stmt_block_append(&$$, $stmt); }
 |	block_head ';'
 
+%nterm <stmt> stmt;
 stmt:
 	non_if_stmt
-|	if_stmt
-|	if_else_stmt
+|	if_ending_stmt
 
+%nterm <stmt> if_ending_stmt;
+if_ending_stmt:
+	if_stmt
+|	if_ending_if_else_stmt
+|	if_ending_while_stmt
+|	if_ending_for_loop
+
+%nterm <stmt> non_if_stmt;
 non_if_stmt:
-	single_assign_stmt ';'
-|	single_declare_stmt ';'
+	basic_stmt ';'
+|	non_if_while_stmt
 |	non_if_if_else_stmt
-|	exp ';'				{ $$ = create_ast_stmt_expr($exp); }
+|	non_if_for_loop
 |	block
 
+%nterm <stmt> basic_stmt;
+basic_stmt:
+	single_assign_stmt
+|	single_declare_stmt
+|	return_stmt
+|	break_stmt
+|	continue_stmt
+|	exp				{ $$ = create_ast_stmt_expr($exp); }
+
+%nterm <stmt> return_stmt;
+return_stmt:
+	TK_RETURN exp		{ $$ = create_ast_stmt_return($exp); }
+
+%nterm <stmt> break_stmt;
+break_stmt:
+	TK_BREAK			{ $$ = (ast_stmt_t){.type = AST_STMT_BREAK}; }
+
+%nterm <stmt> continue_stmt;
+continue_stmt:
+	TK_CONTINUE			{ $$ = (ast_stmt_t){.type = AST_STMT_CONTINUE}; }
+
+%nterm <stmt> single_assign_stmt;
 single_assign_stmt:
 	TK_IDENTIFIER[name] '=' exp[val]	{ $$ = create_ast_stmt_assign($name, $val); }
 
+%nterm <stmt> single_declare_stmt;
 single_declare_stmt:
 	TK_IDENTIFIER[type] TK_IDENTIFIER[name]					{ $$ = create_ast_stmt_declare($type, $name); }
 |	TK_IDENTIFIER[type] TK_IDENTIFIER[name] '=' exp[val]	{ $$ = create_ast_stmt_declare_assign($type, $name, $val); }
 
 // if-else constructs always bind as tightly as possible, so 'if (x) if (y) else z;' will parse as 'if (x) {if (y) else z;}'
+%nterm <stmt> if_stmt;
 if_stmt:
 	TK_IF '(' exp[cond] ')' stmt[then]									{ $$ = create_ast_stmt_if($cond, $then);}
+%nterm <stmt> non_if_if_else_stmt;
 non_if_if_else_stmt:
 	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE non_if_stmt[else]	{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
-if_else_stmt:
-	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE if_stmt[else]		{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
-|	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE if_else_stmt[else]{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
+%nterm <stmt> if_ending_if_else_stmt;
+if_ending_if_else_stmt:
+	TK_IF '(' exp[cond] ')' non_if_stmt[then] TK_ELSE if_ending_stmt[else]		{ $$ = create_ast_stmt_if_else($cond, $then, $else); }
 
+%nterm <stmt> non_if_while_stmt;
+non_if_while_stmt:
+	TK_WHILE '(' exp[cond] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_while($cond, $body); }
+
+%nterm <stmt> if_ending_while_stmt;
+if_ending_while_stmt:
+	TK_WHILE '(' exp[cond] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_while($cond, $body); }
+
+%nterm <stmt> non_if_for_loop;
+non_if_for_loop:
+	TK_FOR '(' basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_for($init, $cond, $step, $body); }
+
+%nterm <stmt> if_ending_for_loop;
+if_ending_for_loop:
+	TK_FOR '(' basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for($init, $cond, $step, $body); }
 
 %%
 

@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
+
 bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
 	switch (op){
 		case AST_EXPR_OP_ADD:
@@ -73,18 +75,12 @@ ast_expr_t create_ast_expr_variable(const char* id){
 	};
 }
 ast_expr_t create_ast_expr_op(ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right){
-	ast_expr_t* l = 0;
-	ast_expr_t* r = 0;
-
-	l = malloc(sizeof(ast_expr_t));
-	*l = left;
-	
-	if (!ast_expr_op_is_unary(op)){
-		r = malloc(sizeof(ast_expr_t));
-		*r = right;
-	}
-	
-	return (ast_expr_t){.type = AST_EXPR_OP, .op.op = op, .op.left = l, .op.right = r};
+	return (ast_expr_t){
+		.type = AST_EXPR_OP,
+		.op.op = op,
+		.op.left = convert_to_ptr(left),
+		.op.right = ast_expr_op_is_unary(op) ? 0 : convert_to_ptr(right)
+	};
 }
 
 
@@ -141,24 +137,18 @@ ast_stmt_t create_ast_stmt_assign(const char* name, ast_expr_t value){
 	};
 }
 ast_stmt_t create_ast_stmt_if(ast_expr_t cond, ast_stmt_t iftrue){
-	ast_stmt_t* iftrue_ptr = malloc(sizeof(ast_stmt_t));
-	*iftrue_ptr = iftrue;
 	return (ast_stmt_t){
 		.type = AST_STMT_IF,
 		.if_.cond = cond,
-		.if_.iftrue = iftrue_ptr
+		.if_.iftrue = convert_to_ptr(iftrue)
 	};
 }
 ast_stmt_t create_ast_stmt_if_else(ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse){
-	ast_stmt_t* iftrue_ptr = malloc(sizeof(ast_stmt_t));
-	*iftrue_ptr = iftrue;
-	ast_stmt_t* iffalse_ptr = malloc(sizeof(ast_stmt_t));
-	*iffalse_ptr = iffalse;
 	return (ast_stmt_t){
 		.type = AST_STMT_IF_ELSE,
 		.if_else.cond = cond,
-		.if_else.iftrue = iftrue_ptr,
-		.if_else.iffalse = iffalse_ptr
+		.if_else.iftrue = convert_to_ptr(iftrue),
+		.if_else.iffalse = convert_to_ptr(iffalse)
 	};
 }
 ast_stmt_t create_ast_stmt_declare(const char* type, const char* name){
@@ -170,13 +160,11 @@ ast_stmt_t create_ast_stmt_declare(const char* type, const char* name){
 	};
 }
 ast_stmt_t create_ast_stmt_declare_assign(const char* type, const char* name, ast_expr_t value){
-	ast_expr_t* valptr = malloc(sizeof(ast_expr_t));
-	*valptr = value;
 	return (ast_stmt_t){
 		.type = AST_STMT_DECLARE,
 		.declare.type = type,
 		.declare.name = name,
-		.declare.val = valptr
+		.declare.val = convert_to_ptr(value)
 	};
 }
 
@@ -193,6 +181,29 @@ void ast_stmt_block_append(ast_stmt_t* block, ast_stmt_t stmt){
 	block->block.len++;
 }
 
+ast_stmt_t create_ast_stmt_return(ast_expr_t expr){
+	return (ast_stmt_t){
+		.type = AST_STMT_RETURN,
+		.return_.val = expr
+	};
+}
+
+ast_stmt_t create_ast_stmt_while(ast_expr_t cond, ast_stmt_t body){
+	return (ast_stmt_t){
+		.type = AST_STMT_WHILE,
+		.while_.cond = cond,
+		.while_.body = convert_to_ptr(body)
+	};
+}
+ast_stmt_t create_ast_stmt_for(ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body){
+	return (ast_stmt_t){
+		.type = AST_STMT_FOR,
+		.for_.cond = cond,
+		.for_.init = convert_to_ptr(init),
+		.for_.step = convert_to_ptr(step),
+		.for_.body = convert_to_ptr(body)
+	};
+}
 
 void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	switch (stmt->type){
@@ -242,6 +253,43 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			printf("%s = ", stmt->assign.name);
 			print_ast_expr(&stmt->assign.val);
 			printf(";\n");
+			break;
+		case AST_STMT_BREAK:
+			printf("%*s", depth*2, "");
+			printf("break;\n");
+			break;
+		case AST_STMT_CONTINUE:
+			printf("%*s", depth*2, "");
+			printf("continue;\n");
+			break;
+		case AST_STMT_RETURN:
+			printf("%*s", depth*2, "");
+			printf("return ");
+			print_ast_expr(&stmt->return_.val);
+			printf(";\n");
+			break;
+		case AST_STMT_WHILE:
+			printf("%*s", depth*2, "");
+			printf("while ");
+			print_ast_expr(&stmt->while_.cond);
+			printf(" {\n");
+			print_ast_stmt(stmt->while_.body, depth+1);
+			printf("%*s", depth*2, "");
+			printf("}\n");
+			break;
+		case AST_STMT_FOR:
+			printf("%*s", depth*2, "");
+			printf("for (\n");
+			print_ast_stmt(stmt->for_.init, depth+1);
+			printf("%*s", depth*2+2, "");
+			print_ast_expr(&stmt->while_.cond);
+			printf(";\n");
+			print_ast_stmt(stmt->for_.step, depth+1);
+			printf("%*s", depth*2, "");
+			printf(") {\n");
+			print_ast_stmt(stmt->for_.body, depth+1);
+			printf("%*s", depth*2, "");
+			printf("}\n");
 			break;
 	}
 }
