@@ -46,7 +46,7 @@ main:
 %nterm <decllist> declaration_list;
 declaration_list:
 	%empty	{ $$ = create_ast_decl_list(); }
-|	declaration_list declaration	{ $$ = $1; ast_decl_list_append(&$$, $declaration); }
+|	declaration_list declaration	{ $$ = $1; ast_decl_list_append(&$$, $declaration); printf("%i.%i - %i.%i\n", @2.first_line, @2.first_column, @2.last_line, @2.last_column); }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
