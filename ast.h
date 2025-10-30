@@ -1,5 +1,6 @@
 #ifndef _AST_H_
 #define _AST_H_
+#include "list.h"
 
 typedef enum {
 	AST_EXPR_CONST,
@@ -122,6 +123,38 @@ typedef struct ast_stmt_t {
 	};
 } ast_stmt_t;
 
+typedef struct ast_argdef_t {
+	const char* type;
+	const char* name;
+} ast_argdef_t;
+create_list_type_header(ast_argdef);
+
+typedef enum {
+	AST_DECL_FUNCTION,
+	AST_DECL_GLOBAL,
+	AST_DECL_TYPE,
+} ast_decl_enum_t;
+
+typedef struct ast_decl_t {
+	ast_decl_enum_t type;
+	union {
+		struct {
+			const char* returntype;
+			const char* name;
+			ast_argdef_list_t args;
+			ast_stmt_t* body;
+		} function;
+		struct {
+			const char* type;
+			const char* name;
+			ast_expr_t* init;
+		} global;
+		struct {
+			const char* name;
+		} typedecl;
+	};
+} ast_decl_t;
+create_list_type_header(ast_decl)
 
 ast_expr_t create_ast_expr_const(unsigned long value);
 ast_expr_t create_ast_expr_variable(const char* id);
@@ -142,5 +175,12 @@ ast_stmt_t create_ast_stmt_for(ast_stmt_t init, ast_expr_t cond, ast_stmt_t step
 
 void ast_stmt_block_append(ast_stmt_t* block, ast_stmt_t stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
+
+ast_decl_t create_ast_decl_function(const char* returntype, const char* name, ast_argdef_list_t args, ast_stmt_t body);
+ast_decl_t create_ast_decl_global(const char* type, const char* name);
+ast_decl_t create_ast_decl_global_assign(const char* type, const char* name, ast_expr_t value);
+
+void print_ast_decl_list(const ast_decl_list_t* decllist);
+void print_ast_decl(const ast_decl_t* decl);
 
 #endif

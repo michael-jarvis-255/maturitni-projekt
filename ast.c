@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+create_list_type_impl(ast_argdef)
+create_list_type_impl(ast_decl)
+
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
 
 bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
@@ -294,3 +297,59 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
+ast_decl_t create_ast_decl_function(const char* returntype, const char* name, ast_argdef_list_t args, ast_stmt_t body){
+	return (ast_decl_t){
+		.type = AST_DECL_FUNCTION,
+		.function.returntype = returntype,
+		.function.name = name,
+		.function.args = args,
+		.function.body = convert_to_ptr(body)
+	};
+}
+ast_decl_t create_ast_decl_global(const char* type, const char* name){
+	return (ast_decl_t){
+		.type = AST_DECL_GLOBAL,
+		.global.type = type,
+		.global.name = name,
+		.global.init = 0
+	};
+}
+ast_decl_t create_ast_decl_global_assign(const char* type, const char* name, ast_expr_t value){
+	return (ast_decl_t){
+		.type = AST_DECL_GLOBAL,
+		.global.type = type,
+		.global.name = name,
+		.global.init = convert_to_ptr(value)
+	};
+}
+
+void print_ast_decl_list(const ast_decl_list_t* decllist){
+	for (unsigned int i=0; i<decllist->len; i++){
+		print_ast_decl(&decllist->data[i]);
+	}
+}
+void print_ast_decl(const ast_decl_t* decl){
+	switch (decl->type){
+		case AST_DECL_FUNCTION:
+			printf("\n%s %s (", decl->function.returntype, decl->function.name);
+			for (unsigned int i=0; i < decl->function.args.len; i++){
+				if (i > 0) printf(", ");
+				printf("%s %s", decl->function.args.data[i].type, decl->function.args.data[i].name);
+			}
+			printf(") {\n");
+			print_ast_stmt(decl->function.body, 1);
+			printf("}\n");
+			break;
+		case AST_DECL_GLOBAL:
+			printf("%s %s", decl->global.type, decl->global.name);
+			if (decl->global.init){
+				printf(" = ");
+				print_ast_expr(decl->global.init);
+			}
+			printf(";\n");
+			break;
+		case AST_DECL_TYPE:
+			printf("<<unimplemented>>\n");
+			break;
+	}
+}

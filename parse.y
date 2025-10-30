@@ -10,34 +10,43 @@
 		char* str;
 		ast_expr_t expr;
 		ast_stmt_t stmt;
+		ast_decl_t decl;
+		ast_argdef_list_t argdeflist;
+		ast_decl_list_t decllist;
 	} YYSTYPE;
 %}
 
 %token <expr> TK_INT
 %token <str> TK_STRING
 %token <str> TK_IDENTIFIER
-%token TK_IF
-%token TK_ELSE
-%token TK_FOR
-%token TK_WHILE
-%token TK_BREAK
-%token TK_CONTINUE
-%token TK_RETURN
+%token TK_IF "if"
+%token TK_ELSE "else"
+%token TK_FOR "for"
+%token TK_WHILE "while"
+%token TK_BREAK "break"
+%token TK_CONTINUE "continue"
+%token TK_RETURN "return"
 
-%token TK_LE
-%token TK_GE
-%token TK_EQ
-%token TK_NE
-%token TK_LAND
-%token TK_LOR
-%token TK_SHR
-%token TK_SHL
+%token TK_LE "<="
+%token TK_GE ">="
+%token TK_EQ "=="
+%token TK_NE "!="
+%token TK_LAND "&&"
+%token TK_LOR "||"
+%token TK_SHR ">>"
+%token TK_SHL "<<"
 
 %define parse.error detailed
 
 %%
 
-main: stmt			{ print_ast_stmt(&$1, 0); }
+main:
+	declaration_list YYEOF	{ print_ast_decl_list(&$1); }
+
+%nterm <decllist> declaration_list;
+declaration_list:
+	%empty	{ $$ = create_ast_decl_list(); }
+|	declaration_list declaration	{ $$ = $1; ast_decl_list_append(&$$, $declaration); }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
@@ -179,6 +188,29 @@ non_if_for_loop:
 %nterm <stmt> if_ending_for_loop;
 if_ending_for_loop:
 	TK_FOR '(' basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for($init, $cond, $step, $body); }
+
+
+%nterm <decl> declaration;
+declaration:
+	function_declaration
+|	single_global_declaration
+
+%nterm <decl> function_declaration;
+function_declaration:
+	TK_IDENTIFIER[type] TK_IDENTIFIER[name] '(' function_args_definition[args] ')' block[body]	{ $$ = create_ast_decl_function($type, $name, $args, $body); }
+
+%nterm <argdeflist> function_args_definition;
+function_args_definition:
+	%empty		{ $$ = create_ast_argdef_list(); }
+|	TK_IDENTIFIER[type] TK_IDENTIFIER[name]	{ $$ = create_ast_argdef_list(); ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
+|	function_args_definition[args] ',' TK_IDENTIFIER[type] TK_IDENTIFIER[name]	{ $$ = $1; ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
+
+%nterm <decl> single_global_declaration;
+single_global_declaration:
+	TK_IDENTIFIER[type] TK_IDENTIFIER[name]	';'				{ $$ = create_ast_decl_global($type, $name); }
+|	TK_IDENTIFIER[type] TK_IDENTIFIER[name] '=' exp[val] ';'{ $$ = create_ast_decl_global_assign($type, $name, $val); }
+
+
 
 %%
 
