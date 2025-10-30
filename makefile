@@ -1,12 +1,12 @@
 MAKEFLAGS += -rR
 
-a.out: build/lex.yy.c build/parse.tab.c ast.c
+a.out: build/lex.yy.c build/parse.tab.c ast.c ast.h
 	gcc $^ -o $@ -I .
 
-build/parse.tab.c build/parse.tab.h: parse.y ast.h
+build/parse.tab.c build/parse.tab.h: parse.y ast.h yystype.h
 	@mkdir build -p
 	bison -Wcounterexamples --header=build/parse.tab.h --output=build/parse.tab.c parse.y
 
-build/lex.yy.c: lex.yy build/parse.tab.h
+build/lex.yy.c: lex.yy build/parse.tab.h yystype.h
 	flex -o $@ lex.yy
 

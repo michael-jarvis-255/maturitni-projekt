@@ -1,11 +1,6 @@
 %{
 	#include "ast.h"
-	//extern YYSTYPE yylval;
-	typedef union YYSTYPE {
-		char* str;
-		ast_expr_t expr;
-		ast_stmt_t stmt;
-	} YYSTYPE;
+	#include "yystype.h"
 	#include "parse.tab.h"
 
 	static void update_yylloc(unsigned int yyleng){
