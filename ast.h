@@ -80,6 +80,10 @@ typedef enum {
 	AST_STMT_WHILE,
 } ast_stmt_enum_t;
 
+struct ast_stmt_t;
+typedef struct ast_stmt_t ast_stmt_t;
+create_list_type_header(ast_stmt)
+
 typedef struct ast_stmt_t {
 	ast_stmt_enum_t type;
 	union {
@@ -94,9 +98,7 @@ typedef struct ast_stmt_t {
 		} if_else;
 		ast_expr_t expr;
 		struct {
-			unsigned int cap;
-			unsigned int len;
-			struct ast_stmt_t* stmtlist;
+			ast_stmt_list_t stmtlist;
 		} block;
 		struct {
 			const char* type;
@@ -173,7 +175,6 @@ ast_stmt_t create_ast_stmt_return(ast_expr_t expr);
 ast_stmt_t create_ast_stmt_while(ast_expr_t cond, ast_stmt_t body);
 ast_stmt_t create_ast_stmt_for(ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
 
-void ast_stmt_block_append(ast_stmt_t* block, ast_stmt_t stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
 ast_decl_t create_ast_decl_function(const char* returntype, const char* name, ast_argdef_list_t args, ast_stmt_t body);

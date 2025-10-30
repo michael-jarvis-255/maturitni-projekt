@@ -6,6 +6,7 @@
 
 create_list_type_impl(ast_argdef)
 create_list_type_impl(ast_decl)
+create_list_type_impl(ast_stmt)
 
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
 
@@ -121,9 +122,7 @@ void print_ast_expr(const ast_expr_t* exp){
 ast_stmt_t create_ast_stmt_block(){
 	return (ast_stmt_t){
 		.type = AST_STMT_BLOCK,
-		.block.cap = 4,
-		.block.len = 0,
-		.block.stmtlist = malloc(sizeof(ast_stmt_t)*4)
+		.block.stmtlist = create_ast_stmt_list()
 	};
 }
 ast_stmt_t create_ast_stmt_expr(ast_expr_t expr){
@@ -169,19 +168,6 @@ ast_stmt_t create_ast_stmt_declare_assign(const char* type, const char* name, as
 		.declare.name = name,
 		.declare.val = convert_to_ptr(value)
 	};
-}
-
-void ast_stmt_block_append(ast_stmt_t* block, ast_stmt_t stmt){
-	if (block->type != AST_STMT_BLOCK) {
-		printf("INTERNAL ERROR!\n\tfile: %s\n\tline:%i", __FILE__, __LINE__);
-		exit(-1);
-	}
-	if (block->block.cap == block->block.len){
-		block->block.cap *= 2;
-		block->block.stmtlist = reallocarray(block->block.stmtlist, block->block.cap, sizeof(ast_stmt_t));
-	}
-	block->block.stmtlist[block->block.len] = stmt;
-	block->block.len++;
 }
 
 ast_stmt_t create_ast_stmt_return(ast_expr_t expr){
@@ -237,8 +223,8 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			printf(";");
 			break;
 		case AST_STMT_BLOCK:
-			for (unsigned int i=0; i < stmt->block.len; i++){
-				print_ast_stmt(&stmt->block.stmtlist[i], depth);
+			for (unsigned int i=0; i < stmt->block.stmtlist.len; i++){
+				print_ast_stmt(&stmt->block.stmtlist.data[i], depth);
 			}
 			break;
 		case AST_STMT_DECLARE:

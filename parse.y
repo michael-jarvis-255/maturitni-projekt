@@ -109,7 +109,7 @@ block:
 %nterm <stmt> block_head;
 block_head:
 	'{'					{ $$ = create_ast_stmt_block(); }
-|	block_head stmt		{ $$ = $1; ast_stmt_block_append(&$$, $stmt); }
+|	block_head stmt		{ $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); }
 |	block_head ';'
 
 %nterm <stmt> stmt;
