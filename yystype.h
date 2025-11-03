@@ -6,4 +6,6 @@ typedef union YYSTYPE {
 	ast_decl_t decl;
 	ast_argdef_list_t argdeflist;
 	ast_decl_list_t decllist;
+	ast_type_t type;
+	ast_identifier_t identifier;
 } YYSTYPE;

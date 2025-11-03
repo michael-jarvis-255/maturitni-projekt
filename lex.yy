@@ -1,6 +1,6 @@
 %{
-	#include "ast.h"
 	#include "yystype.h"
+	#include "ast.h"
 	#include "parse.tab.h"
 
 	static void update_yylloc(unsigned int yyleng){
@@ -53,7 +53,7 @@ return		update_yylloc(yyleng); return TK_RETURN;
 \>\>	update_yylloc(yyleng); return TK_SHR;
 \<\<	update_yylloc(yyleng); return TK_SHL;
 
-{DIGIT}+				update_yylloc(yyleng); yylval.expr = create_ast_expr_const(atoll(yytext)); return TK_INT;
+{DIGIT}+				update_yylloc(yyleng); yylval.expr = create_ast_expr_const(yylloc, atoll(yytext)); return TK_INT;
 {ID_START}{ID_CHAR}*	{ 
 							update_yylloc(yyleng);
 							yylval.str = malloc(yyleng);

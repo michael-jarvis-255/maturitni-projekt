@@ -1,6 +1,18 @@
 #ifndef _AST_H_
 #define _AST_H_
+#include "yyltype.h"
 #include "list.h"
+
+typedef struct ast_identifier_t {
+	loc_t loc;
+	const char* name;
+} ast_identifier_t;
+
+typedef struct ast_type_t {
+	loc_t loc;
+	unsigned int ptr_count; // 0 if type is not a ptr, 1 if it is `name*`, 2 if `name**` and so on
+	const char* name;
+} ast_type_t;
 
 typedef enum {
 	AST_EXPR_CONST,
@@ -42,23 +54,19 @@ typedef enum {
 
 typedef struct ast_expr_t {
 	ast_expr_enum_t type;
+	loc_t loc;
 	union {
 		struct {
 			unsigned long value;
 		} constant;
-		
-		struct {
-			const char* id;
-		} variable;
-		
+		ast_identifier_t variable;
 		struct {
 			ast_expr_op_enum_t op;
 			struct ast_expr_t* left;
 			struct ast_expr_t* right;
 		} op;
-		
 		struct {
-			const char* id;
+			ast_identifier_t funcname;
 			unsigned int cap;
 			unsigned int len;
 			struct ast_expr_t* arglist;
@@ -86,6 +94,7 @@ create_list_type_header(ast_stmt)
 
 typedef struct ast_stmt_t {
 	ast_stmt_enum_t type;
+	loc_t loc;
 	union {
 		struct {
 			struct ast_stmt_t* iftrue;
@@ -101,12 +110,12 @@ typedef struct ast_stmt_t {
 			ast_stmt_list_t stmtlist;
 		} block;
 		struct {
-			const char* type;
-			const char* name;
+			ast_type_t type;
+			ast_identifier_t name;
 			ast_expr_t* val;
 		} declare;
 		struct {
-			const char* name;
+			ast_identifier_t name;
 			ast_expr_t val;
 		} assign;
 		struct {
@@ -126,8 +135,8 @@ typedef struct ast_stmt_t {
 } ast_stmt_t;
 
 typedef struct ast_argdef_t {
-	const char* type;
-	const char* name;
+	ast_type_t type;
+	ast_identifier_t name;
 } ast_argdef_t;
 create_list_type_header(ast_argdef);
 
@@ -139,47 +148,49 @@ typedef enum {
 
 typedef struct ast_decl_t {
 	ast_decl_enum_t type;
+	loc_t loc;
 	union {
 		struct {
-			const char* returntype;
-			const char* name;
+			ast_type_t returntype;
+			ast_identifier_t name;
 			ast_argdef_list_t args;
 			ast_stmt_t* body;
 		} function;
 		struct {
-			const char* type;
-			const char* name;
+			ast_type_t type;
+			ast_identifier_t name;
 			ast_expr_t* init;
 		} global;
 		struct {
-			const char* name;
+			ast_type_t type;
+			ast_identifier_t name;
 		} typedecl;
 	};
 } ast_decl_t;
 create_list_type_header(ast_decl)
 
-ast_expr_t create_ast_expr_const(unsigned long value);
-ast_expr_t create_ast_expr_variable(const char* id);
-ast_expr_t create_ast_expr_op(ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
+ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
+ast_expr_t create_ast_expr_variable(loc_t loc, ast_identifier_t id);
+ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
 
 void print_ast_expr(const ast_expr_t* exp);
 
-ast_stmt_t create_ast_stmt_block();
-ast_stmt_t create_ast_stmt_expr(ast_expr_t expr);
-ast_stmt_t create_ast_stmt_assign(const char* name, ast_expr_t value);
-ast_stmt_t create_ast_stmt_if(ast_expr_t cond, ast_stmt_t iftrue);
-ast_stmt_t create_ast_stmt_if_else(ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
-ast_stmt_t create_ast_stmt_declare(const char* type, const char* name);
-ast_stmt_t create_ast_stmt_declare_assign(const char* type, const char* name, ast_expr_t value);
-ast_stmt_t create_ast_stmt_return(ast_expr_t expr);
-ast_stmt_t create_ast_stmt_while(ast_expr_t cond, ast_stmt_t body);
-ast_stmt_t create_ast_stmt_for(ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
+ast_stmt_t create_ast_stmt_block(loc_t loc);
+ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr);
+ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_identifier_t name, ast_expr_t value);
+ast_stmt_t create_ast_stmt_if(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue);
+ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
+ast_stmt_t create_ast_stmt_declare(loc_t loc, ast_type_t type, ast_identifier_t name);
+ast_stmt_t create_ast_stmt_declare_assign(loc_t loc, ast_type_t type, ast_identifier_t name, ast_expr_t value);
+ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr);
+ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body);
+ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
 
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
-ast_decl_t create_ast_decl_function(const char* returntype, const char* name, ast_argdef_list_t args, ast_stmt_t body);
-ast_decl_t create_ast_decl_global(const char* type, const char* name);
-ast_decl_t create_ast_decl_global_assign(const char* type, const char* name, ast_expr_t value);
+ast_decl_t create_ast_decl_function(loc_t loc, ast_type_t returntype, ast_identifier_t name, ast_argdef_list_t args, ast_stmt_t body);
+ast_decl_t create_ast_decl_global(loc_t loc, ast_type_t type, ast_identifier_t name);
+ast_decl_t create_ast_decl_global_assign(loc_t loc, ast_type_t type, ast_identifier_t name, ast_expr_t value);
 
 void print_ast_decl_list(const ast_decl_list_t* decllist);
 void print_ast_decl(const ast_decl_t* decl);

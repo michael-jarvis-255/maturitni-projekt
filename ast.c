@@ -10,7 +10,7 @@ create_list_type_impl(ast_stmt)
 
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
 
-bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
+static bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
 	switch (op){
 		case AST_EXPR_OP_ADD:
 		case AST_EXPR_OP_SUB:
@@ -39,7 +39,7 @@ bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
 	}
 }
 
-const char* ast_expr_op_string(ast_expr_op_enum_t op){
+static const char* ast_expr_op_string(ast_expr_op_enum_t op){
 	switch (op){
 		case AST_EXPR_OP_ADD: return "+";
 		case AST_EXPR_OP_SUB: return "-";
@@ -65,22 +65,24 @@ const char* ast_expr_op_string(ast_expr_op_enum_t op){
 	}
 }
 
-ast_expr_t create_ast_expr_const(unsigned long value){
+ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value){
 	return (ast_expr_t){
 		.type = AST_EXPR_CONST,
+		.loc = loc,
 		.constant.value = value
 	};
 }
-ast_expr_t create_ast_expr_variable(const char* id){
-	char* name = strcpy(malloc(strlen(id)+1), id);
+ast_expr_t create_ast_expr_variable(loc_t loc, ast_identifier_t id){
 	return (ast_expr_t){
 		.type = AST_EXPR_VARIABLE,
-		.variable.id = name
+		.loc = loc,
+		.variable = id
 	};
 }
-ast_expr_t create_ast_expr_op(ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right){
+ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right){
 	return (ast_expr_t){
 		.type = AST_EXPR_OP,
+		.loc = loc,
 		.op.op = op,
 		.op.left = convert_to_ptr(left),
 		.op.right = ast_expr_op_is_unary(op) ? 0 : convert_to_ptr(right)
@@ -95,7 +97,7 @@ void print_ast_expr(const ast_expr_t* exp){
 			return;
 
 		case AST_EXPR_VARIABLE:
-			printf("%s", exp->variable.id);
+			printf("%s", exp->variable.name);
 			return;
 
 		case AST_EXPR_FUNC_CALL:
@@ -119,74 +121,84 @@ void print_ast_expr(const ast_expr_t* exp){
 }
 
 
-ast_stmt_t create_ast_stmt_block(){
+ast_stmt_t create_ast_stmt_block(loc_t loc){
 	return (ast_stmt_t){
 		.type = AST_STMT_BLOCK,
+		.loc = loc,
 		.block.stmtlist = create_ast_stmt_list()
 	};
 }
-ast_stmt_t create_ast_stmt_expr(ast_expr_t expr){
+ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr){
 	return (ast_stmt_t){
 		.type = AST_STMT_EXPR,
+		.loc = loc,
 		.expr = expr
 	};
 }
-ast_stmt_t create_ast_stmt_assign(const char* name, ast_expr_t value){
+ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_identifier_t name, ast_expr_t value){
 	return (ast_stmt_t){
 		.type = AST_STMT_ASSIGN,
+		.loc = loc,
 		.assign.name = name,
 		.assign.val = value
 	};
 }
-ast_stmt_t create_ast_stmt_if(ast_expr_t cond, ast_stmt_t iftrue){
+ast_stmt_t create_ast_stmt_if(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue){
 	return (ast_stmt_t){
 		.type = AST_STMT_IF,
+		.loc = loc,
 		.if_.cond = cond,
 		.if_.iftrue = convert_to_ptr(iftrue)
 	};
 }
-ast_stmt_t create_ast_stmt_if_else(ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse){
+ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse){
 	return (ast_stmt_t){
 		.type = AST_STMT_IF_ELSE,
+		.loc = loc,
 		.if_else.cond = cond,
 		.if_else.iftrue = convert_to_ptr(iftrue),
 		.if_else.iffalse = convert_to_ptr(iffalse)
 	};
 }
-ast_stmt_t create_ast_stmt_declare(const char* type, const char* name){
+ast_stmt_t create_ast_stmt_declare(loc_t loc, ast_type_t type, ast_identifier_t name){
 	return (ast_stmt_t){
 		.type = AST_STMT_DECLARE,
+		.loc = loc,
 		.declare.type = type,
 		.declare.name = name,
 		.declare.val = 0
 	};
 }
-ast_stmt_t create_ast_stmt_declare_assign(const char* type, const char* name, ast_expr_t value){
+ast_stmt_t create_ast_stmt_declare_assign(loc_t loc, ast_type_t type, ast_identifier_t name, ast_expr_t value){
 	return (ast_stmt_t){
 		.type = AST_STMT_DECLARE,
+		.loc = loc,
 		.declare.type = type,
 		.declare.name = name,
 		.declare.val = convert_to_ptr(value)
 	};
 }
 
-ast_stmt_t create_ast_stmt_return(ast_expr_t expr){
+ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr){
 	return (ast_stmt_t){
 		.type = AST_STMT_RETURN,
+		.loc = loc,
 		.return_.val = expr
 	};
 }
 
-ast_stmt_t create_ast_stmt_while(ast_expr_t cond, ast_stmt_t body){
+ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body){
 	return (ast_stmt_t){
 		.type = AST_STMT_WHILE,
+		.loc = loc,
 		.while_.cond = cond,
 		.while_.body = convert_to_ptr(body)
 	};
 }
-ast_stmt_t create_ast_stmt_for(ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body){
+ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body){
 	return (ast_stmt_t){
 		.type = AST_STMT_FOR,
+		.loc = loc,
 		.for_.cond = cond,
 		.for_.init = convert_to_ptr(init),
 		.for_.step = convert_to_ptr(step),
@@ -229,7 +241,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			break;
 		case AST_STMT_DECLARE:
 			printf("%*s", depth*2, "");
-			printf("%s %s", stmt->declare.type, stmt->declare.name);
+			printf("%s %s", stmt->declare.type.name, stmt->declare.name.name);
 			if (stmt->declare.val){
 				printf(" = ");
 				print_ast_expr(stmt->declare.val);
@@ -239,7 +251,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			break;
 		case AST_STMT_ASSIGN:
 			printf("%*s", depth*2, "");
-			printf("%s = ", stmt->assign.name);
+			printf("%s = ", stmt->assign.name.name);
 			print_ast_expr(&stmt->assign.val);
 			printf(";\n");
 			break;
@@ -283,26 +295,29 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
-ast_decl_t create_ast_decl_function(const char* returntype, const char* name, ast_argdef_list_t args, ast_stmt_t body){
+ast_decl_t create_ast_decl_function(loc_t loc, ast_type_t returntype, ast_identifier_t name, ast_argdef_list_t args, ast_stmt_t body){
 	return (ast_decl_t){
 		.type = AST_DECL_FUNCTION,
+		.loc = loc,
 		.function.returntype = returntype,
 		.function.name = name,
 		.function.args = args,
 		.function.body = convert_to_ptr(body)
 	};
 }
-ast_decl_t create_ast_decl_global(const char* type, const char* name){
+ast_decl_t create_ast_decl_global(loc_t loc, ast_type_t type, ast_identifier_t name){
 	return (ast_decl_t){
 		.type = AST_DECL_GLOBAL,
+		.loc = loc,
 		.global.type = type,
 		.global.name = name,
 		.global.init = 0
 	};
 }
-ast_decl_t create_ast_decl_global_assign(const char* type, const char* name, ast_expr_t value){
+ast_decl_t create_ast_decl_global_assign(loc_t loc, ast_type_t type, ast_identifier_t name, ast_expr_t value){
 	return (ast_decl_t){
 		.type = AST_DECL_GLOBAL,
+		.loc = loc,
 		.global.type = type,
 		.global.name = name,
 		.global.init = convert_to_ptr(value)
@@ -317,17 +332,17 @@ void print_ast_decl_list(const ast_decl_list_t* decllist){
 void print_ast_decl(const ast_decl_t* decl){
 	switch (decl->type){
 		case AST_DECL_FUNCTION:
-			printf("\n%s %s (", decl->function.returntype, decl->function.name);
+			printf("\n%s %s (", decl->function.returntype.name, decl->function.name.name);
 			for (unsigned int i=0; i < decl->function.args.len; i++){
 				if (i > 0) printf(", ");
-				printf("%s %s", decl->function.args.data[i].type, decl->function.args.data[i].name);
+				printf("%s %s", decl->function.args.data[i].type.name, decl->function.args.data[i].name.name);
 			}
 			printf(") {\n");
 			print_ast_stmt(decl->function.body, 1);
 			printf("}\n");
 			break;
 		case AST_DECL_GLOBAL:
-			printf("%s %s", decl->global.type, decl->global.name);
+			printf("%s %s", decl->global.type.name, decl->global.name.name);
 			if (decl->global.init){
 				printf(" = ");
 				print_ast_expr(decl->global.init);
