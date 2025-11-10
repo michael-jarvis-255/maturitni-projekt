@@ -56,9 +56,12 @@ return		update_yylloc(yyleng); return TK_RETURN;
 {DIGIT}+				update_yylloc(yyleng); yylval.expr = create_ast_expr_const(yylloc, atoll(yytext)); return TK_INT;
 {ID_START}{ID_CHAR}*	{ 
 							update_yylloc(yyleng);
-							yylval.str = malloc(yyleng);
-							strncpy(yylval.str, yytext, yyleng);
-							return TK_IDENTIFIER;
+							char* name = malloc(yyleng+1);
+							strncpy(name, yytext, yyleng);
+							name[yyleng] = 0;
+							yylval.name.name = name;
+							yylval.name.loc = yylloc;
+							return TK_NAME;
 						}
 \"[^"]*\"				{
 							string_update_yylloc(yytext, yyleng);

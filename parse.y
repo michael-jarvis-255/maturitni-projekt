@@ -12,7 +12,9 @@
 
 %token <expr> TK_INT
 %token <str> TK_STRING
-%token <str> TK_IDENTIFIER
+%token <name> TK_NAME
+%token <var> TK_VAR
+%token <type> TK_TYPE
 %token TK_IF "if"
 %token TK_ELSE "else"
 %token TK_FOR "for"
@@ -42,20 +44,22 @@ declaration_list:
 	%empty	{ $$ = create_ast_decl_list(); }
 |	declaration_list declaration	{ $$ = $1; ast_decl_list_append(&$$, $declaration); printf("%i.%i - %i.%i\n", @2.first_line, @2.first_column, @2.last_line, @2.last_column); }
 
-%nterm <identifier> identifier;
-identifier:
-	TK_IDENTIFIER	{ $$ = (ast_identifier_t){ .loc=@$, .name=strdup($1)}; }
-
 %nterm <type> type;
 type:
-	TK_IDENTIFIER	{ $$ = (ast_type_t){ .loc=@$, .name=strdup($1)}; }
+	TK_TYPE
 //|	type '*'		{ $$ = $1; $$.ptr_count++; }
+
+%nterm <name> name;
+name:
+	TK_NAME
+|	type		{ $$ = $1->name; }
+|	TK_VAR		{ $$ = $1->name; }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
-	TK_INT			{ $$ = $1; }
-|	identifier	{ $$ = create_ast_expr_variable(@$, $1); }
-|	'(' exp ')'		{ $$ = $2; }
+	TK_INT		{ $$ = $1; }
+|	TK_VAR		{ $$ = create_ast_expr_variable(@$, $1); }
+|	'(' exp ')'	{ $$ = $2; }
 
 exp1:
 	exp1[l] '*' exp0[r]	{ $$ = create_ast_expr_op(@$, AST_EXPR_OP_MUL, $l, $r); }
@@ -158,12 +162,12 @@ continue_stmt:
 
 %nterm <stmt> single_assign_stmt;
 single_assign_stmt:
-	identifier[name] '=' exp[val]	{ $$ = create_ast_stmt_assign(@$, $name, $val); }
+	TK_VAR[var] '=' exp[val]	{ $$ = create_ast_stmt_assign(@$, $var, $val); }
 
 %nterm <stmt> single_declare_stmt;
 single_declare_stmt:
-	type identifier[name]				{ $$ = create_ast_stmt_declare(@$, $type, $name); }
-|	type identifier[name] '=' exp[val]	{ $$ = create_ast_stmt_declare_assign(@$, $type, $name, $val); }
+	type name				{ $$ = create_ast_stmt_declare(@$, $type, $name); }
+|	type name '=' exp[val]	{ $$ = create_ast_stmt_declare_assign(@$, $type, $name, $val); }
 
 // if-else constructs always bind as tightly as possible, so 'if (x) if (y) else z;' will parse as 'if (x) {if (y) else z;}'
 %nterm <stmt> if_stmt;
@@ -200,18 +204,18 @@ declaration:
 
 %nterm <decl> function_declaration;
 function_declaration:
-	type identifier[name] '(' function_args_definition[args] ')' block[body]	{ $$ = create_ast_decl_function(@$, $type, $name, $args, $body); }
+	type name '(' function_args_definition[args] ')' block[body]	{ $$ = create_ast_decl_function(@$, $type, $name, $args, $body); }
 
 %nterm <argdeflist> function_args_definition;
 function_args_definition:
 	%empty		{ $$ = create_ast_argdef_list(); }
-|	type identifier[name]	{ $$ = create_ast_argdef_list(); ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
-|	function_args_definition[args] ',' type identifier[name]	{ $$ = $1; ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
+|	type name	{ $$ = create_ast_argdef_list(); ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
+|	function_args_definition[args] ',' type name	{ $$ = $1; ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
 
 %nterm <decl> single_global_declaration;
 single_global_declaration:
-	type identifier[name]	';'				{ $$ = create_ast_decl_global(@$, $type, $name); }
-|	type identifier[name] '=' exp[val] ';'{ $$ = create_ast_decl_global_assign(@$, $type, $name, $val); }
+	type name	';'				{ $$ = create_ast_decl_global(@$, $type, $name); }
+|	type name '=' exp[val] ';'{ $$ = create_ast_decl_global_assign(@$, $type, $name, $val); }
 
 
 
