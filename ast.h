@@ -2,6 +2,7 @@
 #define _AST_H_
 #include "yyltype.h"
 #include "list.h"
+#include "hashmap.h"
 
 typedef struct ast_name_t {
 	loc_t loc;
@@ -112,6 +113,7 @@ typedef struct ast_stmt_t {
 		ast_expr_t expr;
 		struct {
 			ast_stmt_list_t stmtlist;
+			hashmap_t context;
 		} block;
 		struct {
 			ast_type_t* type;
@@ -144,6 +146,29 @@ typedef struct ast_argdef_t {
 } ast_argdef_t;
 create_list_type_header(ast_argdef);
 
+typedef struct ast_func_t {
+	ast_type_t* returntype;
+	ast_name_t name;
+	ast_argdef_list_t args;
+	ast_stmt_t* body;
+	hashmap_t context;
+} ast_func_t;
+
+typedef enum {
+	AST_ID_TYPE,
+	AST_ID_VAR,
+	AST_ID_FUNC,
+} ast_id_enum_t;
+
+typedef struct ast_id_t {
+	ast_id_enum_t type;
+	union {
+		ast_type_t type_;
+		ast_variable_t var;
+		ast_func_t func;
+	};
+} ast_id_t;
+
 typedef enum {
 	AST_DECL_FUNCTION,
 	AST_DECL_GLOBAL,
@@ -154,15 +179,9 @@ typedef struct ast_decl_t {
 	ast_decl_enum_t type;
 	loc_t loc;
 	union {
+		ast_func_t* func;
 		struct {
-			ast_type_t* returntype;
-			ast_name_t name;
-			ast_argdef_list_t args;
-			ast_stmt_t* body;
-		} function;
-		struct {
-			ast_type_t* type;
-			ast_name_t name;
+			ast_variable_t* var;
 			ast_expr_t* init;
 		} global;
 		struct {
@@ -172,6 +191,10 @@ typedef struct ast_decl_t {
 	};
 } ast_decl_t;
 create_list_type_header(ast_decl)
+
+typedef hashmap_t* hashmap_ptr_t;
+create_list_type_header(hashmap_ptr)
+typedef hashmap_ptr_list_t context_stack_t;
 
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
 ast_expr_t create_ast_expr_variable(loc_t loc, ast_variable_t* var);

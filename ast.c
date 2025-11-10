@@ -7,6 +7,7 @@
 create_list_type_impl(ast_argdef)
 create_list_type_impl(ast_decl)
 create_list_type_impl(ast_stmt)
+create_list_type_impl(hashmap_ptr)
 
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
 
@@ -296,30 +297,39 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 }
 
 ast_decl_t create_ast_decl_function(loc_t loc, ast_type_t* returntype, ast_name_t name, ast_argdef_list_t args, ast_stmt_t body){
+	ast_func_t* func = malloc(sizeof(ast_func_t)); // TODO: add func to current context
+	func->returntype = returntype;
+	func->name = name;
+	func->args = args;
+	func->body = convert_to_ptr(body);
+
 	return (ast_decl_t){
 		.type = AST_DECL_FUNCTION,
 		.loc = loc,
-		.function.returntype = returntype,
-		.function.name = name,
-		.function.args = args,
-		.function.body = convert_to_ptr(body)
+		.func = func
 	};
 }
 ast_decl_t create_ast_decl_global(loc_t loc, ast_type_t* type, ast_name_t name){
+	ast_variable_t* var = malloc(sizeof(ast_variable_t)); // TODO: add var to current context
+	var->type = type;
+	var->name = name;
+
 	return (ast_decl_t){
 		.type = AST_DECL_GLOBAL,
 		.loc = loc,
-		.global.type = type,
-		.global.name = name,
+		.global.var = var,
 		.global.init = 0
 	};
 }
 ast_decl_t create_ast_decl_global_assign(loc_t loc, ast_type_t* type, ast_name_t name, ast_expr_t value){
+	ast_variable_t* var = malloc(sizeof(ast_variable_t)); // TODO: add var to current context
+	var->type = type;
+	var->name = name;
+
 	return (ast_decl_t){
 		.type = AST_DECL_GLOBAL,
 		.loc = loc,
-		.global.type = type,
-		.global.name = name,
+		.global.var = var,
 		.global.init = convert_to_ptr(value)
 	};
 }
@@ -332,17 +342,17 @@ void print_ast_decl_list(const ast_decl_list_t* decllist){
 void print_ast_decl(const ast_decl_t* decl){
 	switch (decl->type){
 		case AST_DECL_FUNCTION:
-			printf("\n%s %s (", decl->function.returntype->name.name, decl->function.name.name);
-			for (unsigned int i=0; i < decl->function.args.len; i++){
+			printf("\n%s %s (", decl->func->returntype->name.name, decl->func->name.name);
+			for (unsigned int i=0; i < decl->func->args.len; i++){
 				if (i > 0) printf(", ");
-				printf("%s %s", decl->function.args.data[i].type->name.name, decl->function.args.data[i].name.name);
+				printf("%s %s", decl->func->args.data[i].type->name.name, decl->func->args.data[i].name.name);
 			}
 			printf(") {\n");
-			print_ast_stmt(decl->function.body, 1);
+			print_ast_stmt(decl->func->body, 1);
 			printf("}\n");
 			break;
 		case AST_DECL_GLOBAL:
-			printf("%s %s", decl->global.type->name.name, decl->global.name.name);
+			printf("%s %s", decl->global.var->type->name.name, decl->global.var->name.name);
 			if (decl->global.init){
 				printf(" = ");
 				print_ast_expr(decl->global.init);
