@@ -13,8 +13,9 @@
 %token <expr> TK_INT
 %token <str> TK_STRING
 %token <name> TK_NAME
-%token <var> TK_VAR
-%token <type> TK_TYPE
+%token <var_ref> TK_VAR
+%token <type_ref> TK_TYPE
+%token <func_ref> TK_FUNC
 %token TK_IF "if"
 %token TK_ELSE "else"
 %token TK_FOR "for"
@@ -44,7 +45,7 @@ declaration_list:
 	%empty	{ $$ = create_ast_decl_list(); }
 |	declaration_list declaration	{ $$ = $1; ast_decl_list_append(&$$, $declaration); printf("%i.%i - %i.%i\n", @2.first_line, @2.first_column, @2.last_line, @2.last_column); }
 
-%nterm <type> type;
+%nterm <type_ref> type;
 type:
 	TK_TYPE
 //|	type '*'		{ $$ = $1; $$.ptr_count++; }
@@ -52,13 +53,13 @@ type:
 %nterm <name> name;
 name:
 	TK_NAME
-|	type		{ $$ = $1->name; }
-|	TK_VAR		{ $$ = $1->name; }
+|	type		{ $$ = (ast_name_t){ .loc=@1, .name=$1->name }; }
+|	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=$1->name }; }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
 	TK_INT		{ $$ = $1; }
-|	TK_VAR		{ $$ = create_ast_expr_variable(@$, $1); }
+|	TK_VAR		{ $$ = create_ast_expr_var_ref(@$, $1); }
 |	'(' exp ')'	{ $$ = $2; }
 
 exp1:
@@ -111,11 +112,11 @@ exp: exp9
 
 %nterm <stmt> block;
 block:
-	block_head '}'
+	block_head '}'		{ $$ = $1; context_stack_pop($$.block.context); }
 
 %nterm <stmt> block_head;
 block_head:
-	'{'					{ $$ = create_ast_stmt_block(@$); }
+	'{'					{ $$ = create_ast_stmt_block(@$); context_stack_push($$.block.context); }
 |	block_head stmt		{ $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); } // TODO: block needs to also update it's loc
 |	block_head ';'
 
@@ -204,13 +205,23 @@ declaration:
 
 %nterm <decl> function_declaration;
 function_declaration:
-	type name '(' function_args_definition[args] ')' block[body]	{ $$ = create_ast_decl_function(@$, $type, $name, $args, $body); }
+	type name '(' function_args_definition[args] ')'
+	<context>{
+		hashmap_t ctx = create_hashmap();
+		$$ = convert_to_ptr(ctx);
+		context_stack_push($$);
+	}[context]
+	block[body]
+	{
+		context_stack_pop($context);
+		$$ = create_ast_decl_function(@$, $type, $name, $args, $context, $body);
+	}
 
 %nterm <argdeflist> function_args_definition;
 function_args_definition:
 	%empty		{ $$ = create_ast_argdef_list(); }
-|	type name	{ $$ = create_ast_argdef_list(); ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
-|	function_args_definition[args] ',' type name	{ $$ = $1; ast_argdef_list_append(&$$, (ast_argdef_t){.type=$type, .name=$name}); }
+|	type name	{ $$ = create_ast_argdef_list(); ast_argdef_list_append(&$$, (ast_argdef_t){.type_ref=$type, .name=$name}); }
+|	function_args_definition[args] ',' type name	{ $$ = $1; ast_argdef_list_append(&$$, (ast_argdef_t){.type_ref=$type, .name=$name}); }
 
 %nterm <decl> single_global_declaration;
 single_global_declaration:
@@ -222,5 +233,6 @@ single_global_declaration:
 %%
 
 int main(){
+	ast_init_context();
 	return yyparse();
 }

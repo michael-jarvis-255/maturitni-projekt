@@ -11,6 +11,7 @@ typedef struct T##_list_t { \
 } T##_list_t;	\
 T##_list_t create_##T##_list();	\
 void T##_list_append(T##_list_t* list, T##_t elem);	\
+void T##_list_pop(T##_list_t* list);
 
 #define create_list_type_impl(T) \
 T##_list_t create_##T##_list(){	\
@@ -28,6 +29,13 @@ void T##_list_append(T##_list_t* list, T##_t elem){ \
 	}	\
 	list->data[list->len] = elem;	\
 	list->len++;	\
+}	\
+void T##_list_pop(T##_list_t* list){	\
+	if (list->len == 0){	\
+		printf("ERROR: cannot pop from empty list\n");	\
+		exit(1);	\
+	}	\
+	list->len--;	\
 }
 
 #endif

@@ -59,9 +59,29 @@ return		update_yylloc(yyleng); return TK_RETURN;
 							char* name = malloc(yyleng+1);
 							strncpy(name, yytext, yyleng);
 							name[yyleng] = 0;
-							yylval.name.name = name;
-							yylval.name.loc = yylloc;
-							return TK_NAME;
+
+							ast_id_t* id = context_get(name);
+							if (id == 0){
+								yylval.name.name = name;
+								yylval.name.loc = yylloc;
+								return TK_NAME;
+							}
+							
+							switch (id->type){ // TODO: location tracking for type, var and funcs
+								case AST_ID_TYPE:
+									yylval.type_ref = &id->type_;
+									return TK_TYPE;
+								case AST_ID_VAR:
+									yylval.var_ref = &id->var;
+									return TK_VAR;
+								case AST_ID_FUNC:
+									yylval.func_ref = &id->func;
+									return TK_FUNC;
+								default:
+									yylval.name.name = name;
+									yylval.name.loc = yylloc;
+									return TK_NAME;
+							}
 						}
 \"[^"]*\"				{
 							string_update_yylloc(yytext, yyleng);

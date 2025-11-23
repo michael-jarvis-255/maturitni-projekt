@@ -7,6 +7,8 @@ typedef union YYSTYPE {
 	ast_argdef_list_t argdeflist;
 	ast_decl_list_t decllist;
 	ast_name_t name;
-	ast_type_t* type;
-	ast_variable_t* var;
+	ast_datatype_t* type_ref;
+	ast_variable_t* var_ref;
+	ast_func_t* func_ref;
+	hashmap_t* context;
 } YYSTYPE;

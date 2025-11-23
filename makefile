@@ -1,7 +1,7 @@
 MAKEFLAGS += -rR
 
 a.out: build/lex.yy.c build/parse.tab.c ast.c hashmap.c
-	gcc $^ -o $@ -I .
+	gcc $^ -o $@ -I . -g -fsanitize=address,undefined
 
 build/parse.tab.c build/parse.tab.h: parse.y ast.h yystype.h
 	@mkdir build -p
