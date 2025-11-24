@@ -1,7 +1,10 @@
 MAKEFLAGS += -rR
+ifneq ($(OS),Windows_NT)
+	GCCFLAGS = -g -fsanitize=address,undefined
+endif
 
 a.out: build/lex.yy.c build/parse.tab.c ast.c hashmap.c
-	gcc $^ -o $@ -I . -g -fsanitize=address,undefined
+	gcc $^ -o $@ -I . $(GCCFLAGS)
 
 build/parse.tab.c build/parse.tab.h: parse.y ast.h yystype.h
 	@mkdir build -p

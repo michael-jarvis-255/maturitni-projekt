@@ -4,10 +4,10 @@
 #include <stdbool.h>
 #include <string.h>
 
-create_list_type_impl(ast_argdef)
-create_list_type_impl(ast_decl)
+create_list_type_impl(ast_variable)
 create_list_type_impl(ast_stmt)
 create_list_type_impl(hashmap_ptr)
+create_list_type_impl(ast_expr)
 
 static hashmap_t top_level_context;
 static context_stack_t context_stack;
@@ -81,6 +81,14 @@ ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var_ref){
 		.var_ref = var_ref
 	};
 }
+ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref){
+	return (ast_expr_t){
+		.type = AST_EXPR_FUNC_CALL,
+		.loc = loc,
+		.func_call.func_ref = func_ref,
+		.func_call.arglist = create_ast_expr_list()
+	};
+}
 ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right){
 	return (ast_expr_t){
 		.type = AST_EXPR_OP,
@@ -123,13 +131,17 @@ void print_ast_expr(const ast_expr_t* exp){
 }
 
 
-ast_stmt_t create_ast_stmt_block(loc_t loc){
-	hashmap_t ctx = create_hashmap();
+ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context){
+	hashmap_t* ctxp = 0;
+	if (with_context){
+		hashmap_t ctx = create_hashmap();
+		ctxp = convert_to_ptr(ctx);
+	}
 	return (ast_stmt_t){
 		.type = AST_STMT_BLOCK,
 		.loc = loc,
 		.block.stmtlist = create_ast_stmt_list(),
-		.block.context = convert_to_ptr(ctx)
+		.block.context = ctxp
 	};
 }
 ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr){
@@ -164,28 +176,6 @@ ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue
 		.if_else.iffalse = convert_to_ptr(iffalse)
 	};
 }
-ast_stmt_t create_ast_stmt_declare(loc_t loc, ast_datatype_t* type_ref, ast_name_t name){
-	ast_id_t* var_id = malloc(sizeof(ast_id_t));
-	var_id->type = AST_ID_VAR;
-	var_id->var.type_ref = type_ref;
-	var_id->var.declare_loc = loc;
-	var_id->var.name = name.name;
-	context_insert(name.name, var_id);
-	
-	// TODO: create variable in current context
-	return (ast_stmt_t){
-		.type = AST_STMT_DECLARE,
-		.loc = loc,
-		.declare.var_ref = &var_id->var,
-		.declare.val = 0
-	};
-}
-ast_stmt_t create_ast_stmt_declare_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
-	ast_stmt_t res = create_ast_stmt_declare(loc, type, name);
-	res.declare.val = value;
-	return res;
-}
-
 ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr){
 	return (ast_stmt_t){
 		.type = AST_STMT_RETURN,
@@ -302,23 +292,20 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, ast_name_t name, ast_argdef_list_t args, hashmap_t* context, ast_stmt_t body){
+ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_variable_list_t args, hashmap_t* context, ast_stmt_t body){
 	ast_id_t* func_id = malloc(sizeof(ast_id_t));
 	func_id->type = AST_ID_FUNC;
+	func_id->func.declare_loc = loc;
 	func_id->func.return_type_ref = returntype_ref;
 	func_id->func.name = name;
 	func_id->func.args = args;
 	func_id->func.context = context;
 	func_id->func.body = convert_to_ptr(body);
-	context_insert(name.name, func_id);
+	context_insert(name, func_id);
 
-	return (ast_decl_t){
-		.type = AST_DECL_FUNCTION,
-		.loc = loc,
-		.func_ref = &func_id->func
-	};
+	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
-ast_decl_t create_ast_decl_global(loc_t loc, ast_datatype_t* type, ast_name_t name){ // TODO: merge with create_ast_stmt_declare
+ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name){
 	ast_id_t* var_id = malloc(sizeof(ast_id_t));
 	var_id->type = AST_ID_VAR;
 	var_id->var.type_ref = type;
@@ -326,14 +313,9 @@ ast_decl_t create_ast_decl_global(loc_t loc, ast_datatype_t* type, ast_name_t na
 	var_id->var.name = name.name;
 	context_insert(name.name, var_id);
 
-	return (ast_decl_t){
-		.type = AST_DECL_GLOBAL,
-		.loc = loc,
-		.global.var_ref = &var_id->var,
-		.global.init = 0
-	};
+	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
-ast_decl_t create_ast_decl_global_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
+ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
 	ast_id_t* var_id = malloc(sizeof(ast_id_t));
 	var_id->type = AST_ID_VAR;
 	var_id->var.type_ref = type;
@@ -341,43 +323,7 @@ ast_decl_t create_ast_decl_global_assign(loc_t loc, ast_datatype_t* type, ast_na
 	var_id->var.name = name.name;
 	context_insert(name.name, var_id);
 
-	return (ast_decl_t){
-		.type = AST_DECL_GLOBAL,
-		.loc = loc,
-		.global.var_ref = &var_id->var,
-		.global.init = convert_to_ptr(value)
-	};
-}
-
-void print_ast_decl_list(const ast_decl_list_t* decllist){
-	for (unsigned int i=0; i<decllist->len; i++){
-		print_ast_decl(&decllist->data[i]);
-	}
-}
-void print_ast_decl(const ast_decl_t* decl){
-	//switch (decl->type){
-	//	case AST_DECL_FUNCTION:
-	//		printf("\n%s %s (", decl->func->returntype->name.name, decl->func->name.name);
-	//		for (unsigned int i=0; i < decl->func->args.len; i++){
-	//			if (i > 0) printf(", ");
-	//			printf("%s %s", decl->func->args.data[i].type->name.name, decl->func->args.data[i].name.name);
-	//		}
-	//		printf(") {\n");
-	//		print_ast_stmt(decl->func->body, 1);
-	//		printf("}\n");
-	//		break;
-	//	case AST_DECL_GLOBAL:
-	//		printf("%s %s", decl->global.var->type->name.name, decl->global.var->name.name);
-	//		if (decl->global.init){
-	//			printf(" = ");
-	//			print_ast_expr(decl->global.init);
-	//		}
-	//		printf(";\n");
-	//		break;
-	//	case AST_DECL_TYPE:
-	//		printf("<<unimplemented>>\n");
-	//		break;
-	//}
+	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, &var_id->var, value)};
 }
 
 void ast_init_context(){

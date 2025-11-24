@@ -64,6 +64,8 @@ typedef enum {
 } ast_expr_op_enum_t;
 
 struct ast_func_t;
+typedef struct ast_expr_t ast_expr_t;
+create_list_type_header(ast_expr);
 typedef struct ast_expr_t {
 	ast_expr_enum_t type;
 	loc_t loc;
@@ -79,9 +81,7 @@ typedef struct ast_expr_t {
 		} op; // TODO: split into 'unop' and 'binop'
 		struct {
 			struct ast_func_t* func_ref;
-			unsigned int cap;
-			unsigned int len;
-			struct ast_expr_t* arglist; // TODO: use list.h
+			ast_expr_list_t arglist;
 		} func_call;
 	};
 } ast_expr_t;
@@ -120,7 +120,7 @@ typedef struct ast_stmt_t {
 		ast_expr_t expr;
 		struct {
 			ast_stmt_list_t stmtlist;
-			hashmap_t* context; // TODO
+			hashmap_t* context;
 		} block;
 		struct {
 			ast_variable_t* var_ref;
@@ -146,16 +146,25 @@ typedef struct ast_stmt_t {
 	};
 } ast_stmt_t;
 
-typedef struct ast_argdef_t {
-	ast_datatype_t* type_ref;
-	ast_name_t name;
-} ast_argdef_t;
-create_list_type_header(ast_argdef);
+typedef enum {
+	AST_DECL_DUMMY,
+	AST_DECL_STMT,
+} ast_decl_enum_t;
+
+typedef struct ast_decl_t {
+	ast_decl_enum_t type;
+	union {
+		ast_stmt_t stmt;
+	};
+} ast_decl_t;
+
+create_list_type_header(ast_variable);
 
 typedef struct ast_func_t {
+	loc_t declare_loc;
 	ast_datatype_t* return_type_ref;
-	ast_name_t name;
-	ast_argdef_list_t args;
+	const char* name;
+	ast_variable_list_t args;
 	ast_stmt_t* body;
 	hashmap_t* context;
 } ast_func_t;
@@ -175,58 +184,31 @@ typedef struct ast_id_t {
 	};
 } ast_id_t;
 
-typedef enum {
-	AST_DECL_FUNCTION,
-	AST_DECL_GLOBAL,
-	AST_DECL_TYPE,
-} ast_decl_enum_t;
-
-typedef struct ast_decl_t {
-	ast_decl_enum_t type;
-	loc_t loc;
-	union {
-		ast_func_t* func_ref;
-		struct {
-			ast_variable_t* var_ref;
-			ast_expr_t* init;
-		} global;
-		struct {
-			ast_datatype_t* type_ref;
-			ast_name_t name;
-		} typedecl;
-	};
-} ast_decl_t;
-create_list_type_header(ast_decl)
-
 typedef hashmap_t* hashmap_ptr_t;
 create_list_type_header(hashmap_ptr)
 typedef hashmap_ptr_list_t context_stack_t;
 
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
 ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var);
+ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
 
 void print_ast_expr(const ast_expr_t* exp);
 
-ast_stmt_t create_ast_stmt_block(loc_t loc);
+ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context);
 ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr);
 ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_variable_t* name, ast_expr_t value);
 ast_stmt_t create_ast_stmt_if(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue);
 ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
-ast_stmt_t create_ast_stmt_declare(loc_t loc, ast_datatype_t* type, ast_name_t name);
-ast_stmt_t create_ast_stmt_declare_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
 ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr);
 ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body);
 ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
 
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, ast_name_t name, ast_argdef_list_t args, hashmap_t* context, ast_stmt_t body);
-ast_decl_t create_ast_decl_global(loc_t loc, ast_datatype_t* type, ast_name_t name);
-ast_decl_t create_ast_decl_global_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
-
-void print_ast_decl_list(const ast_decl_list_t* decllist);
-void print_ast_decl(const ast_decl_t* decl);
+ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_variable_list_t args, hashmap_t* context, ast_stmt_t body);
+ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name);
+ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
 
 void ast_init_context();
 void context_insert(const char* name, ast_id_t* value);
