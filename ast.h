@@ -29,39 +29,43 @@ typedef enum {
 	AST_EXPR_CONST,
 	AST_EXPR_VAR_REF,
 	AST_EXPR_FUNC_CALL,
-	AST_EXPR_OP,
+	AST_EXPR_UNOP,
+	AST_EXPR_BINOP,
 } ast_expr_enum_t;
 
 typedef enum {
+	AST_EXPR_UNOP_NEG,
+	AST_EXPR_UNOP_BNOT,
+	AST_EXPR_UNOP_LNOT,
+} ast_expr_unop_enum_t;
+
+typedef enum {
 	// numeric ops
-	AST_EXPR_OP_ADD,
-	AST_EXPR_OP_SUB,
-	AST_EXPR_OP_MUL,
-	AST_EXPR_OP_DIV,
-	AST_EXPR_OP_MOD,
-	AST_EXPR_OP_NEG, // unary
+	AST_EXPR_BINOP_ADD,
+	AST_EXPR_BINOP_SUB,
+	AST_EXPR_BINOP_MUL,
+	AST_EXPR_BINOP_DIV,
+	AST_EXPR_BINOP_MOD,
 
 	// comparisons
-	AST_EXPR_OP_LT,
-	AST_EXPR_OP_GT,
-	AST_EXPR_OP_LE,
-	AST_EXPR_OP_GE,
-	AST_EXPR_OP_EQ,
-	AST_EXPR_OP_NE,
+	AST_EXPR_BINOP_LT,
+	AST_EXPR_BINOP_GT,
+	AST_EXPR_BINOP_LE,
+	AST_EXPR_BINOP_GE,
+	AST_EXPR_BINOP_EQ,
+	AST_EXPR_BINOP_NE,
 
 	// bitwise
-	AST_EXPR_OP_SHL,
-	AST_EXPR_OP_SHR,
-	AST_EXPR_OP_BXOR,
-	AST_EXPR_OP_BAND,
-	AST_EXPR_OP_BOR,
-	AST_EXPR_OP_BNOT, // unary
+	AST_EXPR_BINOP_SHL,
+	AST_EXPR_BINOP_SHR,
+	AST_EXPR_BINOP_BXOR,
+	AST_EXPR_BINOP_BAND,
+	AST_EXPR_BINOP_BOR,
 
 	// logical
-	AST_EXPR_OP_LAND,
-	AST_EXPR_OP_LOR,
-	AST_EXPR_OP_LNOT, // unary
-} ast_expr_op_enum_t;
+	AST_EXPR_BINOP_LAND,
+	AST_EXPR_BINOP_LOR,
+} ast_expr_binop_enum_t;
 
 struct ast_func_t;
 typedef struct ast_expr_t ast_expr_t;
@@ -75,10 +79,14 @@ typedef struct ast_expr_t {
 		} constant;
 		ast_variable_t* var_ref;
 		struct {
-			ast_expr_op_enum_t op;
+			ast_expr_unop_enum_t op;
+			struct ast_expr_t* operand;
+		} unop;
+		struct {
+			ast_expr_binop_enum_t op;
 			struct ast_expr_t* left;
 			struct ast_expr_t* right;
-		} op; // TODO: split into 'unop' and 'binop'
+		} binop;
 		struct {
 			struct ast_func_t* func_ref;
 			ast_expr_list_t arglist;
@@ -189,7 +197,8 @@ void free_ast_id(ast_id_t* id);
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
 ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var);
 ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
-ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
+ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right);
+ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t opernad);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
 void print_ast_expr(const ast_expr_t* exp);

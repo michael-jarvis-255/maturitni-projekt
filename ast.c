@@ -37,58 +37,33 @@ void free_ast_id(ast_id_t* id){
 	free(id);
 }
 
-static bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
+static const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 	switch (op){
-		case AST_EXPR_OP_ADD:
-		case AST_EXPR_OP_SUB:
-		case AST_EXPR_OP_MUL:
-		case AST_EXPR_OP_DIV:
-		case AST_EXPR_OP_MOD:
-		case AST_EXPR_OP_LT:
-		case AST_EXPR_OP_GT:
-		case AST_EXPR_OP_LE:
-		case AST_EXPR_OP_GE:
-		case AST_EXPR_OP_EQ:
-		case AST_EXPR_OP_NE:
-		case AST_EXPR_OP_BXOR:
-		case AST_EXPR_OP_BAND:
-		case AST_EXPR_OP_BOR:
-		case AST_EXPR_OP_LAND:
-		case AST_EXPR_OP_LOR:
-		case AST_EXPR_OP_SHR:
-		case AST_EXPR_OP_SHL:
-			return false;
-	
-		case AST_EXPR_OP_BNOT:
-		case AST_EXPR_OP_LNOT:
-		case AST_EXPR_OP_NEG:
-			return true;
+		case AST_EXPR_UNOP_BNOT: return "~";
+		case AST_EXPR_UNOP_LNOT: return "!";
+		case AST_EXPR_UNOP_NEG: return "-";
 	}
 }
-
-static const char* ast_expr_op_string(ast_expr_op_enum_t op){
+static const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 	switch (op){
-		case AST_EXPR_OP_ADD: return "+";
-		case AST_EXPR_OP_SUB: return "-";
-		case AST_EXPR_OP_MUL: return "*";
-		case AST_EXPR_OP_DIV: return "/";
-		case AST_EXPR_OP_MOD: return "%";
-		case AST_EXPR_OP_LT: return "<";
-		case AST_EXPR_OP_GT: return ">";
-		case AST_EXPR_OP_LE: return "<=";
-		case AST_EXPR_OP_GE: return ">=";
-		case AST_EXPR_OP_EQ: return "==";
-		case AST_EXPR_OP_NE: return "!=";
-		case AST_EXPR_OP_BXOR: return "^";
-		case AST_EXPR_OP_BAND: return "&";
-		case AST_EXPR_OP_BOR: return "|";
-		case AST_EXPR_OP_LAND: return "&&";
-		case AST_EXPR_OP_LOR: return "||";
-		case AST_EXPR_OP_SHR: return ">>";
-		case AST_EXPR_OP_SHL: return "<<";
-		case AST_EXPR_OP_BNOT: return "~";
-		case AST_EXPR_OP_LNOT: return "!";
-		case AST_EXPR_OP_NEG: return "-";
+		case AST_EXPR_BINOP_ADD: return "+";
+		case AST_EXPR_BINOP_SUB: return "-";
+		case AST_EXPR_BINOP_MUL: return "*";
+		case AST_EXPR_BINOP_DIV: return "/";
+		case AST_EXPR_BINOP_MOD: return "%";
+		case AST_EXPR_BINOP_LT: return "<";
+		case AST_EXPR_BINOP_GT: return ">";
+		case AST_EXPR_BINOP_LE: return "<=";
+		case AST_EXPR_BINOP_GE: return ">=";
+		case AST_EXPR_BINOP_EQ: return "==";
+		case AST_EXPR_BINOP_NE: return "!=";
+		case AST_EXPR_BINOP_BXOR: return "^";
+		case AST_EXPR_BINOP_BAND: return "&";
+		case AST_EXPR_BINOP_BOR: return "|";
+		case AST_EXPR_BINOP_LAND: return "&&";
+		case AST_EXPR_BINOP_LOR: return "||";
+		case AST_EXPR_BINOP_SHR: return ">>";
+		case AST_EXPR_BINOP_SHL: return "<<";
 	}
 }
 
@@ -114,13 +89,21 @@ ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref){
 		.func_call.arglist = create_ast_expr_list()
 	};
 }
-ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right){
+ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right){
 	return (ast_expr_t){
-		.type = AST_EXPR_OP,
+		.type = AST_EXPR_BINOP,
 		.loc = loc,
-		.op.op = op,
-		.op.left = convert_to_ptr(left),
-		.op.right = ast_expr_op_is_unary(op) ? 0 : convert_to_ptr(right)
+		.binop.op = op,
+		.binop.left = convert_to_ptr(left),
+		.binop.right = convert_to_ptr(right)
+	};
+}
+ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t opernad){
+	return (ast_expr_t){
+		.type = AST_EXPR_UNOP,
+		.loc = loc,
+		.unop.op = op,
+		.unop.operand = convert_to_ptr(opernad),
 	};
 }
 
@@ -137,10 +120,12 @@ void free_ast_expr_v(ast_expr_t exp){
 		case AST_EXPR_FUNC_CALL:
 			free_ast_expr_list_v(&exp.func_call.arglist);
 			break;
-		case AST_EXPR_OP:
-			free_ast_expr(exp.op.left);
-			if (!ast_expr_op_is_unary(exp.op.op))
-				free_ast_expr(exp.op.right);
+		case AST_EXPR_UNOP:
+			free_ast_expr(exp.unop.operand);
+			break;
+		case AST_EXPR_BINOP:
+			free_ast_expr(exp.binop.left);
+			free_ast_expr(exp.binop.right);
 			break;
 	}
 }
@@ -158,18 +143,17 @@ void print_ast_expr(const ast_expr_t* exp){
 		case AST_EXPR_FUNC_CALL:
 			printf("TODO");
 			return;
-
-		case AST_EXPR_OP:
+			
+		case AST_EXPR_UNOP:
+			printf("%s", ast_expr_unop_string(exp->unop.op));
+			print_ast_expr(exp->unop.operand);
+			return;
+			
+		case AST_EXPR_BINOP:
 			printf("(");
-			if (!ast_expr_op_is_unary(exp->op.op)){
-				print_ast_expr(exp->op.left);
-			}
-			printf("%s", ast_expr_op_string(exp->op.op));
-			if (ast_expr_op_is_unary(exp->op.op)){
-				print_ast_expr(exp->op.left);
-			}else{
-				print_ast_expr(exp->op.right);
-			}
+			print_ast_expr(exp->binop.left);
+			printf("%s", ast_expr_binop_string(exp->binop.op));
+			print_ast_expr(exp->binop.right);
 			printf(")");
 			return;
 	}
