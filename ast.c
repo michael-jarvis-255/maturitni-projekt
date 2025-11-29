@@ -36,6 +36,33 @@ void free_ast_id(ast_id_t* id){
 	free_ast_id_v(*id);
 	free(id);
 }
+static inline void nspaces(unsigned int n){ printf("%*.s", n, ""); }
+static inline void ntabs(unsigned int n){ nspaces(n*4); }
+void print_ast_id(const ast_id_t* id, int depth){
+	switch (id->type){
+		case AST_ID_TYPE:
+			ntabs(depth); printf("type '%s", id->type_.name);
+			for (unsigned int i=0; i<id->type_.ptr_count; i++)
+				printf("*");
+			printf("':\n");
+			ntabs(depth+1); printf("signed: %s\n", id->type_.signed_ ? "signed" : "unsigned");
+			ntabs(depth+1); printf("bitwidth: %u\n", id->type_.bitwidth);
+			break;
+		case AST_ID_VAR:
+			ntabs(depth); printf("variable '%s':\n", id->var.name);
+			ntabs(depth+1); printf("type: '%s'\n", id->var.type_ref->name);
+			break;
+		case AST_ID_FUNC:
+			ntabs(depth); printf("function '%s':\n", id->func.name);
+			ntabs(depth+1); printf("return type: '%s'\n", id->func.return_type_ref->name);
+			// TODO: arguments ?
+			ntabs(depth+1); printf("context:\n");
+			print_ast_context(id->func.context, depth+2);
+			ntabs(depth+1); printf("body:\n");
+			print_ast_stmt(id->func.body, depth+2);
+			break;
+	}
+}
 
 static const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 	switch (op){
@@ -280,29 +307,23 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	switch (stmt->type){
 		case AST_STMT_IF:
-			printf("%*s", depth*2, "");
-			printf("if ");
+			ntabs(depth); printf("if ");
 			print_ast_expr(&stmt->if_.cond);
 			printf(" {\n");
 			print_ast_stmt(stmt->if_.iftrue, depth+1);
-			printf("%*s", depth*2, "");
-			printf("}\n");
+			ntabs(depth); printf("}\n");
 			break;
 		case AST_STMT_IF_ELSE:
-			printf("%*s", depth*2, "");
-			printf("if ");
+			ntabs(depth); printf("if ");
 			print_ast_expr(&stmt->if_else.cond);
 			printf(" {\n");
 			print_ast_stmt(stmt->if_else.iftrue, depth+1);
-			printf("%*s", depth*2, "");
-			printf("} else {\n");
+			ntabs(depth); printf("} else {\n");
 			print_ast_stmt(stmt->if_else.iffalse, depth+1);
-			printf("%*s", depth*2, "");
-			printf("}\n");
+			ntabs(depth); printf("}\n");
 			break;
 		case AST_STMT_EXPR:
-			printf("%*s", depth*2, "");
-			print_ast_expr(&stmt->expr);
+			ntabs(depth); print_ast_expr(&stmt->expr);
 			printf(";");
 			break;
 		case AST_STMT_BLOCK:
@@ -311,47 +332,37 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			}
 			break;
 		case AST_STMT_ASSIGN:
-			printf("%*s", depth*2, "");
-			printf("%s = ", stmt->assign.var_ref->name);
+			ntabs(depth); printf("%s = ", stmt->assign.var_ref->name);
 			print_ast_expr(&stmt->assign.val);
 			printf(";\n");
 			break;
 		case AST_STMT_BREAK:
-			printf("%*s", depth*2, "");
-			printf("break;\n");
+			ntabs(depth); printf("break;\n");
 			break;
 		case AST_STMT_CONTINUE:
-			printf("%*s", depth*2, "");
-			printf("continue;\n");
+			ntabs(depth); printf("continue;\n");
 			break;
 		case AST_STMT_RETURN:
-			printf("%*s", depth*2, "");
-			printf("return ");
+			ntabs(depth); printf("return ");
 			print_ast_expr(&stmt->return_.val);
 			printf(";\n");
 			break;
 		case AST_STMT_WHILE:
-			printf("%*s", depth*2, "");
-			printf("while ");
+			ntabs(depth); printf("while ");
 			print_ast_expr(&stmt->while_.cond);
 			printf(" {\n");
 			print_ast_stmt(stmt->while_.body, depth+1);
-			printf("%*s", depth*2, "");
-			printf("}\n");
+			ntabs(depth); printf("}\n");
 			break;
 		case AST_STMT_FOR:
-			printf("%*s", depth*2, "");
-			printf("for (\n");
+			ntabs(depth); printf("for (\n");
 			print_ast_stmt(stmt->for_.init, depth+1);
-			printf("%*s", depth*2+2, "");
-			print_ast_expr(&stmt->while_.cond);
+			ntabs(depth); print_ast_expr(&stmt->while_.cond);
 			printf(";\n");
 			print_ast_stmt(stmt->for_.step, depth+1);
-			printf("%*s", depth*2, "");
-			printf(") {\n");
+			ntabs(depth); printf(") {\n");
 			print_ast_stmt(stmt->for_.body, depth+1);
-			printf("%*s", depth*2, "");
-			printf("}\n");
+			ntabs(depth); printf("}\n");
 			break;
 	}
 }
@@ -448,8 +459,15 @@ void free_context(hashmap_t* context){
 	free(context);
 }
 void ast_cleanup_context(){
-	//if (context_stack.len != 1)
-	//	printf("INTERNAL ERROR: ast_cleanup_context() when context stack isn't empty.\n");
-	//free_context_v(&top_level_context);
 	free_hashmap_ptr_list_v(&context_stack);
+}
+
+void print_ast_context(const hashmap_t* ctx, int depth){
+	for (hashmap_iterator_t iter = hashmap_iter(ctx); iter.current; iter = hashmap_iter_next(iter)){
+		print_ast_id(iter.current->value, depth);
+	}
+}
+
+void print_ast(){
+	print_ast_context(&top_level_context, 0);
 }

@@ -228,5 +228,8 @@ void context_stack_pop(hashmap_t* context);
 void free_context_v(hashmap_t* context);
 void free_context(hashmap_t* context);
 void ast_cleanup_context();
+void print_ast_context(const hashmap_t* context, int depth);
+
+void print_ast();
 
 #endif

@@ -38,7 +38,7 @@
 %%
 
 main:
-	declaration_list YYEOF	{ printf("Parsing complete: TODO debug print\n"); }
+	declaration_list YYEOF	{ print_ast(); }
 
 declaration_list:
 	%empty

@@ -111,3 +111,35 @@ hashmap_entry_t* hashmap_to_linked_list(hashmap_t* map){
 	
 	return first;
 }
+
+hashmap_iterator_t hashmap_iter(const hashmap_t* map){
+	for (unsigned int i=0; i<map->bcap; i++){
+		if (map->buckets[i]){
+			return (hashmap_iterator_t){
+				.current=map->buckets[i],
+				.map=map,
+				.bi=i,
+			};
+		}
+	}
+	return (hashmap_iterator_t){
+		.current=0,
+		.map=map,
+		.bi=-1,
+	};
+}
+hashmap_iterator_t hashmap_iter_next(hashmap_iterator_t iter){
+	if (!iter.current) return iter;
+	if (iter.current->next){
+		iter.current = iter.current->next;
+		return iter;
+	}
+	for (iter.bi++; iter.bi < iter.map->bcap; iter.bi++){
+		if (iter.map->buckets[iter.bi]){
+			iter.current = iter.map->buckets[iter.bi];
+			return iter;
+		}
+	}
+	iter.current = 0;
+	return iter;
+}
