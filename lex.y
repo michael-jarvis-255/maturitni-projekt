@@ -67,7 +67,7 @@ return		update_yylloc(yyleng); return TK_RETURN;
 								return TK_NAME;
 							}
 							
-							switch (id->type){ // TODO: location tracking for type, var and funcs
+							switch (id->type){
 								case AST_ID_TYPE:
 									yylval.type_ref = &id->type_;
 									free(name);
