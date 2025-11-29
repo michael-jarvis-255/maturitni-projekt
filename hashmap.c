@@ -88,3 +88,26 @@ void hashmap_insert(hashmap_t* map, const char* key, void* value){
 	map->buckets[h] = entry;
 	map->size++;
 }
+
+hashmap_entry_t* hashmap_to_linked_list(hashmap_t* map){
+	hashmap_entry_t* first = 0;
+	hashmap_entry_t* last = 0;
+	for (unsigned int i=0; i < map->bcap; i++){
+		if (map->buckets[i]){
+			if (!first){
+				first = map->buckets[i];
+				last = first;
+			}else{
+				last->next = map->buckets[i];
+			}
+			map->buckets[i] = 0;
+			while (last->next) last = last->next;
+		}
+	}
+	map->size = 0;
+	map->bcap = 0;
+	free(map->buckets);
+	map->buckets = 0;
+	
+	return first;
+}

@@ -18,5 +18,6 @@ hashmap_t create_hashmap();
 void* hashmap_get(const hashmap_t* map, const char* key);
 void hashmap_remove(hashmap_t* map, const char* key);
 void hashmap_insert(hashmap_t* map, const char* key, void* value);
+hashmap_entry_t* hashmap_to_linked_list(hashmap_t* map);
 
 #endif

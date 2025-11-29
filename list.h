@@ -11,7 +11,8 @@ typedef struct T##_list_t { \
 } T##_list_t;	\
 T##_list_t create_##T##_list();	\
 void T##_list_append(T##_list_t* list, T##_t elem);	\
-void T##_list_pop(T##_list_t* list);
+void T##_list_pop(T##_list_t* list);	\
+void free_##T##_list(T##_list_t* list);
 
 #define create_list_type_impl(T) \
 T##_list_t create_##T##_list(){	\
@@ -36,6 +37,15 @@ void T##_list_pop(T##_list_t* list){	\
 		exit(1);	\
 	}	\
 	list->len--;	\
+}	\
+void free_##T##_list_v(T##_list_t* list){	\
+	for (unsigned int i=0; i<list->len; i++){	\
+		free_##T##_v(list->data[i]);	\
+	}	\
+	free(list->data);	\
+	list->data = 0;	\
+	list->cap = 0;	\
+	list->len = 0;	\
 }
 
 #endif

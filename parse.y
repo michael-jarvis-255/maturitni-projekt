@@ -42,7 +42,7 @@ main:
 
 declaration_list:
 	%empty
-|	declaration_list declaration	{ printf("%i.%i - %i.%i\n", @2.first_line, @2.first_column, @2.last_line, @2.last_column); }
+|	declaration_list declaration
 
 %nterm <type_ref> type;
 type:
@@ -52,8 +52,8 @@ type:
 %nterm <name> name;
 name:
 	TK_NAME
-|	type		{ $$ = (ast_name_t){ .loc=@1, .name=$1->name }; }
-|	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=$1->name }; }
+|	type		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
+|	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
@@ -268,5 +268,6 @@ single_var_declaration:
 
 int main(){
 	ast_init_context();
-	return yyparse();
+	yyparse();
+	ast_cleanup_context();
 }

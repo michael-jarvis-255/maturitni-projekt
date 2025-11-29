@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <string.h>
 
+void free_hashmap_ptr_v(hashmap_ptr_t map){
+	free_context_v(map);
+}
+void free_ast_variable_v(ast_variable_t _){}
 create_list_type_impl(ast_variable)
 create_list_type_impl(ast_stmt)
 create_list_type_impl(hashmap_ptr)
@@ -11,6 +15,27 @@ create_list_type_impl(ast_expr)
 
 static hashmap_t top_level_context;
 static context_stack_t context_stack;
+
+void free_ast_id_v(ast_id_t id){
+	switch (id.type){
+		case AST_ID_TYPE:
+			free((void*)id.type_.name);
+			break;
+		case AST_ID_VAR:
+			free((void*)id.var.name);
+			break;
+		case AST_ID_FUNC:
+			free_ast_stmt(id.func.body);
+			free_context(id.func.context);
+			free((void*)id.func.name);
+			free(id.func.args.data);
+			break;
+	}
+}
+void free_ast_id(ast_id_t* id){
+	free_ast_id_v(*id);
+	free(id);
+}
 
 static bool ast_expr_op_is_unary(ast_expr_op_enum_t op){
 	switch (op){
@@ -99,6 +124,26 @@ ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left,
 	};
 }
 
+
+void free_ast_expr(ast_expr_t* exp){
+	free_ast_expr_v(*exp);
+	free(exp);
+}
+void free_ast_expr_v(ast_expr_t exp){
+	switch (exp.type){
+		case AST_EXPR_CONST:
+		case AST_EXPR_VAR_REF:
+			break;
+		case AST_EXPR_FUNC_CALL:
+			free_ast_expr_list_v(&exp.func_call.arglist);
+			break;
+		case AST_EXPR_OP:
+			free_ast_expr(exp.op.left);
+			if (!ast_expr_op_is_unary(exp.op.op))
+				free_ast_expr(exp.op.right);
+			break;
+	}
+}
 
 void print_ast_expr(const ast_expr_t* exp){
 	switch (exp->type){
@@ -203,6 +248,51 @@ ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_
 	};
 }
 
+void free_ast_stmt(ast_stmt_t* stmt){
+	free_ast_stmt_v(*stmt);
+	free(stmt);
+}
+void free_ast_stmt_v(ast_stmt_t stmt){
+	switch (stmt.type){
+		case AST_STMT_IF:
+			free_ast_stmt(stmt.if_.iftrue);
+			free_ast_expr_v(stmt.if_.cond);
+			break;
+		case AST_STMT_IF_ELSE:
+			free_ast_stmt(stmt.if_else.iffalse);
+			free_ast_stmt(stmt.if_else.iftrue);
+			free_ast_expr_v(stmt.if_else.cond);
+			break;
+		case AST_STMT_EXPR:
+			free_ast_expr_v(stmt.expr);
+			break;
+		case AST_STMT_BLOCK:
+			free_ast_stmt_list_v(&stmt.block.stmtlist);
+			if (stmt.block.context)
+				free_context(stmt.block.context);
+			break;
+		case AST_STMT_ASSIGN:
+			free_ast_expr_v(stmt.assign.val);
+			break;
+		case AST_STMT_BREAK:
+		case AST_STMT_CONTINUE:
+			break;
+		case AST_STMT_RETURN:
+			free_ast_expr_v(stmt.return_.val);
+			break;
+		case AST_STMT_FOR:
+			free_ast_expr_v(stmt.while_.cond);
+			free_ast_stmt(stmt.while_.body);
+			break;
+		case AST_STMT_WHILE:
+			free_ast_expr_v(stmt.for_.cond);
+			free_ast_stmt(stmt.for_.init);
+			free_ast_stmt(stmt.for_.step);
+			free_ast_stmt(stmt.for_.body);
+			break;
+	}
+}
+
 void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	switch (stmt->type){
 		case AST_STMT_IF:
@@ -235,16 +325,6 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			for (unsigned int i=0; i < stmt->block.stmtlist.len; i++){
 				print_ast_stmt(&stmt->block.stmtlist.data[i], depth);
 			}
-			break;
-		case AST_STMT_DECLARE:
-			//printf("%*s", depth*2, "");
-			//printf("%s %s", stmt->declare.type->name.name, stmt->declare.name.name);
-			//if (stmt->declare.val){
-			//	printf(" = ");
-			//	print_ast_expr(stmt->declare.val);
-			//	printf(";");
-			//}
-			//printf("\n");
 			break;
 		case AST_STMT_ASSIGN:
 			printf("%*s", depth*2, "");
@@ -334,7 +414,7 @@ void ast_init_context(){
 	ast_id_t* int_type = malloc(sizeof(ast_id_t));
 	int_type->type = AST_ID_TYPE;
 	int_type->type_.declare_loc = (loc_t){0};
-	int_type->type_.name = "int";
+	int_type->type_.name = strdup("int");
 	int_type->type_.ptr_count = 0;
 	int_type->type_.bitwidth = 32;
 	int_type->type_.signed_ = 1;
@@ -364,8 +444,28 @@ void context_stack_push(hashmap_t* context){
 }
 void context_stack_pop(hashmap_t* context){
 	if (context_stack.data[context_stack.len-1] != context){
-		printf("INTERNAL ERROR: attempting to end context which isn't top level.\n");
+		printf("INTERNAL ERROR: attempting to end context which isn't the active level.\n");
 		return;
 	}
 	hashmap_ptr_list_pop(&context_stack);
+}
+
+void free_context_v(hashmap_t* context){
+	hashmap_entry_t* entry = hashmap_to_linked_list(context);
+	while (entry){
+		free_ast_id(entry->value);
+		hashmap_entry_t* next = entry->next;
+		free(entry);
+		entry = next;
+	}
+}
+void free_context(hashmap_t* context){
+	free_context_v(context);
+	free(context);
+}
+void ast_cleanup_context(){
+	//if (context_stack.len != 1)
+	//	printf("INTERNAL ERROR: ast_cleanup_context() when context stack isn't empty.\n");
+	//free_context_v(&top_level_context);
+	free_hashmap_ptr_list_v(&context_stack);
 }

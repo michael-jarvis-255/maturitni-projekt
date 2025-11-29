@@ -8,12 +8,12 @@
 
 typedef struct ast_name_t {
 	loc_t loc;
-	const char* name;
+	char* name;
 } ast_name_t;
 
 typedef struct ast_datatype_t {
 	loc_t declare_loc;
-	const char* name;
+	char* name;
 	unsigned int ptr_count; // 0 if type is not a ptr, 1 if it is `name*`, 2 if `name**` and so on
 	unsigned int bitwidth;
 	bool signed_;
@@ -21,7 +21,7 @@ typedef struct ast_datatype_t {
 
 typedef struct ast_variable_t {
 	loc_t declare_loc;
-	const char* name;
+	char* name;
 	ast_datatype_t* type_ref;
 } ast_variable_t;
 
@@ -91,7 +91,6 @@ typedef enum {
 	AST_STMT_IF_ELSE,
 	AST_STMT_EXPR,
 	AST_STMT_BLOCK,
-	AST_STMT_DECLARE,
 	AST_STMT_ASSIGN,
 	AST_STMT_BREAK,
 	AST_STMT_CONTINUE,
@@ -122,10 +121,6 @@ typedef struct ast_stmt_t {
 			ast_stmt_list_t stmtlist;
 			hashmap_t* context;
 		} block;
-		struct {
-			ast_variable_t* var_ref;
-			ast_expr_t val;
-		} declare; // TODO: remove this and have declaration info in ast_variable_t?
 		struct {
 			ast_variable_t* var_ref;
 			ast_expr_t val;
@@ -188,11 +183,15 @@ typedef hashmap_t* hashmap_ptr_t;
 create_list_type_header(hashmap_ptr)
 typedef hashmap_ptr_list_t context_stack_t;
 
+void free_ast_id_v(ast_id_t id);
+void free_ast_id(ast_id_t* id);
+
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
 ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var);
 ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_op(loc_t loc, ast_expr_op_enum_t op, ast_expr_t left, ast_expr_t right);
-
+void free_ast_expr_v(ast_expr_t exp);
+void free_ast_expr(ast_expr_t* exp);
 void print_ast_expr(const ast_expr_t* exp);
 
 ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context);
@@ -203,7 +202,8 @@ ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue
 ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr);
 ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body);
 ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
-
+void free_ast_stmt_v(ast_stmt_t stmt);
+void free_ast_stmt(ast_stmt_t* stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
 ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_variable_list_t args, hashmap_t* context, ast_stmt_t body);
@@ -216,5 +216,8 @@ ast_id_t* context_get(const char* name);
 hashmap_t create_context();
 void context_stack_push(hashmap_t* context);
 void context_stack_pop(hashmap_t* context);
+void free_context_v(hashmap_t* context);
+void free_context(hashmap_t* context);
+void ast_cleanup_context();
 
 #endif

@@ -1,0 +1,14 @@
+int x;
+int y = 15;
+
+int foo(int x){
+	int y = x + 45;
+	int q;
+	int w = 15;
+
+	int bar(int w){
+		return q;
+	}
+	
+	return y;
+}
