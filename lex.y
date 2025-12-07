@@ -60,7 +60,7 @@ return		update_yylloc(yyleng); return TK_RETURN;
 							strncpy(name, yytext, yyleng);
 							name[yyleng] = 0;
 
-							ast_id_t* id = context_get(name);
+							ast_id_t* id = context_stack_get(name);
 							if (id == 0){
 								yylval.name.name = name;
 								yylval.name.loc = yylloc;

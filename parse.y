@@ -233,7 +233,7 @@ declaration:
 function_declaration:
 	type name '(' function_args_definition[args] ')'
 	<context>{
-		hashmap_t ctx = create_hashmap();
+		context_t ctx = create_context();
 		$$ = convert_to_ptr(ctx);
 		context_stack_push($$);
 
@@ -241,7 +241,7 @@ function_declaration:
 			ast_variable_t v = $args.data[i];
 			ast_id_t id = (ast_id_t){.type=AST_ID_VAR, .var=v};
 			ast_id_t* idp = convert_to_ptr(id);
-			context_insert(v.name, idp);
+			current_context_insert(v.name, idp);
 		}
 	}[context]
 	no_context_block[body]

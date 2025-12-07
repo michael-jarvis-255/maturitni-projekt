@@ -4,16 +4,17 @@
 #include <stdbool.h>
 #include <string.h>
 
-void free_hashmap_ptr_v(hashmap_ptr_t map){
+void free_context_ptr_v(context_ptr_t map){
 	free_context_v(map);
 }
 void free_ast_variable_v(ast_variable_t _){}
 create_list_type_impl(ast_variable)
 create_list_type_impl(ast_stmt)
-create_list_type_impl(hashmap_ptr)
+create_list_type_impl(context_ptr)
 create_list_type_impl(ast_expr)
+create_hashmap_type_impl(str, ast_id_t*, context);
 
-static hashmap_t top_level_context;
+static context_t top_level_context;
 static context_stack_t context_stack;
 
 void free_ast_id_v(ast_id_t id){
@@ -188,9 +189,9 @@ void print_ast_expr(const ast_expr_t* exp){
 
 
 ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context){
-	hashmap_t* ctxp = 0;
+	context_t* ctxp = 0;
 	if (with_context){
-		hashmap_t ctx = create_hashmap();
+		context_t ctx = create_context();
 		ctxp = convert_to_ptr(ctx);
 	}
 	return (ast_stmt_t){
@@ -367,7 +368,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_variable_list_t args, hashmap_t* context, ast_stmt_t body){
+ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_variable_list_t args, context_t* context, ast_stmt_t body){
 	ast_id_t* func_id = malloc(sizeof(ast_id_t));
 	func_id->type = AST_ID_FUNC;
 	func_id->func.declare_loc = loc;
@@ -376,7 +377,7 @@ ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, c
 	func_id->func.args = args;
 	func_id->func.context = context;
 	func_id->func.body = convert_to_ptr(body);
-	context_insert(name, func_id);
+	current_context_insert(name, func_id);
 
 	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
@@ -386,7 +387,7 @@ ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name)
 	var_id->var.type_ref = type;
 	var_id->var.declare_loc = loc;
 	var_id->var.name = name.name;
-	context_insert(name.name, var_id);
+	current_context_insert(name.name, var_id);
 
 	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
@@ -396,15 +397,15 @@ ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_
 	var_id->var.type_ref = type;
 	var_id->var.declare_loc = loc;
 	var_id->var.name = name.name;
-	context_insert(name.name, var_id);
+	current_context_insert(name.name, var_id);
 
 	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, &var_id->var, value)};
 }
 
 void ast_init_context(){
-	context_stack = create_hashmap_ptr_list();
-	top_level_context = create_hashmap();
-	hashmap_ptr_list_append(&context_stack, &top_level_context);
+	context_stack = create_context_ptr_list();
+	top_level_context = create_context();
+	context_ptr_list_append(&context_stack, &top_level_context);
 
 	ast_id_t* int_type = malloc(sizeof(ast_id_t));
 	int_type->type = AST_ID_TYPE;
@@ -413,57 +414,57 @@ void ast_init_context(){
 	int_type->type_.ptr_count = 0;
 	int_type->type_.bitwidth = 32;
 	int_type->type_.signed_ = 1;
-	context_insert("int", int_type);
+	current_context_insert("int", int_type);
 	
 	// TODO: add more default types to global context
 }
-void context_insert(const char* name, ast_id_t* value){
-	hashmap_t* ctx = context_stack.data[context_stack.len-1];
-	bool exists = hashmap_get(ctx, name);
+void current_context_insert(const char* name, ast_id_t* value){
+	context_t* ctx = context_stack.data[context_stack.len-1];
+	bool exists = context_get(ctx, name);
 	if (exists){
 		printf("ERROR: name '%s' is already defined!\n", name); // TODO: better error logging
 		return;
 	}
-	hashmap_insert(ctx, name, value);
+	context_insert(ctx, name, value);
 }
-ast_id_t* context_get(const char* name){
+ast_id_t* context_stack_get(const char* name){
 	for (int i = context_stack.len-1; i>=0; i--){
-		hashmap_t* ctx = context_stack.data[i];
-		ast_id_t* val = hashmap_get(ctx, name);
+		context_t* ctx = context_stack.data[i];
+		ast_id_t* val = context_get(ctx, name);
 		if (val) return val;
 	}
 	return 0;
 }
-void context_stack_push(hashmap_t* context){
-	hashmap_ptr_list_append(&context_stack, context);
+void context_stack_push(context_t* context){
+	context_ptr_list_append(&context_stack, context);
 }
-void context_stack_pop(hashmap_t* context){
+void context_stack_pop(context_t* context){
 	if (context_stack.data[context_stack.len-1] != context){
 		printf("INTERNAL ERROR: attempting to end context which isn't the active level.\n");
 		return;
 	}
-	hashmap_ptr_list_pop(&context_stack);
+	context_ptr_list_pop(&context_stack);
 }
 
-void free_context_v(hashmap_t* context){
-	hashmap_entry_t* entry = hashmap_to_linked_list(context);
+void free_context_v(context_t* context){
+	context_entry_t* entry = context_to_linked_list(context);
 	while (entry){
 		free_ast_id(entry->value);
-		hashmap_entry_t* next = entry->next;
+		context_entry_t* next = entry->next;
 		free(entry);
 		entry = next;
 	}
 }
-void free_context(hashmap_t* context){
+void free_context(context_t* context){
 	free_context_v(context);
 	free(context);
 }
 void ast_cleanup_context(){
-	free_hashmap_ptr_list_v(&context_stack);
+	free_context_ptr_list_v(&context_stack);
 }
 
-void print_ast_context(const hashmap_t* ctx, int depth){
-	for (hashmap_iterator_t iter = hashmap_iter(ctx); iter.current; iter = hashmap_iter_next(iter)){
+void print_ast_context(const context_t* ctx, int depth){
+	for (context_iterator_t iter = context_iter(ctx); iter.current; iter = context_iter_next(iter)){
 		print_ast_id(iter.current->value, depth);
 	}
 }

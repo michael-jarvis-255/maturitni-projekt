@@ -9,5 +9,5 @@ typedef union YYSTYPE {
 	ast_datatype_t* type_ref;
 	ast_variable_t* var_ref;
 	ast_func_t* func_ref;
-	hashmap_t* context;
+	context_t* context;
 } YYSTYPE;

@@ -6,6 +6,11 @@
 #include <stdbool.h>
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
 
+typedef const char* str;
+struct ast_id_t;
+typedef struct ast_id_t ast_id_t;
+create_hashmap_type_header(str, ast_id_t*, context);
+
 typedef struct ast_name_t {
 	loc_t loc;
 	char* name;
@@ -127,7 +132,7 @@ typedef struct ast_stmt_t {
 		ast_expr_t expr;
 		struct {
 			ast_stmt_list_t stmtlist;
-			hashmap_t* context;
+			context_t* context;
 		} block;
 		struct {
 			ast_variable_t* var_ref;
@@ -169,7 +174,7 @@ typedef struct ast_func_t {
 	const char* name;
 	ast_variable_list_t args;
 	ast_stmt_t* body;
-	hashmap_t* context;
+	context_t* context;
 } ast_func_t;
 
 typedef enum {
@@ -187,9 +192,9 @@ typedef struct ast_id_t {
 	};
 } ast_id_t;
 
-typedef hashmap_t* hashmap_ptr_t;
-create_list_type_header(hashmap_ptr)
-typedef hashmap_ptr_list_t context_stack_t;
+typedef context_t* context_ptr_t;
+create_list_type_header(context_ptr)
+typedef context_ptr_list_t context_stack_t;
 
 void free_ast_id_v(ast_id_t id);
 void free_ast_id(ast_id_t* id);
@@ -215,20 +220,20 @@ void free_ast_stmt_v(ast_stmt_t stmt);
 void free_ast_stmt(ast_stmt_t* stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_variable_list_t args, hashmap_t* context, ast_stmt_t body);
+ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_variable_list_t args, context_t* context, ast_stmt_t body);
 ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name);
 ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
 
 void ast_init_context();
-void context_insert(const char* name, ast_id_t* value);
-ast_id_t* context_get(const char* name);
-hashmap_t create_context();
-void context_stack_push(hashmap_t* context);
-void context_stack_pop(hashmap_t* context);
-void free_context_v(hashmap_t* context);
-void free_context(hashmap_t* context);
+void current_context_insert(const char* name, ast_id_t* value);
+ast_id_t* context_stack_get(const char* name);
+context_t create_context();
+void context_stack_push(context_t* context);
+void context_stack_pop(context_t* context);
+void free_context_v(context_t* context);
+void free_context(context_t* context);
 void ast_cleanup_context();
-void print_ast_context(const hashmap_t* context, int depth);
+void print_ast_context(const context_t* context, int depth);
 
 void print_ast();
 
