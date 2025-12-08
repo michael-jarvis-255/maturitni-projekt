@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include "hash.h"
 
 static void free_context_ptr_v(context_ptr_t map){
 	free_context_v(map);

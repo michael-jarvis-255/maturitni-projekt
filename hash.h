@@ -1,6 +1,6 @@
 #include <string.h>
 
-static inline unsigned long str_hash(const char* str){
+static unsigned long str_hash(const char* str){
 	unsigned long h = 1337;
 	while (str[0]){
 		h = (h*6364136223846793005) + str[0];

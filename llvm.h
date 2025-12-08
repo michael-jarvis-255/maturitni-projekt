@@ -1,4 +1,4 @@
-
+#include "list.h"
 
 typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
 	LLVM_TERM_INST_RET,
@@ -83,11 +83,18 @@ typedef struct llvm_inst_t {
 		} call;
 	};
 } llvm_inst_t;
-
+create_list_type_header(llvm_inst, false);
 
 typedef struct llvm_basic_block_t {
-	// list of [%register = instruction] pairs
+	unsigned int regbase;
+	llvm_inst_list_t instructions; // i-th instrcution assigns register (regbase + i)
 	llvm_term_inst_t term_inst;
 } llvm_basic_block_t;
+create_list_type_header(llvm_basic_block, false);
 
-
+typedef struct llvm_function_t {
+	const char* name;
+	llvm_basic_block_list_t blocks; // entry block is always block 0
+	// return type
+	// argument list
+} llvm_function_t;

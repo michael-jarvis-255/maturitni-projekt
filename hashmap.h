@@ -1,7 +1,6 @@
 #ifndef _HASHMAP_H_
 #define _HASHMAP_H_
 #include <stdbool.h>
-#include "hash.h"
 
 // Tk = key type
 // Tv = value type
