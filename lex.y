@@ -20,6 +20,8 @@
 	}
 %}
 
+%option nounput
+%option noinput
 %option noyywrap
 %x comment
 %x string

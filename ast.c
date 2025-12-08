@@ -70,6 +70,8 @@ static const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 		case AST_EXPR_UNOP_LNOT: return "!";
 		case AST_EXPR_UNOP_NEG: return "-";
 	}
+	printf("INTERNAL ERROR\n");
+	exit(1);
 }
 static const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 	switch (op){
@@ -92,6 +94,8 @@ static const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 		case AST_EXPR_BINOP_SHR: return ">>";
 		case AST_EXPR_BINOP_SHL: return "<<";
 	}
+	printf("INTERNAL ERROR\n");
+	exit(1);
 }
 
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value){
