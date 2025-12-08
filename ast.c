@@ -4,14 +4,13 @@
 #include <stdbool.h>
 #include <string.h>
 
-void free_context_ptr_v(context_ptr_t map){
+static void free_context_ptr_v(context_ptr_t map){
 	free_context_v(map);
 }
-void free_ast_variable_v(ast_variable_t _){}
-create_list_type_impl(ast_variable)
-create_list_type_impl(ast_stmt)
-create_list_type_impl(context_ptr)
-create_list_type_impl(ast_expr)
+create_list_type_impl(ast_variable, false);
+create_list_type_impl(ast_stmt, true);
+create_list_type_impl(context_ptr, true);
+create_list_type_impl(ast_expr, true);
 create_hashmap_type_impl(str, ast_id_t*, context);
 
 static context_t top_level_context;
@@ -146,7 +145,7 @@ void free_ast_expr_v(ast_expr_t exp){
 		case AST_EXPR_VAR_REF:
 			break;
 		case AST_EXPR_FUNC_CALL:
-			free_ast_expr_list_v(&exp.func_call.arglist);
+			deep_free_ast_expr_list(&exp.func_call.arglist);
 			break;
 		case AST_EXPR_UNOP:
 			free_ast_expr(exp.unop.operand);
@@ -279,7 +278,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			free_ast_expr_v(stmt.expr);
 			break;
 		case AST_STMT_BLOCK:
-			free_ast_stmt_list_v(&stmt.block.stmtlist);
+			deep_free_ast_stmt_list(&stmt.block.stmtlist);
 			if (stmt.block.context)
 				free_context(stmt.block.context);
 			break;
@@ -460,7 +459,7 @@ void free_context(context_t* context){
 	free(context);
 }
 void ast_cleanup_context(){
-	free_context_ptr_list_v(&context_stack);
+	deep_free_context_ptr_list(&context_stack);
 }
 
 void print_ast_context(const context_t* ctx, int depth){

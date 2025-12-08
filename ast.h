@@ -74,7 +74,7 @@ typedef enum {
 
 struct ast_func_t;
 typedef struct ast_expr_t ast_expr_t;
-create_list_type_header(ast_expr);
+create_list_type_header(ast_expr, true);
 typedef struct ast_expr_t {
 	ast_expr_enum_t type;
 	loc_t loc;
@@ -114,7 +114,7 @@ typedef enum {
 
 struct ast_stmt_t;
 typedef struct ast_stmt_t ast_stmt_t;
-create_list_type_header(ast_stmt)
+create_list_type_header(ast_stmt, true);
 
 typedef struct ast_stmt_t {
 	ast_stmt_enum_t type;
@@ -166,7 +166,7 @@ typedef struct ast_decl_t {
 	};
 } ast_decl_t;
 
-create_list_type_header(ast_variable);
+create_list_type_header(ast_variable, false);
 
 typedef struct ast_func_t {
 	loc_t declare_loc;
@@ -193,7 +193,7 @@ typedef struct ast_id_t {
 } ast_id_t;
 
 typedef context_t* context_ptr_t;
-create_list_type_header(context_ptr)
+create_list_type_header(context_ptr, true);
 typedef context_ptr_list_t context_stack_t;
 
 void free_ast_id_v(ast_id_t id);
