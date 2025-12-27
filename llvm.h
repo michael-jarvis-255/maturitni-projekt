@@ -1,6 +1,12 @@
 #include "list.h"
+#include "hashmap.h"
+#include "ast.h"
+
+typedef const ast_variable_t* ast_variable_ptr;
+create_hashmap_type_header(ast_variable_ptr, unsigned int, var2reg_map);
 
 typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
+	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
 	LLVM_TERM_INST_RET,
 	LLVM_TERM_INST_JMP, // 'br' instruction without a condition
 	LLVM_TERM_INST_BR,
@@ -23,6 +29,35 @@ typedef struct llvm_term_inst_t {
 	};
 } llvm_term_inst_t;
 
+typedef enum {
+	LLVM_TYPE_INTEGRAL,
+	LLVM_TYPE_STRUCTURAL,
+} llvm_type_enum_t;
+
+typedef struct llvm_type_t {
+	llvm_type_enum_t type;
+	union {
+		unsigned int bitwidth; // when LLVM_TYPE_INTEGRAL
+	};
+} llvm_type_t;
+
+typedef enum {
+	LLVM_VALUE_INTEGRAL,
+	LLVM_VALUE_REG,
+	LLVM_VALUE_UNDEF,
+	LLVM_VALUE_POISON, // TODO: where to use 'undef' and where 'poison'?
+} llvm_value_enum_t;
+
+typedef struct llvm_value_t {
+	llvm_value_enum_t type;
+	union {
+		long integral;
+		struct {
+			unsigned int reg;
+			ast_datatype_t* ast_type;
+		} reg;
+	};
+} llvm_value_t;
 
 typedef enum {
 	// binary operations
@@ -54,12 +89,9 @@ typedef struct llvm_inst_t {
 	llvm_inst_enum_t type;
 	union {
 		struct {
-			// type (?)
-			// value1
-			// value2
+			llvm_value_t first, second;
 		} binop;
 		struct {
-			// type
 			// ptr value
 		} load;
 		struct {
@@ -68,16 +100,13 @@ typedef struct llvm_inst_t {
 		} store;
 		struct {
 			// cond (eq, ne, ugt, ...)
-			// type (?)
 			// value1
 			// value2
 		} icmp;
 		struct {
-			// type
 			// list of [value, label] pairs
 		} phi;
 		struct {
-			// type
 			// func ptr
 			// function args
 		} call;
@@ -95,6 +124,10 @@ create_list_type_header(llvm_basic_block, false);
 typedef struct llvm_function_t {
 	const char* name;
 	llvm_basic_block_list_t blocks; // entry block is always block 0
+	unsigned int next_reg;
 	// return type
 	// argument list
 } llvm_function_t;
+
+
+llvm_function_t llvm_emit_ast_func(ast_func_t func);

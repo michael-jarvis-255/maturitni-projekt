@@ -26,7 +26,7 @@ typedef struct {	\
 	\
 void T##_insert(T##_t* map, Tk key, Tv value);	\
 T##_t create_##T();	\
-Tv T##_get(const T##_t* map, Tk key);	\
+Tv T##_get(const T##_t* map, Tk key, Tv default_);	\
 void T##_remove(T##_t* map, Tk key);	\
 void T##_insert(T##_t* map, Tk key, Tv value);	\
 T##_entry_t* T##_to_linked_list(T##_t* map);	\
@@ -52,10 +52,10 @@ static T##_entry_t* T##_find_entry(const T##_t* map, Tk key){	\
 	return 0;	\
 }	\
 	\
-Tv T##_get(const T##_t* map, Tk key){	\
+Tv T##_get(const T##_t* map, Tk key, Tv default_){	\
 	T##_entry_t* entry = T##_find_entry(map, key);	\
 	if (entry) return entry->value;	\
-	return 0;	\
+	return default_;	\
 }	\
 	\
 void T##_remove(T##_t* map, Tk key){	\

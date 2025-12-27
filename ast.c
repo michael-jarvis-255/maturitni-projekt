@@ -424,7 +424,7 @@ void ast_init_context(){
 }
 void current_context_insert(const char* name, ast_id_t* value){
 	context_t* ctx = context_stack.data[context_stack.len-1];
-	bool exists = context_get(ctx, name);
+	bool exists = context_get(ctx, name, 0);
 	if (exists){
 		printf("ERROR: name '%s' is already defined!\n", name); // TODO: better error logging
 		return;
@@ -434,7 +434,7 @@ void current_context_insert(const char* name, ast_id_t* value){
 ast_id_t* context_stack_get(const char* name){
 	for (int i = context_stack.len-1; i>=0; i--){
 		context_t* ctx = context_stack.data[i];
-		ast_id_t* val = context_get(ctx, name);
+		ast_id_t* val = context_get(ctx, name, 0);
 		if (val) return val;
 	}
 	return 0;
