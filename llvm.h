@@ -5,30 +5,6 @@
 typedef const ast_variable_t* ast_variable_ptr;
 create_hashmap_type_header(ast_variable_ptr, unsigned int, var2reg_map);
 
-typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
-	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
-	LLVM_TERM_INST_RET,
-	LLVM_TERM_INST_JMP, // 'br' instruction without a condition
-	LLVM_TERM_INST_BR,
-} llvm_term_inst_enum_t;
-
-typedef struct llvm_term_inst_t {
-	llvm_term_inst_enum_t type;
-	union {
-		struct {
-			// value
-		} ret;
-		struct {
-			// condition
-			// label iftrue
-			// label iffalse
-		} br;
-		struct {
-			// label
-		} jmp;
-	};
-} llvm_term_inst_t;
-
 typedef enum {
 	LLVM_TYPE_INTEGRAL,
 	LLVM_TYPE_STRUCTURAL,
@@ -59,6 +35,29 @@ typedef struct llvm_value_t {
 	};
 } llvm_value_t;
 
+typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
+	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
+	LLVM_TERM_INST_RET,
+	LLVM_TERM_INST_JMP, // 'br' instruction without a condition
+	LLVM_TERM_INST_BR,
+} llvm_term_inst_enum_t;
+
+typedef struct llvm_term_inst_t {
+	llvm_term_inst_enum_t type;
+	union {
+		struct {
+			// value
+		} ret;
+		struct {
+			llvm_value_t cond;
+			unsigned int iftrue, iffalse;
+		} br;
+		struct {
+			unsigned int target;
+		} jmp;
+	};
+} llvm_term_inst_t;
+
 typedef enum {
 	// binary operations
 	LLVM_INST_ADD,
@@ -85,10 +84,23 @@ typedef enum {
 	LLVM_INST_CALL,
 } llvm_inst_enum_t;
 
+typedef enum {
+	LLVM_ICMP_EQ,
+	LLVM_ICMP_NE,
+	LLVM_ICMP_UGT,
+	LLVM_ICMP_UGE,
+	LLVM_ICMP_ULT,
+	LLVM_ICMP_ULE,
+	LLVM_ICMP_SGT,
+	LLVM_ICMP_SGE,
+	LLVM_ICMP_SLT,
+	LLVM_ICMP_SLE,
+} llvm_icmp_enum_t;
+
 typedef struct llvm_inst_t {
 	llvm_inst_enum_t type;
 	union {
-		struct {
+		struct { // TODO: types
 			llvm_value_t first, second;
 		} binop;
 		struct {
@@ -99,12 +111,11 @@ typedef struct llvm_inst_t {
 			// ptr value
 		} store;
 		struct {
-			// cond (eq, ne, ugt, ...)
-			// value1
-			// value2
+			llvm_icmp_enum_t cond;
+			llvm_value_t op1, op2;
 		} icmp;
 		struct {
-			// list of [value, label] pairs
+			unsigned int label1, reg1, label2, reg2;
 		} phi;
 		struct {
 			// func ptr

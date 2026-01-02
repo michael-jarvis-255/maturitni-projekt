@@ -25,13 +25,16 @@ typedef struct {	\
 } T##_iterator_t;	\
 	\
 void T##_insert(T##_t* map, Tk key, Tv value);	\
+void T##_set(T##_t* map, Tk key, Tv value);	\
 T##_t create_##T();	\
 Tv T##_get(const T##_t* map, Tk key, Tv default_);	\
 void T##_remove(T##_t* map, Tk key);	\
 void T##_insert(T##_t* map, Tk key, Tv value);	\
 T##_entry_t* T##_to_linked_list(T##_t* map);	\
 T##_iterator_t T##_iter(const T##_t* map);	\
-T##_iterator_t T##_iter_next(T##_iterator_t iter)
+T##_iterator_t T##_iter_next(T##_iterator_t iter);	\
+T##_t T##_copy(T##_t* map);	\
+void T##_free(T##_t* map)
 
 #define create_hashmap_type_impl(Tk, Tv, T)	\
 T##_t create_##T(){	\
@@ -111,6 +114,12 @@ void T##_insert(T##_t* map, Tk key, Tv value){	\
 	map->size++;	\
 }	\
 	\
+void T##_set(T##_t* map, Tk key, Tv value){	\
+	T##_entry_t* entry = T##_find_entry(map, key);	\
+	if (entry == 0) return T##_insert(map, key, value);	\
+	entry->value = value;	\
+}	\
+	\
 T##_entry_t* T##_to_linked_list(T##_t* map){	\
 	T##_entry_t* first = 0;	\
 	T##_entry_t* last = 0;	\
@@ -164,6 +173,25 @@ T##_iterator_t T##_iter_next(T##_iterator_t iter){	\
 	}	\
 	iter.current = 0;	\
 	return iter;	\
+}	\
+T##_t T##_copy(T##_t* map){	\
+	T##_t copy = create_##T();	\
+	for (T##_iterator_t iter = T##_iter(map); iter.current; iter = T##_iter_next(iter)){	\
+		T##_insert(&copy, iter.current->key, iter.current->value); /* TODO: grow `copy` to the same size as `map` to avoid realloc()s */	\
+	}	\
+	return copy;	\
+}	\
+void T##_free(T##_t* map){	\
+	T##_entry_t* prev = 0;	\
+	for (T##_iterator_t iter = T##_iter(map); iter.current; iter = T##_iter_next(iter)){	\
+		if (prev) free(prev);	\
+		prev = iter.current;	\
+	}	\
+	if (prev) free(prev);	\
+	free(map->buckets);	\
+	map->bcap = 0;	\
+	map->size = 0;	\
 }
+
 
 #endif

@@ -415,6 +415,7 @@ void ast_init_context(){
 	int_type->type = AST_ID_TYPE;
 	int_type->type_.declare_loc = (loc_t){0};
 	int_type->type_.name = strdup("int");
+	int_type->type_.kind = AST_DATATYPE_INTEGRAL;
 	int_type->type_.ptr_count = 0;
 	int_type->type_.bitwidth = 32;
 	int_type->type_.signed_ = 1;

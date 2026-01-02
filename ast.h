@@ -16,9 +16,16 @@ typedef struct ast_name_t {
 	char* name;
 } ast_name_t;
 
+typedef enum {
+	AST_DATATYPE_INTEGRAL,
+	AST_DATATYPE_FLOAT,
+	AST_DATATYPE_STRUCTURED,
+} ast_datatype_enum_t;
+
 typedef struct ast_datatype_t {
 	loc_t declare_loc;
 	char* name;
+	ast_datatype_enum_t kind;
 	unsigned int ptr_count; // 0 if type is not a ptr, 1 if it is `name*`, 2 if `name**` and so on
 	unsigned int bitwidth;
 	bool signed_;
