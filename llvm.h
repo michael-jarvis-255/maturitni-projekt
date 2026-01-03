@@ -35,12 +35,20 @@ typedef struct llvm_value_t {
 	llvm_value_enum_t type;
 	union {
 		long int_const;
+		llvm_reg_t reg;
+	};
+} llvm_value_t;
+
+typedef struct llvm_typed_value_t {
+	llvm_value_enum_t type;
+	union {
+		long int_const;
 		struct {
 			llvm_reg_t reg;
 			ast_datatype_t* ast_type;
-		} reg;
+		} typed_reg;
 	};
-} llvm_value_t;
+} llvm_typed_value_t;
 
 typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
 	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
@@ -107,7 +115,8 @@ typedef enum {
 typedef struct llvm_inst_t {
 	llvm_inst_enum_t type;
 	union {
-		struct { // TODO: types
+		struct {
+			llvm_type_t type;
 			llvm_value_t first, second;
 		} binop;
 		struct {
@@ -119,9 +128,11 @@ typedef struct llvm_inst_t {
 		} store;
 		struct {
 			llvm_icmp_enum_t cond;
+			llvm_type_t type;
 			llvm_value_t op1, op2;
 		} icmp;
 		struct {
+			llvm_type_t type;
 			llvm_label_t label1, label2;
 			llvm_reg_t reg1, reg2;
 		} phi;
