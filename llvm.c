@@ -19,6 +19,7 @@ static inline llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 				break;
 			case LLVM_VALUE_UNDEF:
 			case LLVM_VALUE_POISON:
+				break;
 	}
 	return v;
 }
@@ -32,10 +33,10 @@ static unsigned long ast_variable_ptr_hash(ast_variable_ptr p){
 	return h;
 }
 static inline bool ast_variable_ptr_cmp(ast_variable_ptr a, ast_variable_ptr b){ return a == b; }
-create_hashmap_type_impl(ast_variable_ptr, llvm_reg_t, var2reg_map);
+create_hashmap_type_impl(ast_variable_ptr, llvm_reg_t, var2reg_map)
 
-create_list_type_impl(llvm_inst, false);
-create_list_type_impl(llvm_basic_block, false);
+create_list_type_impl(llvm_inst, false)
+create_list_type_impl(llvm_basic_block, false)
 
 static llvm_label_t llvm_add_block(llvm_function_t* f){
 	llvm_basic_block_t* lastblock = &f->blocks.data[f->blocks.len - 1];
@@ -70,6 +71,7 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 		case AST_EXPR_CONST:
 			return (llvm_typed_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=expr->constant.value };
 		case AST_EXPR_VAR_REF:
+		{
 			llvm_reg_t reg = var2reg_map_get(var2reg, expr->var_ref, LLVM_INVALID_REG);
 			if (LLVM_REG_EQ(reg, LLVM_INVALID_REG))
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_UNDEF }; // variable has not been bound to a register yet, thus is undefined
@@ -78,8 +80,10 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 					.typed_reg.reg = reg,
 					.typed_reg.ast_type = expr->var_ref->type_ref
 				};
+		}
 		case AST_EXPR_FUNC_CALL:	printf("<unimplemented>\n"); exit(1); // TODO
 		case AST_EXPR_UNOP:
+		{
 			llvm_typed_value_t operand = llvm_emit_ast_expr(expr->unop.operand, var2reg, f);
 			if (operand.type == LLVM_VALUE_REG && operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED){
 				printf("ERROR: cannot use structured data type in unary operation\n"); // TODO: better error msg
@@ -92,11 +96,13 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 			if (operand.type == LLVM_VALUE_POISON){
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON }; // TODO: is this valid to do according to llvm langauge docs?
 			}
+			// TODO: what if operand isnt LLVM_VALUE_REG ?
 			llvm_inst_t inst; // TODO: variable types, register types
 			switch (expr->unop.op){
 				case AST_EXPR_UNOP_NEG: // TODO: types
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_SUB,
+						.binop.type = ast_type_to_llvm_type(operand.typed_reg.ast_type),
 						.binop.first = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0 },
 						.binop.second = llvm_untype_value(operand)
 					};
@@ -104,6 +110,7 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 				case AST_EXPR_UNOP_BNOT:
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_XOR,
+						.binop.type = ast_type_to_llvm_type(operand.typed_reg.ast_type),
 						.binop.first = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0xffffffff }, // TODO: use bitwidth of operand.reg.ast_type
 						.binop.second = llvm_untype_value(operand)
 					};
@@ -111,6 +118,7 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 				case AST_EXPR_UNOP_LNOT:
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_ICMP,
+						.icmp.type = ast_type_to_llvm_type(operand.typed_reg.ast_type),
 						.icmp.cond = LLVM_ICMP_EQ,
 						.icmp.op1 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0 },
 						.icmp.op2 = llvm_untype_value(operand)
@@ -118,6 +126,7 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 					break;
 			}
 			return (llvm_typed_value_t){ .type=LLVM_VALUE_REG, .typed_reg.reg=llvm_add_inst(f, inst), .typed_reg.ast_type=0 }; // TODO: assign ast type
+		}
 		case AST_EXPR_BINOP:		printf("<unimplemented>\n"); exit(1); // TODO
 	}
 }
@@ -160,6 +169,7 @@ static void llvm_merge_var2reg_maps(llvm_function_t* f, llvm_label_t block1, var
 static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_function_t* f){
 	switch (stmt->type){
 		case AST_STMT_IF:
+		{
 			llvm_typed_value_t cond = llvm_emit_ast_expr(&stmt->if_.cond, var2reg, f);
 			cond = llvm_cast_to_i1(cond, f); // TODO
 			llvm_label_t base_label = llvm_function_last_label(f);
@@ -177,6 +187,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			llvm_merge_var2reg_maps(f, base_label, var2reg, iftrue_label, &var2reg_iftrue);
 			var2reg_map_free(&var2reg_iftrue);
 			return;
+		}
 		case AST_STMT_IF_ELSE:	printf("<unimplemented>\n"); exit(1); // TODO
 		case AST_STMT_EXPR:
 			llvm_emit_ast_expr(&stmt->expr, var2reg, f);

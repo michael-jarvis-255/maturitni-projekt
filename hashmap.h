@@ -116,7 +116,10 @@ void T##_insert(T##_t* map, Tk key, Tv value){	\
 	\
 void T##_set(T##_t* map, Tk key, Tv value){	\
 	T##_entry_t* entry = T##_find_entry(map, key);	\
-	if (entry == 0) return T##_insert(map, key, value);	\
+	if (entry == 0){	\
+		T##_insert(map, key, value);	\
+		return;	\
+	}	\
 	entry->value = value;	\
 }	\
 	\

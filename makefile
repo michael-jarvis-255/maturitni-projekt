@@ -1,5 +1,5 @@
 MAKEFLAGS += -rR
-GCCFLAGS = -Wall -Wextra
+GCCFLAGS = -Wall -Wextra -Wpedantic
 ifneq ($(OS),Windows_NT)
 	GCCFLAGS += -g -fsanitize=address,undefined
 endif

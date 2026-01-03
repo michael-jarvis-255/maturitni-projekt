@@ -8,11 +8,11 @@
 static void free_context_ptr_v(context_ptr_t map){
 	free_context_v(map);
 }
-create_list_type_impl(ast_variable, false);
-create_list_type_impl(ast_stmt, true);
-create_list_type_impl(context_ptr, true);
-create_list_type_impl(ast_expr, true);
-create_hashmap_type_impl(str, ast_id_t*, context);
+create_list_type_impl(ast_variable, false)
+create_list_type_impl(ast_stmt, true)
+create_list_type_impl(context_ptr, true)
+create_list_type_impl(ast_expr, true)
+create_hashmap_type_impl(str, ast_id_t*, context)
 
 static context_t top_level_context;
 static context_stack_t context_stack;

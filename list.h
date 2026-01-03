@@ -19,8 +19,8 @@ typedef struct T##_list_t { \
 T##_list_t create_##T##_list();	\
 void T##_list_append(T##_list_t* list, T##_t elem);	\
 void T##_list_pop(T##_list_t* list);	\
-void shallow_free_##T##_list(T##_list_t* list);	\
-MACRO_IF(deep_free, void deep_free_##T##_list(T##_list_t* list);)
+MACRO_IF(deep_free, void deep_free_##T##_list(T##_list_t* list);) \
+void shallow_free_##T##_list(T##_list_t* list)	\
 
 #define create_list_type_impl(T, deep_free) \
 T##_list_t create_##T##_list(){	\
