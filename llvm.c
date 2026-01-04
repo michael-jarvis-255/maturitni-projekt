@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdarg.h>
 #include "llvm.h"
 
 static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
@@ -223,39 +224,53 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 	}
 }
 
-static void llvm_merge_var2reg_maps(llvm_function_t* f, llvm_label_t block1, var2reg_map_t* var2reg1, llvm_label_t block2, var2reg_map_t* var2reg2){
-	for (var2reg_map_iterator_t iter=var2reg_map_iter(var2reg1); iter.current; iter = var2reg_map_iter_next(iter)){
-		const ast_variable_t* var = iter.current->key;
-		llvm_reg_t reg1 = iter.current->value;
-		llvm_reg_t reg2 = var2reg_map_get(var2reg2, var, LLVM_INVALID_REG);
-		if (LLVM_REG_EQ(reg1, reg2)) continue;
-		
-		llvm_reg_t new = llvm_add_inst(f, (llvm_inst_t){
-			.type=LLVM_INST_PHI,
-			.phi.label1 = block1,
-			.phi.reg1 = reg1,
-			.phi.label2 = block2,
-			.phi.reg2 = reg2 // TODO: if reg2 is LLVM_INVALID_REG, then use LLVM_UNDEF
-		});
-		var2reg_map_set(var2reg1, var, new);
-		var2reg_map_set(var2reg2, var, new);
+static void llvm_merge_blocks(llvm_function_t* f, unsigned int n, ...){ // variadic arguments must be "llvm_label_t, var2reg_map_t*, " n times
+	if (n == 0) return;
+
+	va_list args;
+	va_start(args, n);
+
+	llvm_label_t labels[n];
+	var2reg_map_t* maps[n];
+	for (unsigned int i=0; i<n; i++){
+		labels[i] = va_arg(args, llvm_label_t);
+		maps[i] = va_arg(args, var2reg_map_t*);
 	}
-	for (var2reg_map_iterator_t iter=var2reg_map_iter(var2reg2); iter.current; iter = var2reg_map_iter_next(iter)){
-		const ast_variable_t* var = iter.current->key;
-		llvm_reg_t reg2 = iter.current->value;
-		llvm_reg_t reg1 = var2reg_map_get(var2reg1, var, LLVM_INVALID_REG);
-		if (LLVM_REG_EQ(reg1, reg2)) continue;
-		
-		llvm_reg_t new = llvm_add_inst(f, (llvm_inst_t){
-			.type=LLVM_INST_PHI,
-			.phi.label1 = block1,
-			.phi.reg1 = reg1,
-			.phi.label2 = block2,
-			.phi.reg2 = reg2 // TODO: if reg2 is LLVM_INVALID_REG, then use LLVM_UNDEF
-		});
-		var2reg_map_set(var2reg1, var, new);
-		var2reg_map_set(var2reg2, var, new);
+	va_end(args);
+
+	if (n > LLVM_PHI_MAX){
+		printf("INTERNAL ERROR: n > LLVM_PHI_MAX\n");
+		exit(1);
 	}
+
+	var2reg_map_t vars_to_merge = create_var2reg_map(); // TODO: use a set instead of a hashmap
+	for (unsigned int i=1; i<n; i++){
+		for (var2reg_map_iterator_t iter=var2reg_map_iter(maps[i]); iter.current; iter = var2reg_map_iter_next(iter)){
+			const ast_variable_t* var = iter.current->key;
+			if (LLVM_REG_EQ(var2reg_map_get(maps[0], var, LLVM_INVALID_REG), iter.current->value))
+				continue;
+
+			var2reg_map_set(&vars_to_merge, var, LLVM_INVALID_REG);
+		}
+	}
+
+	for (var2reg_map_iterator_t iter=var2reg_map_iter(&vars_to_merge); iter.current; iter = var2reg_map_iter_next(iter)){
+		const ast_variable_t* var = iter.current->key;
+		llvm_inst_t inst = (llvm_inst_t){
+			.type=LLVM_INST_PHI,
+			.phi.count=n
+		};
+		for (unsigned int i=0; i<n; i++){
+			inst.phi.labels[i] = labels[i];
+			llvm_reg_t r = var2reg_map_get(maps[i], var, LLVM_INVALID_REG);
+			inst.phi.values[i] = LLVM_REG_EQ(r, LLVM_INVALID_REG) ? (llvm_value_t){ .type=LLVM_VALUE_UNDEF } : (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=r };
+		}
+		llvm_reg_t new = llvm_add_inst(f, inst);
+		for (unsigned int i=0; i<n; i++){
+			var2reg_map_set(maps[i], var, new);
+		}
+	}
+	var2reg_map_free(&vars_to_merge);
 }
 
 static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_function_t* f){
@@ -276,11 +291,46 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
 			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=llvm_untype_value(cond), .br.iftrue=iftrue_label, .br.iffalse=next_label };
 
-			llvm_merge_var2reg_maps(f, base_label, var2reg, iftrue_label, &var2reg_iftrue);
+			llvm_merge_blocks(f, 3,
+				base_label,    var2reg,
+				iftrue_label, &var2reg_iftrue
+			);
+			
 			var2reg_map_free(&var2reg_iftrue);
 			return;
 		}
-		case AST_STMT_IF_ELSE:	printf("<unimplemented>\n"); exit(1); // TODO
+		case AST_STMT_IF_ELSE:
+		{
+			llvm_typed_value_t cond = llvm_emit_ast_expr(&stmt->if_else.cond, var2reg, f);
+			cond = llvm_cast_to_i1(cond, f); // TODO
+			llvm_label_t base_label = llvm_function_last_label(f);
+			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
+
+			llvm_label_t iftrue_label = llvm_add_block(f);
+			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
+			var2reg_map_t var2reg_iftrue = var2reg_map_copy(var2reg);
+			llvm_emit_ast_stmt(stmt->if_else.iftrue, &var2reg_iftrue, f);
+
+			llvm_label_t iffalse_label = llvm_add_block(f);
+			llvm_basic_block_t* iffalse_block = &f->blocks.data[iffalse_label.idx];
+			var2reg_map_t var2reg_iffalse = var2reg_map_copy(var2reg);
+			llvm_emit_ast_stmt(stmt->if_else.iffalse, &var2reg_iffalse, f);
+
+			llvm_label_t next_label = llvm_add_block(f);
+			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
+			iffalse_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
+			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=llvm_untype_value(cond), .br.iftrue=iftrue_label, .br.iffalse=iffalse_label };
+
+			llvm_merge_blocks(f, 3,
+				base_label,     var2reg,
+				iftrue_label,  &var2reg_iftrue,
+				iffalse_label, &var2reg_iffalse
+			);
+
+			var2reg_map_free(&var2reg_iftrue);
+			var2reg_map_free(&var2reg_iffalse);
+			return;
+		}
 		case AST_STMT_EXPR:
 			llvm_emit_ast_expr(&stmt->expr, var2reg, f);
 			return;
@@ -294,6 +344,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 				llvm_typed_value_t val = llvm_emit_ast_expr(&stmt->assign.val, var2reg, f);
 				// TODO: ensure that val and stmt->assign.var_ref are of the same ast type!!
 				var2reg_map_set(var2reg, stmt->assign.var_ref, val.typed_reg.reg);
+				return;
 			}
 		case AST_STMT_BREAK:	printf("<unimplemented>\n"); exit(1); // TODO
 		case AST_STMT_CONTINUE:	printf("<unimplemented>\n"); exit(1); // TODO
