@@ -91,11 +91,15 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 		{
 			llvm_typed_value_t operand = llvm_emit_ast_expr(expr->unop.operand, var2reg, f);
 			if (operand.type == LLVM_VALUE_REG && operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED){
-				printf("ERROR: cannot use structured data type in unary operation\n"); // TODO: better error msg
+				char buf[128];
+				snprintf(buf, sizeof(buf), "struct type '%s' is not supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
+				print_error(expr->unop.operand->loc, buf);
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
 			}
 			if (operand.type == LLVM_VALUE_REG && operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT){
-				printf("ERROR: floats not yet supported\n"); // TODO: better error msg
+				char buf[128];
+				snprintf(buf, sizeof(buf), "floating point type '%s' is not yet supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
+				print_error(expr->unop.operand->loc, buf);
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
 			}
 			if (operand.type == LLVM_VALUE_POISON){
@@ -146,12 +150,32 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 			if (left_operand.type == LLVM_VALUE_POISON || right_operand.type == LLVM_VALUE_POISON){
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
 			}
-			if (left_operand.type == LLVM_VALUE_REG && (left_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT || left_operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED)){
-				printf("ERROR: structs and floats aren't allowed in operations\n");
+
+			// catch structured types
+			if (left_operand.type == LLVM_VALUE_REG && left_operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED){
+				char buf[128];
+				snprintf(buf, sizeof(buf), "struct type '%s' is not supported for binary operation '%s'", left_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				print_error(expr->binop.left->loc, buf);
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
 			}
-			if (right_operand.type == LLVM_VALUE_REG && (right_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT || right_operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED)){
-				printf("ERROR: structs and floats aren't allowed in operations\n");
+			if (right_operand.type == LLVM_VALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED){
+				char buf[128];
+				snprintf(buf, sizeof(buf), "struct type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				print_error(expr->binop.right->loc, buf);
+				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
+			}
+
+			// catch floating point types
+			if (left_operand.type == LLVM_VALUE_REG && left_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT){
+				char buf[128];
+				snprintf(buf, sizeof(buf), "floating point type '%s' is not supported for binary operation '%s'", left_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				print_error(expr->binop.left->loc, buf);
+				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
+			}
+			if (right_operand.type == LLVM_VALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT){
+				char buf[128];
+				snprintf(buf, sizeof(buf), "floating point type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				print_error(expr->binop.right->loc, buf);
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
 			}
 

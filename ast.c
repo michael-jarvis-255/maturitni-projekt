@@ -67,7 +67,7 @@ void print_ast_id(const ast_id_t* id, int depth){
 	}
 }
 
-static const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
+const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 	switch (op){
 		case AST_EXPR_UNOP_BNOT: return "~";
 		case AST_EXPR_UNOP_LNOT: return "!";
@@ -76,7 +76,7 @@ static const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 	printf("INTERNAL ERROR\n");
 	exit(1);
 }
-static const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
+const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 	switch (op){
 		case AST_EXPR_BINOP_ADD: return "+";
 		case AST_EXPR_BINOP_SUB: return "-";
@@ -96,6 +96,15 @@ static const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 		case AST_EXPR_BINOP_LOR: return "||";
 		case AST_EXPR_BINOP_SHR: return ">>";
 		case AST_EXPR_BINOP_SHL: return "<<";
+	}
+	printf("INTERNAL ERROR\n");
+	exit(1);
+}
+static inline loc_t loc_from_ast_id(ast_id_t* id){
+	switch (id->type){
+		case AST_ID_VAR: return id->var.declare_loc;
+		case AST_ID_FUNC: return id->func.declare_loc;
+		case AST_ID_TYPE: return id->type_.declare_loc;
 	}
 	printf("INTERNAL ERROR\n");
 	exit(1);
@@ -543,9 +552,13 @@ void ast_init_context(FILE* source){
 }
 void current_context_insert(const char* name, ast_id_t* value){
 	context_t* ctx = context_stack.data[context_stack.len-1];
-	bool exists = context_get(ctx, name, 0);
+	ast_id_t* exists = context_get(ctx, name, 0);
 	if (exists){
-		printf("ERROR: name '%s' is already defined!\n", name); // TODO: better error logging
+		char buf[128];
+		snprintf(buf, sizeof(buf), "name '%s' is already defined", name);
+		print_error(loc_from_ast_id(value), buf);
+		print_info(loc_from_ast_id(exists), "declared here"); // TODO: what if 'exists' is a built-in datatype? (like i32 or u64)
+		free_ast_id(value);
 		return;
 	}
 	context_insert(ctx, name, value);
@@ -610,7 +623,7 @@ void print_ast(){
 #define STYLE_BOLD "\033[1m"
 #define STYLE_RESET "\033[0m"
 
-static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){
+static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){ // TODO: correctly handle tabs and unprintable characters
 	printf("%sline %u: %s%s:%s %s\n", STYLE_BOLD, loc.first_line+1, colour, msg_type, STYLE_RESET, msg);
 	unsigned int tilde_count = 0;
 	if (loc.first_line == loc.last_line){

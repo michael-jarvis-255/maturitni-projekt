@@ -244,6 +244,9 @@ void print_ast_context(const context_t* context, int depth);
 
 void print_ast();
 
+const char* ast_expr_binop_string(ast_expr_binop_enum_t op);
+const char* ast_expr_unop_string(ast_expr_unop_enum_t op);
+
 void print_info(loc_t loc, char* msg);
 void print_warning(loc_t loc, char* msg);
 void print_error(loc_t loc, char* msg);
