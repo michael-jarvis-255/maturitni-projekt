@@ -1,12 +1,12 @@
-int x;
-int y = 15;
+i32 x;
+i32 y = 15;
 
-int foo(int x){
-	int y = x + 45;
-	int q;
-	int w = 15;
+i32 foo(i32 x){
+	i32 y = x + 45;
+	i32 q;
+	i16 w = 15;
 
-	int bar(int w){
+	i32 bar(i32 w){
 		return q;
 	}
 	

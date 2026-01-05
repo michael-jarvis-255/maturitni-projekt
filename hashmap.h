@@ -85,7 +85,7 @@ static void T##_grow(T##_t* map){	\
 	T##_entry_t** old_buckets = map->buckets;	\
 	map->size = 0;	\
 	map->bcap *= 4;	\
-	map->buckets = calloc(map->bcap, sizeof(T##_entry_t*));	\
+	map->buckets = calloc(map->bcap, sizeof(T##_entry_t**));	\
 	\
 	for (unsigned int h=0; h<old_bcap; h++){	\
 		T##_entry_t* head = old_buckets[h];	\
@@ -179,8 +179,10 @@ T##_iterator_t T##_iter_next(T##_iterator_t iter){	\
 }	\
 T##_t T##_copy(T##_t* map){	\
 	T##_t copy = create_##T();	\
+	copy.buckets = realloc(copy.buckets, map->bcap * sizeof(T##_entry_t**));	\
+	copy.bcap = map->bcap;	\
 	for (T##_iterator_t iter = T##_iter(map); iter.current; iter = T##_iter_next(iter)){	\
-		T##_insert(&copy, iter.current->key, iter.current->value); /* TODO: grow `copy` to the same size as `map` to avoid realloc()s */	\
+		T##_insert(&copy, iter.current->key, iter.current->value);	\
 	}	\
 	return copy;	\
 }	\

@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "llvm.h"
+#include "set.h"
 
 static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
 	return (llvm_label_t){ .idx = f->blocks.len - 1 }; 
@@ -41,6 +42,8 @@ static unsigned long ast_variable_ptr_hash(ast_variable_ptr p){
 }
 static inline bool ast_variable_ptr_cmp(ast_variable_ptr a, ast_variable_ptr b){ return a == b; }
 create_hashmap_type_impl(ast_variable_ptr, llvm_reg_t, var2reg_map)
+create_set_type_header(ast_variable_ptr);
+create_set_type_impl(ast_variable_ptr)
 
 create_list_type_impl(llvm_inst, false)
 create_list_type_impl(llvm_basic_block, false)
@@ -152,23 +155,23 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 				return (llvm_typed_value_t){ .type=LLVM_VALUE_POISON };
 			}
 
-			llvm_type_t left_type, righ_type, optype;
+			llvm_type_t left_type, right_type, optype;
 			if (left_operand.type == LLVM_VALUE_REG){
 				left_type = ast_type_to_llvm_type(left_operand.typed_reg.ast_type);
 			} else {
 				left_type = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=64 };
 			}
 			if (right_operand.type == LLVM_VALUE_REG){
-				righ_type = ast_type_to_llvm_type(right_operand.typed_reg.ast_type);
+				right_type = ast_type_to_llvm_type(right_operand.typed_reg.ast_type);
 			} else {
-				righ_type = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=64 };
+				right_type = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=64 };
 			}
-			optype = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth = max(left_type.int_bitwidth, righ_type.int_bitwidth) }; // TODO: if one opearand is LLVM_TYPE_INTEGRAL, it should be truncated to the size of the other
+			optype = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth = max(left_type.int_bitwidth, right_type.int_bitwidth) }; // TODO: if one opearand is LLVM_TYPE_INTEGRAL, it should be truncated to the size of the other
 
 			// cast both operands to the same type, if they are different
 			// TODO: what to do with signed / unsigned integers?
 			left_operand = llvm_extend(left_operand, optype); // TODO
-			righ_type = llvm_extend(righ_type, optype);
+			right_type = llvm_extend(right_type, optype);
 
 			llvm_inst_t inst = (llvm_inst_t){ // this preset holds for most of the operations
 				.binop.type = optype,
@@ -243,19 +246,19 @@ static void llvm_merge_blocks(llvm_function_t* f, unsigned int n, ...){ // varia
 		exit(1);
 	}
 
-	var2reg_map_t vars_to_merge = create_var2reg_map(); // TODO: use a set instead of a hashmap
+	ast_variable_ptr_set_t vars_to_merge = create_ast_variable_ptr_set();
 	for (unsigned int i=1; i<n; i++){
 		for (var2reg_map_iterator_t iter=var2reg_map_iter(maps[i]); iter.current; iter = var2reg_map_iter_next(iter)){
 			const ast_variable_t* var = iter.current->key;
 			if (LLVM_REG_EQ(var2reg_map_get(maps[0], var, LLVM_INVALID_REG), iter.current->value))
 				continue;
 
-			var2reg_map_set(&vars_to_merge, var, LLVM_INVALID_REG);
+			ast_variable_ptr_set_add(&vars_to_merge, var);
 		}
 	}
 
-	for (var2reg_map_iterator_t iter=var2reg_map_iter(&vars_to_merge); iter.current; iter = var2reg_map_iter_next(iter)){
-		const ast_variable_t* var = iter.current->key;
+	for (ast_variable_ptr_set_iterator_t iter=ast_variable_ptr_set_iter(&vars_to_merge); iter.current; iter = ast_variable_ptr_set_iter_next(iter)){
+		const ast_variable_t* var = iter.current->value;
 		llvm_inst_t inst = (llvm_inst_t){
 			.type=LLVM_INST_PHI,
 			.phi.count=n
@@ -270,7 +273,7 @@ static void llvm_merge_blocks(llvm_function_t* f, unsigned int n, ...){ // varia
 			var2reg_map_set(maps[i], var, new);
 		}
 	}
-	var2reg_map_free(&vars_to_merge);
+	ast_variable_ptr_set_free(&vars_to_merge);
 }
 
 static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_function_t* f){

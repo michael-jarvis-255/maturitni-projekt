@@ -244,4 +244,6 @@ void print_ast_context(const context_t* context, int depth);
 
 void print_ast();
 
+extern context_t top_level_context;
+
 #endif

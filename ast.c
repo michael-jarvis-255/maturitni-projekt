@@ -14,7 +14,7 @@ create_list_type_impl(context_ptr, true)
 create_list_type_impl(ast_expr, true)
 create_hashmap_type_impl(str, ast_id_t*, context)
 
-static context_t top_level_context;
+context_t top_level_context;
 static context_stack_t context_stack;
 
 void free_ast_id_v(ast_id_t id){
@@ -406,22 +406,90 @@ ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_
 	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, &var_id->var, value)};
 }
 
+static void ast_context_insert_type(const char* name, ast_datatype_t type){
+	ast_id_t* id = malloc(sizeof(ast_id_t));
+	id->type = AST_ID_TYPE;
+	id->type_ = type;
+	id->type_.name = strdup(name);
+	current_context_insert(name, id);
+}
+
 void ast_init_context(){
 	context_stack = create_context_ptr_list();
 	top_level_context = create_context();
 	context_ptr_list_append(&context_stack, &top_level_context);
 
-	ast_id_t* int_type = malloc(sizeof(ast_id_t));
-	int_type->type = AST_ID_TYPE;
-	int_type->type_.declare_loc = (loc_t){0};
-	int_type->type_.name = strdup("int");
-	int_type->type_.kind = AST_DATATYPE_INTEGRAL;
-	int_type->type_.ptr_count = 0;
-	int_type->type_.bitwidth = 32;
-	int_type->type_.signed_ = 1;
-	current_context_insert("int", int_type);
-	
-	// TODO: add more default types to global context
+	// integer types
+	ast_context_insert_type("i64", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 64,
+		.signed_ = true
+	});
+	ast_context_insert_type("u64", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 64,
+		.signed_ = false
+	});
+	ast_context_insert_type("i32", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 32,
+		.signed_ = true
+	});
+	ast_context_insert_type("u32", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 32,
+		.signed_ = false
+	});
+	ast_context_insert_type("i16", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 16,
+		.signed_ = true
+	});
+	ast_context_insert_type("u16", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 16,
+		.signed_ = false
+	});
+	ast_context_insert_type("i8", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 8,
+		.signed_ = true
+	});
+	ast_context_insert_type("u8", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 8,
+		.signed_ = false
+	});
+
+	// floating point types
+	ast_context_insert_type("f64", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_FLOAT,
+		.ptr_count = 0,
+		.bitwidth = 64,
+	});
+	ast_context_insert_type("f32", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_FLOAT,
+		.ptr_count = 0,
+		.bitwidth = 32,
+	});
 }
 void current_context_insert(const char* name, ast_id_t* value){
 	context_t* ctx = context_stack.data[context_stack.len-1];
