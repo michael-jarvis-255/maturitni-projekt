@@ -231,7 +231,7 @@ ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const
 ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name);
 ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
 
-void ast_init_context();
+void ast_init_context(FILE* source);
 void current_context_insert(const char* name, ast_id_t* value);
 ast_id_t* context_stack_get(const char* name);
 context_t create_context();
@@ -243,6 +243,10 @@ void ast_cleanup_context();
 void print_ast_context(const context_t* context, int depth);
 
 void print_ast();
+
+void print_info(loc_t loc, char* msg);
+void print_warning(loc_t loc, char* msg);
+void print_error(loc_t loc, char* msg);
 
 extern context_t top_level_context;
 

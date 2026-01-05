@@ -4,7 +4,7 @@ ifneq ($(OS),Windows_NT)
 	GCCFLAGS += -g -fsanitize=address,undefined
 endif
 
-a.out: build/lex.y.c build/parse.tab.c ast.c llvm.c
+a.out: build/lex.y.c build/parse.tab.c ast.c main.c
 	gcc $^ -o $@ -I . $(GCCFLAGS)
 
 build/parse.tab.c build/parse.tab.h: parse.y ast.h yystype.h

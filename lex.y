@@ -9,7 +9,7 @@
 		yylloc.last_column += yyleng;
 	}
 	static void newline_update_yylloc(){
-		yylloc.last_line++; yylloc.last_column = 1;
+		yylloc.last_line++; yylloc.last_column = 0;
 	}
 	static void string_update_yylloc(const char* yytext, unsigned int yyleng){
 		update_yylloc(0);

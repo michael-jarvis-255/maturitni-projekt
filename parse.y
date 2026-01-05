@@ -4,7 +4,6 @@
 	#include "yystype.h"
 	#include "yyltype.h"
 	#include "ast.h"
-	#include "llvm.h"
 	void yyerror(char const* err){
 		fprintf(stderr, "%s\n", err);
 	}
@@ -39,7 +38,7 @@
 %%
 
 main:
-	declaration_list YYEOF	{ print_ast(); }
+	declaration_list YYEOF
 
 declaration_list:
 	%empty
@@ -266,19 +265,3 @@ single_var_declaration:
 
 
 %%
-
-int main(){
-	ast_init_context();
-	yyparse();
-
-	// emit all functions in top context
-	for (context_iterator_t iter = context_iter(&top_level_context); iter.current; iter = context_iter_next(iter)){
-		ast_id_t* id = iter.current->value;
-		if (id->type != AST_ID_FUNC) continue;
-
-		printf("emit '%s'\n", iter.current->key);
-		llvm_emit_ast_func(id->func);
-	}
-		
-	ast_cleanup_context();
-}

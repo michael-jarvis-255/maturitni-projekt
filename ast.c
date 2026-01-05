@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include "hash.h"
 
 static void free_context_ptr_v(context_ptr_t map){
@@ -16,6 +17,7 @@ create_hashmap_type_impl(str, ast_id_t*, context)
 
 context_t top_level_context;
 static context_stack_t context_stack;
+static char** source_lines;
 
 void free_ast_id_v(ast_id_t id){
 	switch (id.type){
@@ -414,7 +416,55 @@ static void ast_context_insert_type(const char* name, ast_datatype_t type){
 	current_context_insert(name, id);
 }
 
-void ast_init_context(){
+static void rtrim(char* str){
+	char* end = str + strlen(str) - 1;
+	while ((end >= str) && isspace(*end)){
+		end--;
+	}
+	if (end < str){
+		str[0] = 0;
+		return;
+	}
+	end[1] = 0;
+}
+
+static void get_source_lines_from_file(FILE* source){
+	if (fseek(source, 0, SEEK_END)){
+		printf("Failed to seek file.\n");
+		exit(1);
+	}
+	unsigned long sz = ftell(source);
+	char* text = malloc(sz);
+
+	if (fseek(source, 0, SEEK_SET)){
+		printf("Failed to seek file.\n");
+		exit(1);
+	}
+	fread(text, 1, sz, source);
+
+	unsigned int line_count = 2;
+	for (unsigned int i=0; i<sz; i++){
+		if (text[i] == '\n') line_count++;
+	}
+	source_lines = malloc(sizeof(char*)*line_count);
+
+	unsigned int line_start = 0;
+	unsigned int line_idx = 0;
+	for (unsigned int i=0; i<sz; i++){
+		if (text[i] != '\n') continue;
+		source_lines[line_idx] = strndup(&text[line_start], i-line_start);
+		rtrim(source_lines[line_idx]);
+		line_start = i+1;
+		line_idx++;
+	}
+	source_lines[line_idx] = strndup(&text[line_start], sz-line_start);
+	rtrim(source_lines[line_idx]);
+	source_lines[line_count-1] = 0;
+	free(text);
+}
+
+void ast_init_context(FILE* source){
+	get_source_lines_from_file(source);
 	context_stack = create_context_ptr_list();
 	top_level_context = create_context();
 	context_ptr_list_append(&context_stack, &top_level_context);
@@ -533,6 +583,14 @@ void free_context(context_t* context){
 	free(context);
 }
 void ast_cleanup_context(){
+	char** l = source_lines;
+	while (*l){
+		free(*l);
+		l++;
+	}
+	free(source_lines);
+	source_lines = 0;
+
 	deep_free_context_ptr_list(&context_stack);
 }
 
@@ -544,4 +602,52 @@ void print_ast_context(const context_t* ctx, int depth){
 
 void print_ast(){
 	print_ast_context(&top_level_context, 0);
+}
+
+#define COLOUR_INFO "\033[36m"
+#define COLOUR_WARNING "\033[33m"
+#define COLOUR_ERROR "\033[31m"
+#define STYLE_BOLD "\033[1m"
+#define STYLE_RESET "\033[0m"
+
+static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){
+	printf("%sline %u: %s%s:%s %s\n", STYLE_BOLD, loc.first_line+1, colour, msg_type, STYLE_RESET, msg);
+	unsigned int tilde_count = 0;
+	if (loc.first_line == loc.last_line){
+		printf("%5u |    %.*s%s%.*s%s%s\n", loc.first_line+1,
+			loc.first_column, source_lines[loc.first_line],
+			colour,
+			loc.last_column - loc.first_column, source_lines[loc.first_line] + loc.first_column,
+			STYLE_RESET,
+			source_lines[loc.first_line] + loc.last_column);
+		tilde_count = loc.last_column - loc.first_column - 1;
+	}else{
+		printf("%5u |    %.*s%s%s%s\n", loc.first_line+1,
+			loc.first_column, source_lines[loc.first_line],
+			colour,
+			source_lines[loc.first_line] + loc.first_column,
+			STYLE_RESET);
+		tilde_count = strlen(source_lines[loc.first_line]) - loc.first_column - 1;
+	}
+
+	printf("      |    %*s%s^", loc.first_column, "", colour);
+	for (unsigned int i=0; i<tilde_count; i++){
+		printf("~");
+	}
+	printf("%s\n", STYLE_RESET);
+
+	if (loc.first_line != loc.last_line){
+		printf("      |    %s...%s\n", colour, STYLE_RESET);
+	}
+	//printf("%i:%i - %i:%i\n", loc.first_line, loc.first_column, loc.last_line, loc.last_column);
+}
+
+void print_info(loc_t loc, char* msg){
+	print_msg(loc, "info", msg, COLOUR_INFO);
+}
+void print_warning(loc_t loc, char* msg){
+	print_msg(loc, "warning", msg, COLOUR_WARNING);
+}
+void print_error(loc_t loc, char* msg){
+	print_msg(loc, "error", msg, COLOUR_ERROR);
 }
