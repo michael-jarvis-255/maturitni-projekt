@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include "hash.h"
 
 static void free_context_ptr_v(context_ptr_t map){
@@ -554,9 +555,7 @@ void current_context_insert(const char* name, ast_id_t* value){
 	context_t* ctx = context_stack.data[context_stack.len-1];
 	ast_id_t* exists = context_get(ctx, name, 0);
 	if (exists){
-		char buf[128];
-		snprintf(buf, sizeof(buf), "name '%s' is already defined", name);
-		print_error(loc_from_ast_id(value), buf);
+		printf_error(loc_from_ast_id(value), "name '%s' is already defined", name);
 		print_info(loc_from_ast_id(exists), "declared here"); // TODO: what if 'exists' is a built-in datatype? (like i32 or u64)
 		free_ast_id(value);
 		return;
@@ -663,4 +662,29 @@ void print_warning(loc_t loc, char* msg){
 }
 void print_error(loc_t loc, char* msg){
 	print_msg(loc, "error", msg, COLOUR_ERROR);
+}
+
+static void vprintf_msg(loc_t loc, const char* msg_type, const char* colour, const char* msg, va_list args){
+	char buf[512];
+	vsnprintf(buf, sizeof(buf), msg, args);
+	print_msg(loc, msg_type, buf, colour);
+}
+
+void printf_info(loc_t loc, char* msg, ...){
+	va_list args;
+	va_start(args, msg);
+	vprintf_msg(loc, "info", msg, COLOUR_INFO, args);
+	va_end(args);
+}
+void printf_warning(loc_t loc, char* msg, ...){
+	va_list args;
+	va_start(args, msg);
+	vprintf_msg(loc, "warning", msg, COLOUR_WARNING, args);
+	va_end(args);
+}
+void printf_error(loc_t loc, char* msg, ...){
+	va_list args;
+	va_start(args, msg);
+	vprintf_msg(loc, "error", msg, COLOUR_ERROR, args);
+	va_end(args);
 }

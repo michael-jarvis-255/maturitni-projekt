@@ -251,6 +251,10 @@ void print_info(loc_t loc, char* msg);
 void print_warning(loc_t loc, char* msg);
 void print_error(loc_t loc, char* msg);
 
+void printf_info(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
+void printf_warning(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
+void printf_error(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
+
 extern context_t top_level_context;
 
 #endif

@@ -28,7 +28,7 @@ typedef enum {
 	LLVM_VALUE_INT_CONST,
 	LLVM_VALUE_REG,
 	LLVM_VALUE_UNDEF,
-	LLVM_VALUE_POISON, // TODO: where to use 'undef' and where 'poison'?
+	LLVM_VALUE_POISON,
 } llvm_value_enum_t;
 
 typedef struct llvm_value_t {
@@ -38,17 +38,6 @@ typedef struct llvm_value_t {
 		llvm_reg_t reg;
 	};
 } llvm_value_t;
-
-typedef struct llvm_typed_value_t {
-	llvm_value_enum_t type;
-	union {
-		long int_const;
-		struct {
-			llvm_reg_t reg;
-			ast_datatype_t* ast_type;
-		} typed_reg;
-	};
-} llvm_typed_value_t;
 
 typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
 	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
@@ -61,7 +50,7 @@ typedef struct llvm_term_inst_t {
 	llvm_term_inst_enum_t type;
 	union {
 		struct {
-			// value
+			llvm_value_t value;
 		} ret;
 		struct {
 			llvm_value_t cond;
