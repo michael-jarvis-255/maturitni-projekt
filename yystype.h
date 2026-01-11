@@ -10,4 +10,5 @@ typedef union YYSTYPE {
 	ast_variable_t* var_ref;
 	ast_func_t* func_ref;
 	context_t* context;
+	ast_id_ptr_list_t id_ptr_list;
 } YYSTYPE;

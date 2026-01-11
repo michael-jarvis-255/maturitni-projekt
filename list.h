@@ -46,7 +46,7 @@ void T##_list_pop(T##_list_t* list){	\
 	}	\
 	list->len--;	\
 }	\
-void shallow_free_##T##_list_v(T##_list_t* list){	\
+void shallow_free_##T##_list(T##_list_t* list){	\
 	free(list->data);	\
 	list->data = 0;	\
 	list->cap = 0;	\

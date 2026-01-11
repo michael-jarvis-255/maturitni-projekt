@@ -24,6 +24,8 @@ typedef struct llvm_type_t {
 	};
 } llvm_type_t;
 
+#define LLVM_I1 ((llvm_type_t){.type=LLVM_TYPE_INTEGRAL,.int_bitwidth=1})
+
 typedef enum {
 	LLVM_VALUE_INT_CONST,
 	LLVM_VALUE_REG,
@@ -34,7 +36,7 @@ typedef enum {
 typedef struct llvm_value_t {
 	llvm_value_enum_t type;
 	union {
-		long int_const;
+		unsigned long int_const;
 		llvm_reg_t reg;
 	};
 } llvm_value_t;
@@ -86,6 +88,8 @@ typedef enum {
 	LLVM_INST_ICMP,
 	LLVM_INST_PHI,
 	LLVM_INST_CALL,
+	LLVM_INST_ZEXT,
+	LLVM_INST_NOP,
 } llvm_inst_enum_t;
 
 typedef enum {
@@ -131,6 +135,14 @@ typedef struct llvm_inst_t {
 			// func ptr
 			// function args
 		} call;
+		struct {
+			llvm_type_t from;
+			llvm_type_t to;
+			llvm_value_t operand;
+		} ext;
+		struct {
+			llvm_value_t value;
+		} nop;
 	};
 } llvm_inst_t;
 create_list_type_header(llvm_inst, false);

@@ -14,6 +14,7 @@ create_list_type_impl(ast_variable, false)
 create_list_type_impl(ast_stmt, true)
 create_list_type_impl(context_ptr, true)
 create_list_type_impl(ast_expr, true)
+create_list_type_impl(ast_id_ptr, false)
 create_hashmap_type_impl(str, ast_id_t*, context)
 
 context_t top_level_context;
@@ -384,7 +385,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_variable_list_t args, context_t* context, ast_stmt_t body){
+ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body){
 	ast_id_t* func_id = malloc(sizeof(ast_id_t));
 	func_id->type = AST_ID_FUNC;
 	func_id->func.declare_loc = loc;
@@ -673,18 +674,35 @@ static void vprintf_msg(loc_t loc, const char* msg_type, const char* colour, con
 void printf_info(loc_t loc, char* msg, ...){
 	va_list args;
 	va_start(args, msg);
-	vprintf_msg(loc, "info", msg, COLOUR_INFO, args);
+	vprintf_msg(loc, "info", COLOUR_INFO, msg, args);
 	va_end(args);
 }
 void printf_warning(loc_t loc, char* msg, ...){
 	va_list args;
 	va_start(args, msg);
-	vprintf_msg(loc, "warning", msg, COLOUR_WARNING, args);
+	vprintf_msg(loc, "warning", COLOUR_WARNING, msg, args);
 	va_end(args);
 }
 void printf_error(loc_t loc, char* msg, ...){
 	va_list args;
 	va_start(args, msg);
-	vprintf_msg(loc, "error", msg, COLOUR_ERROR, args);
+	vprintf_msg(loc, "error", COLOUR_ERROR, msg, args);
 	va_end(args);
+}
+
+bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
+	if (a->kind != b->kind) return false;
+	if (a->ptr_count != b->ptr_count) return false;
+	switch (a->kind){
+		case AST_DATATYPE_INTEGRAL:
+			if (a->bitwidth != b->bitwidth) return false;
+			if (a->signed_ != b->signed_) return false;
+			break;
+		case AST_DATATYPE_FLOAT:
+			if (a->bitwidth != b->bitwidth) return false;
+			break;
+		case AST_DATATYPE_STRUCTURED:
+			break;
+	}
+	return true;
 }

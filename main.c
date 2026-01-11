@@ -34,7 +34,7 @@ int main(int argc, char** argv){
 		if (id->type != AST_ID_FUNC) continue;
 
 		printf("TODO: emit '%s'\n", iter.current->key);
-		//llvm_emit_ast_func(id->func);
+		llvm_emit_ast_func(id->func);
 	}
 	
 	ast_cleanup_context();

@@ -12,7 +12,7 @@ typedef enum {
 typedef struct llvm_typed_value_t {
 	llvm_typed_value_enum_t type;
 	union {
-		long int_const;
+		unsigned long int_const;
 		struct {
 			llvm_reg_t reg;
 			ast_datatype_t* ast_type;
@@ -46,7 +46,7 @@ static inline llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 	}
 	return v;
 }
-static inline llvm_typed_value_t llvm_var2reg_get_typed_value(var2reg_map_t* var2reg, ast_variable_t* var, loc_t loc){
+static inline llvm_typed_value_t llvm_var2reg_get_typed_value(const var2reg_map_t* var2reg, const ast_variable_t* var, loc_t loc){
 	llvm_reg_t reg = var2reg_map_get(var2reg, var, LLVM_INVALID_REG);
 	if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
 		printf_error(loc, "use of undefined variable '%s'", var->name);
@@ -63,7 +63,7 @@ static unsigned long ast_variable_ptr_hash(ast_variable_ptr p){
 	}
 	return h;
 }
-static inline bool ast_variable_ptr_cmp(ast_variable_ptr a, ast_variable_ptr b){ return a == b; }
+static inline bool ast_variable_ptr_cmp(ast_variable_ptr a, ast_variable_ptr b){ return a != b; }
 create_hashmap_type_impl(ast_variable_ptr, llvm_reg_t, var2reg_map)
 create_set_type_header(ast_variable_ptr);
 create_set_type_impl(ast_variable_ptr)
@@ -83,7 +83,7 @@ static llvm_label_t llvm_add_block(llvm_function_t* f){
 }
 
 static llvm_reg_t llvm_add_inst(llvm_function_t* f, llvm_inst_t inst){
-	llvm_basic_block_t* block = &f->blocks.data[f->blocks.len];
+	llvm_basic_block_t* block = &f->blocks.data[f->blocks.len-1];
 	llvm_inst_list_append(&block->instructions, inst);
 	return llvm_block_last_reg(block);
 }
@@ -99,17 +99,75 @@ static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
 	}
 }
 
-static unsigned int max(unsigned int a, unsigned int b){
-	return a > b ? a : b;
+static llvm_typed_value_t llvm_int_const_binop(const ast_expr_t* expr, llvm_typed_value_t left_operand, llvm_typed_value_t right_operand){
+	// NOTE: both left_operand and right_operand must be LLVM_TVALUE_INT_CONST
+	// NOTE: expr must be AST_EXPR_BINOP
+	switch (expr->binop.op){
+		case AST_EXPR_BINOP_ADD:
+			left_operand.int_const = left_operand.int_const + right_operand.int_const; break;
+		case AST_EXPR_BINOP_SUB:
+			left_operand.int_const = left_operand.int_const - right_operand.int_const; break;
+		case AST_EXPR_BINOP_MUL:
+			left_operand.int_const = left_operand.int_const * right_operand.int_const; break;
+		case AST_EXPR_BINOP_DIV: // TODO: signedness ?
+			left_operand.int_const = left_operand.int_const / right_operand.int_const; break;
+		case AST_EXPR_BINOP_MOD: // TODO: signedness ?
+			left_operand.int_const = left_operand.int_const % right_operand.int_const; break;
+		case AST_EXPR_BINOP_LT: // TODO: signedness ?
+			left_operand.int_const = left_operand.int_const < right_operand.int_const; break;
+		case AST_EXPR_BINOP_GT: // TODO: signedness ?
+			left_operand.int_const = left_operand.int_const > right_operand.int_const; break;
+		case AST_EXPR_BINOP_LE: // TODO: signedness ?
+			left_operand.int_const = left_operand.int_const <= right_operand.int_const; break;
+		case AST_EXPR_BINOP_GE: // TODO: signedness ?
+			left_operand.int_const = left_operand.int_const >= right_operand.int_const; break;
+		case AST_EXPR_BINOP_EQ:
+			left_operand.int_const = left_operand.int_const == right_operand.int_const; break;
+		case AST_EXPR_BINOP_NE:
+			left_operand.int_const = left_operand.int_const != right_operand.int_const; break;
+		case AST_EXPR_BINOP_SHL:
+			left_operand.int_const = left_operand.int_const << right_operand.int_const; break;
+		case AST_EXPR_BINOP_SHR:
+			left_operand.int_const = left_operand.int_const >> right_operand.int_const; break;
+		case AST_EXPR_BINOP_BXOR:
+			left_operand.int_const = left_operand.int_const ^ right_operand.int_const; break;
+		case AST_EXPR_BINOP_BAND:
+			left_operand.int_const = left_operand.int_const & right_operand.int_const; break;
+		case AST_EXPR_BINOP_BOR:
+			left_operand.int_const = left_operand.int_const | right_operand.int_const; break;
+		case AST_EXPR_BINOP_LAND:
+			left_operand.int_const = left_operand.int_const || right_operand.int_const; break;
+		case AST_EXPR_BINOP_LOR:
+			left_operand.int_const = left_operand.int_const && right_operand.int_const; break;
+	}
+	return left_operand;
 }
 
-static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* var2reg, llvm_function_t* f){
+static unsigned long ulong_truncate(unsigned long x, unsigned int bitwidth){
+	if (bitwidth == 64) return x;
+	unsigned long mask = (1l << bitwidth) - 1;
+	return x & mask;
+}
+
+static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
+	llvm_reg_t out = llvm_add_inst(f, 
+		(llvm_inst_t){
+			.type = LLVM_INST_ICMP,
+			.icmp.cond = LLVM_ICMP_NE,
+			.icmp.type = ast_type_to_llvm_type(val.typed_reg.ast_type),
+			.icmp.op1 = llvm_untype_value(val),
+			.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_INT_CONST, .int_const = 0}
+		});
+	return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
+}
+
+static llvm_typed_value_t llvm_emit_ast_expr(const ast_expr_t* expr, var2reg_map_t* var2reg, llvm_function_t* f){
 	switch (expr->type){
 		case AST_EXPR_CONST:
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=expr->constant.value };
 		case AST_EXPR_VAR_REF:
 			return llvm_var2reg_get_typed_value(var2reg, expr->var_ref, expr->loc);
-		case AST_EXPR_FUNC_CALL:	printf("<unimplemented>\n"); exit(1); // TODO
+		case AST_EXPR_FUNC_CALL:	printf("<unimplemented (func call)>\n"); exit(1); // TODO
 		case AST_EXPR_UNOP:
 		{
 			llvm_typed_value_t operand = llvm_emit_ast_expr(expr->unop.operand, var2reg, f);
@@ -117,9 +175,9 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 				case LLVM_TVALUE_POISON: return operand;
 				case LLVM_TVALUE_INT_CONST:
 					switch (expr->unop.op){
-						case AST_EXPR_UNOP_NEG: operand.int_const = -operand.int_const;
-						case AST_EXPR_UNOP_BNOT: operand.int_const = ~operand.int_const;
-						case AST_EXPR_UNOP_LNOT: operand.int_const = !operand.int_const;
+						case AST_EXPR_UNOP_NEG: operand.int_const = -operand.int_const; break;
+						case AST_EXPR_UNOP_BNOT: operand.int_const = ~operand.int_const; break;
+						case AST_EXPR_UNOP_LNOT: operand.int_const = !operand.int_const; break;
 					}
 					return operand;
 				case LLVM_TVALUE_REG: break;
@@ -166,14 +224,23 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 			}
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=llvm_add_inst(f, inst), .typed_reg.ast_type=0 }; // TODO: assign ast type
 		}
+
+
 		case AST_EXPR_BINOP:
 		{
 			// TODO: short-circuiting && and ||
 			llvm_typed_value_t left_operand = llvm_emit_ast_expr(expr->binop.left, var2reg, f);
 			llvm_typed_value_t right_operand = llvm_emit_ast_expr(expr->binop.right, var2reg, f);
 
+			// catch poison
 			if (left_operand.type == LLVM_TVALUE_POISON || right_operand.type == LLVM_TVALUE_POISON){
 				return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+			}
+
+			// catch mistyped operands
+			if (left_operand.type == LLVM_TVALUE_REG && right_operand.type == LLVM_TVALUE_REG
+				&& !ast_datatype_eq(left_operand.typed_reg.ast_type, right_operand.typed_reg.ast_type)){
+				printf_error(expr->loc, "binary operation '%s' doesn't support differing types '%s' and '%s'", ast_expr_binop_string(expr->binop.op), left_operand.typed_reg.ast_type->name, right_operand.typed_reg.ast_type->name);
 			}
 
 			// catch structured types
@@ -196,23 +263,32 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 				return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
 			}
 
-			llvm_type_t left_type, right_type, optype;
-			if (left_operand.type == LLVM_TVALUE_REG){
-				left_type = ast_type_to_llvm_type(left_operand.typed_reg.ast_type);
-			} else {
-				left_type = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=64 };
+			// catch constant expressions
+			if (left_operand.type == LLVM_TVALUE_INT_CONST && right_operand.type == LLVM_TVALUE_INT_CONST){
+				return llvm_int_const_binop(expr, left_operand, right_operand);
 			}
-			if (right_operand.type == LLVM_TVALUE_REG){
-				right_type = ast_type_to_llvm_type(right_operand.typed_reg.ast_type);
-			} else {
-				right_type = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=64 };
-			}
-			optype = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth = max(left_type.int_bitwidth, right_type.int_bitwidth) }; // TODO: if one opearand is LLVM_TYPE_INTEGRAL, it should be truncated to the size of the other
 
-			// cast both operands to the same type, if they are different
-			// TODO: what to do with signed / unsigned integers?
-			left_operand = llvm_extend(left_operand, optype); // TODO
-			right_type = llvm_extend(right_type, optype);
+			ast_datatype_t* restype;
+			bool signed_op;
+			if (left_operand.type == LLVM_TVALUE_REG){
+				restype   = left_operand.typed_reg.ast_type;
+				signed_op = left_operand.typed_reg.ast_type->signed_;
+			}else{
+				restype   = right_operand.typed_reg.ast_type;
+				signed_op = right_operand.typed_reg.ast_type->signed_;
+			}
+			llvm_type_t optype = ast_type_to_llvm_type(restype);
+
+			// catch constant int truncations
+			if (left_operand.type == LLVM_TVALUE_INT_CONST && (left_operand.int_const != ulong_truncate(left_operand.int_const, optype.int_bitwidth))){
+				printf_warning(expr->loc, "using integer constant in binary operation '%s' with type '%s' truncates it's value from %lu to %lu",
+					ast_expr_binop_string(expr->binop.op), right_operand.typed_reg.ast_type->name, left_operand.int_const, ulong_truncate(left_operand.int_const, optype.int_bitwidth));
+				left_operand.int_const = ulong_truncate(left_operand.int_const, optype.int_bitwidth);
+			} else if (right_operand.type == LLVM_TVALUE_INT_CONST && (right_operand.int_const != ulong_truncate(right_operand.int_const, optype.int_bitwidth))){
+				printf_warning(expr->loc, "using integer constant in binary operation '%s' with type '%s' truncates it's value from %lu to %lu",
+					ast_expr_binop_string(expr->binop.op), left_operand.typed_reg.ast_type->name, right_operand.int_const, ulong_truncate(right_operand.int_const, optype.int_bitwidth));
+				right_operand.int_const = ulong_truncate(right_operand.int_const, optype.int_bitwidth);
+			}
 
 			llvm_inst_t inst = (llvm_inst_t){ // this preset holds for most of the operations
 				.binop.type = optype,
@@ -229,26 +305,72 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 				case AST_EXPR_BINOP_MUL:
 					inst.type = LLVM_INST_MUL; // TODO: should i32*i32 give i64?
 					break;
-				case AST_EXPR_BINOP_DIV: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_MOD: // TODO: signedness 
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_LT: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_GT: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_LE: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_GE: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_EQ: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
-				case AST_EXPR_BINOP_NE: // TODO: signedness
-					printf("<unimplemented>\n"); exit(1);
+				case AST_EXPR_BINOP_DIV:
+					inst.type = signed_op ? LLVM_INST_SDIV : LLVM_INST_UDIV;
+					break;
+				case AST_EXPR_BINOP_MOD:
+					inst.type = signed_op ? LLVM_INST_SREM : LLVM_INST_UREM;
+					break;
+				case AST_EXPR_BINOP_LT:
+					inst = (llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = signed_op ? LLVM_ICMP_SLT : LLVM_ICMP_ULT,
+						.icmp.type = optype,
+						.icmp.op1 = llvm_untype_value(left_operand),
+						.icmp.op2 = llvm_untype_value(right_operand)
+					};
+					break;
+				case AST_EXPR_BINOP_GT:
+					inst = (llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = signed_op ? LLVM_ICMP_SGT : LLVM_ICMP_UGT,
+						.icmp.type = optype,
+						.icmp.op1 = llvm_untype_value(left_operand),
+						.icmp.op2 = llvm_untype_value(right_operand)
+					};
+					break;
+				case AST_EXPR_BINOP_LE:
+					inst = (llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = signed_op ? LLVM_ICMP_SLE : LLVM_ICMP_ULE,
+						.icmp.type = optype,
+						.icmp.op1 = llvm_untype_value(left_operand),
+						.icmp.op2 = llvm_untype_value(right_operand)
+					};
+					break;
+				case AST_EXPR_BINOP_GE:
+					inst = (llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = signed_op ? LLVM_ICMP_SGE : LLVM_ICMP_UGE,
+						.icmp.type = optype,
+						.icmp.op1 = llvm_untype_value(left_operand),
+						.icmp.op2 = llvm_untype_value(right_operand)
+					};
+					break;
+				case AST_EXPR_BINOP_EQ:
+					inst = (llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = LLVM_ICMP_EQ,
+						.icmp.type = optype,
+						.icmp.op1 = llvm_untype_value(left_operand),
+						.icmp.op2 = llvm_untype_value(right_operand)
+					};
+					break;
+				case AST_EXPR_BINOP_NE:
+					inst = (llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = LLVM_ICMP_NE,
+						.icmp.type = optype,
+						.icmp.op1 = llvm_untype_value(left_operand),
+						.icmp.op2 = llvm_untype_value(right_operand)
+					};
+					break;
 				case AST_EXPR_BINOP_SHL:
-					printf("<unimplemented>\n"); exit(1);
+					inst.type = LLVM_INST_SHL;
+					break;
 				case AST_EXPR_BINOP_SHR:
-					printf("<unimplemented>\n"); exit(1);
+					inst.type = signed_op ? LLVM_INST_ASHR : LLVM_INST_LSHR;
+					break;
 				case AST_EXPR_BINOP_BXOR:
 					inst.type = LLVM_INST_XOR;
 					break;
@@ -259,11 +381,21 @@ static llvm_typed_value_t llvm_emit_ast_expr(ast_expr_t* expr, var2reg_map_t* va
 					inst.type = LLVM_INST_OR;
 					break;
 				case AST_EXPR_BINOP_LAND:
-					printf("<unimplemented>\n"); exit(1);
+					printf("<unimplemented (land)>\n"); exit(1);
 				case AST_EXPR_BINOP_LOR:
-					printf("<unimplemented>\n"); exit(1);
+					printf("<unimplemented (lor)>\n"); exit(1);
 			}
-			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=llvm_add_inst(f, inst), .typed_reg.ast_type = 0 }; // TODO: assign ast type
+			llvm_reg_t out = llvm_add_inst(f, inst);
+			if (inst.type == LLVM_INST_ICMP){ // icmp instruction always returns i1 instead of optype
+				out = llvm_add_inst(f,
+					(llvm_inst_t){
+						.type = LLVM_INST_ZEXT,
+						.ext.from = LLVM_I1,
+						.ext.to = optype,
+						.ext.operand = (llvm_value_t){.type=LLVM_VALUE_REG, .reg=out},
+					});
+			}
+			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=out, .typed_reg.ast_type = restype };
 		}
 	}
 }
@@ -321,8 +453,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 	switch (stmt->type){
 		case AST_STMT_IF:
 		{
-			llvm_typed_value_t cond = llvm_emit_ast_expr(&stmt->if_.cond, var2reg, f);
-			cond = llvm_cast_to_i1(cond, f); // TODO
+			llvm_value_t cond = llvm_cast_to_i1(llvm_emit_ast_expr(&stmt->if_.cond, var2reg, f), f);
 			llvm_label_t base_label = llvm_function_last_label(f);
 			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
 
@@ -333,7 +464,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 
 			llvm_label_t next_label = llvm_add_block(f);
 			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
-			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=llvm_untype_value(cond), .br.iftrue=iftrue_label, .br.iffalse=next_label };
+			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_label, .br.iffalse=next_label };
 
 			llvm_merge_blocks(f, 3,
 				base_label,    var2reg,
@@ -345,8 +476,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 		}
 		case AST_STMT_IF_ELSE:
 		{
-			llvm_typed_value_t cond = llvm_emit_ast_expr(&stmt->if_else.cond, var2reg, f);
-			cond = llvm_cast_to_i1(cond, f); // TODO
+			llvm_value_t cond = llvm_cast_to_i1(llvm_emit_ast_expr(&stmt->if_else.cond, var2reg, f), f);
 			llvm_label_t base_label = llvm_function_last_label(f);
 			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
 
@@ -363,7 +493,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			llvm_label_t next_label = llvm_add_block(f);
 			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
 			iffalse_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
-			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=llvm_untype_value(cond), .br.iftrue=iftrue_label, .br.iffalse=iffalse_label };
+			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_label, .br.iffalse=iffalse_label };
 
 			llvm_merge_blocks(f, 3,
 				base_label,     var2reg,
@@ -386,15 +516,40 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 		case AST_STMT_ASSIGN:
 			{
 				llvm_typed_value_t val = llvm_emit_ast_expr(&stmt->assign.val, var2reg, f);
-				// TODO: ensure that val and stmt->assign.var_ref are of the same ast type!!
-				var2reg_map_set(var2reg, stmt->assign.var_ref, val.typed_reg.reg);
+				llvm_reg_t new;
+				switch (val.type){
+					case LLVM_TVALUE_REG:
+						if (ast_datatype_eq(stmt->assign.var_ref->type_ref, val.typed_reg.ast_type)){
+							new = val.typed_reg.reg;
+						}
+						else{
+							printf_error(stmt->loc, "attempt to assign type '%s' to variable '%s' of type '%s'", val.typed_reg.ast_type->name, stmt->assign.var_ref->name, stmt->assign.var_ref->type_ref->name);
+							new = llvm_add_inst(f, (llvm_inst_t){ .type=LLVM_INST_NOP, .nop.value=POISON_VALUE});
+						}
+						break;
+					case LLVM_TVALUE_INT_CONST:
+					case LLVM_TVALUE_POISON:
+						new = llvm_add_inst(f, (llvm_inst_t){ .type=LLVM_INST_NOP, .nop.value=llvm_untype_value(val)});
+						break;
+				}
+				var2reg_map_set(var2reg, stmt->assign.var_ref, new);
 				return;
 			}
-		case AST_STMT_BREAK:	printf("<unimplemented>\n"); exit(1); // TODO
-		case AST_STMT_CONTINUE:	printf("<unimplemented>\n"); exit(1); // TODO
-		case AST_STMT_RETURN:	printf("<unimplemented>\n"); exit(1); // TODO
-		case AST_STMT_FOR:		printf("<unimplemented>\n"); exit(1); // TODO
-		case AST_STMT_WHILE:	printf("<unimplemented>\n"); exit(1); // TODO
+		case AST_STMT_BREAK:	printf("<unimplemented (break)>\n"); exit(1); // TODO
+		case AST_STMT_CONTINUE:	printf("<unimplemented (continue)>\n"); exit(1); // TODO
+		case AST_STMT_RETURN:
+			{
+				llvm_typed_value_t val = llvm_emit_ast_expr(&stmt->return_.val, var2reg, f);
+				// TODO: check value type matches function return type
+				llvm_basic_block_t* block = &f->blocks.data[f->blocks.len - 1];
+				block->term_inst = (llvm_term_inst_t){
+					.type = LLVM_TERM_INST_RET,
+					.ret.value = llvm_untype_value(val)
+				};
+				llvm_add_block(f); // add a dead block to consume any extra instructions
+			}
+		case AST_STMT_FOR:		printf("<unimplemented (for)>\n"); exit(1); // TODO
+		case AST_STMT_WHILE:	printf("<unimplemented (while)>\n"); exit(1); // TODO
 	}
 }
 
@@ -407,7 +562,7 @@ llvm_function_t llvm_emit_ast_func(ast_func_t func){
 
 	var2reg_map_t var2reg = create_var2reg_map();
 	for (unsigned int i=0; i < func.args.len; i++){
-		var2reg_map_insert(&var2reg, &func.args.data[i], (llvm_reg_t){.idx=i});
+		var2reg_map_insert(&var2reg, &func.args.data[i]->var, (llvm_reg_t){.idx=i});
 	}
 
 	llvm_basic_block_list_append(&f.blocks, (llvm_basic_block_t){

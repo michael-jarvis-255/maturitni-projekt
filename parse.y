@@ -236,18 +236,23 @@ function_declaration:
 		context_t ctx = create_context();
 		$$ = convert_to_ptr(ctx);
 		context_stack_push($$);
-
+	}[context]
+	<id_ptr_list>{
+		$$ = create_ast_id_ptr_list();
 		for (unsigned int i=0; i<$args.len; i++){
 			ast_variable_t v = $args.data[i];
 			ast_id_t id = (ast_id_t){.type=AST_ID_VAR, .var=v};
 			ast_id_t* idp = convert_to_ptr(id);
 			current_context_insert(v.name, idp);
+			printf("insert '%s' into context as %p\n", v.name, (void*)idp);
+			ast_id_ptr_list_append(&$$, idp);
 		}
-	}[context]
+		shallow_free_ast_variable_list(&$args);
+	}[id_ptr_list]
 	no_context_block[body]
 	{
 		context_stack_pop($context);
-		$$ = create_ast_decl_function(@$, $type, $name.name, $args, $context, $body);
+		$$ = create_ast_decl_function(@$, $type, $name.name, $id_ptr_list, $context, $body);
 	}
 
 %nterm <argdeflist> function_args_definition;
