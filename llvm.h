@@ -1,3 +1,6 @@
+#ifndef _LLVM_H_
+#define _LLVM_H_
+
 #include "list.h"
 #include "hashmap.h"
 #include "ast.h"
@@ -7,9 +10,6 @@ typedef struct{ unsigned int idx; } llvm_reg_t;
 typedef struct{ unsigned int idx; } llvm_label_t;
 #define LLVM_INVALID_REG ((llvm_reg_t){.idx=-1})
 #define LLVM_REG_EQ(a, b) (a.idx == b.idx)
-
-typedef const ast_variable_t* ast_variable_ptr;
-create_hashmap_type_header(ast_variable_ptr, llvm_reg_t, var2reg_map);
 
 typedef enum {
 	LLVM_TYPE_INTEGRAL,
@@ -161,5 +161,4 @@ typedef struct llvm_function_t {
 	// argument list
 } llvm_function_t;
 
-
-llvm_function_t llvm_emit_ast_func(ast_func_t func);
+#endif
