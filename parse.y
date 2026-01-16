@@ -244,7 +244,6 @@ function_declaration:
 			ast_id_t id = (ast_id_t){.type=AST_ID_VAR, .var=v};
 			ast_id_t* idp = convert_to_ptr(id);
 			current_context_insert(v.name, idp);
-			printf("insert '%s' into context as %p\n", v.name, (void*)idp);
 			ast_id_ptr_list_append(&$$, idp);
 		}
 		shallow_free_ast_variable_list(&$args);

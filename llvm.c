@@ -547,6 +547,7 @@ static void llvm_emit_ast_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 					.ret.value = llvm_untype_value(val)
 				};
 				llvm_add_block(f); // add a dead block to consume any extra instructions
+				return;
 			}
 		case AST_STMT_FOR:		printf("<unimplemented (for)>\n"); exit(1); // TODO
 		case AST_STMT_WHILE:	printf("<unimplemented (while)>\n"); exit(1); // TODO
