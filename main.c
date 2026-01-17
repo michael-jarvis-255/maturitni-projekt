@@ -33,8 +33,13 @@ int main(int argc, char** argv){
 		ast_id_t* id = iter.current->value;
 		if (id->type != AST_ID_FUNC) continue;
 
-		printf("TODO: emit '%s'\n", iter.current->key);
-		ast2llvm_emit_func(id->func);
+		printf("-- EMIT '%s' --\n", iter.current->key);
+		llvm_function_t func = ast2llvm_emit_func(id->func);
+		
+		char* llvm_code = llvm_func_to_string(&func);
+		puts(llvm_code);
+		free(llvm_code);
+		puts("----");
 	}
 	
 	ast_cleanup_context();

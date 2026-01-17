@@ -48,6 +48,7 @@ void T##_list_extend(T##_list_t* list, unsigned int n, const T##_t* arr){	\
 		list->data = reallocarray(list->data, list->cap, sizeof(T##_t));	\
 	}	\
 	memcpy(&list->data[list->len], arr, n*sizeof(T##_t));	\
+	list->len += n;	\
 }	\
 void T##_list_pop(T##_list_t* list){	\
 	if (list->len == 0){	\

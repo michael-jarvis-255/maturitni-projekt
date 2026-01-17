@@ -30,7 +30,7 @@ static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
 	return (llvm_label_t){ .idx = f->blocks.len - 1 }; 
 }
 static inline llvm_reg_t llvm_block_last_reg(const llvm_basic_block_t* b){
-	return (llvm_reg_t){ .idx = b->instructions.len - 1};
+	return (llvm_reg_t){ .idx = b->regbase + b->instructions.len - 1};
 }
 static inline llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 	llvm_value_t v;
@@ -547,6 +547,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 				llvm_basic_block_t* block = &f->blocks.data[f->blocks.len - 1];
 				block->term_inst = (llvm_term_inst_t){
 					.type = LLVM_TERM_INST_RET,
+					.ret.type = ast_type_to_llvm_type(val.typed_reg.ast_type), // TODO: might not be a reg!
 					.ret.value = llvm_untype_value(val)
 				};
 				llvm_add_block(f); // add a dead block to consume any extra instructions

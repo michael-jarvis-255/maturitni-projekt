@@ -43,6 +43,7 @@ typedef struct llvm_value_t {
 
 typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
 	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
+	LLVM_TERM_INST_RET_VOID,
 	LLVM_TERM_INST_RET,
 	LLVM_TERM_INST_JMP, // 'br' instruction without a condition
 	LLVM_TERM_INST_BR,
@@ -52,6 +53,7 @@ typedef struct llvm_term_inst_t {
 	llvm_term_inst_enum_t type;
 	union {
 		struct {
+			llvm_type_t type;
 			llvm_value_t value;
 		} ret;
 		struct {
@@ -160,5 +162,10 @@ typedef struct llvm_function_t {
 	// return type
 	// argument list
 } llvm_function_t;
+
+
+
+void llvm_func_to_stream(const llvm_function_t* f, FILE* stream);
+char* llvm_func_to_string(const llvm_function_t* f);
 
 #endif
