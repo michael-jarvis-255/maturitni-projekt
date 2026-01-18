@@ -25,6 +25,8 @@ create_hashmap_type_header(ast_variable_ptr, llvm_reg_t, var2reg_map);
 
 #define POISON_TYPED_VALUE ((llvm_typed_value_t){ .type=LLVM_TVALUE_POISON })
 #define POISON_VALUE ((llvm_value_t){ .type=LLVM_VALUE_POISON })
+#define LLVM_TYPE_I1 ((llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=1 })
+#define LLVM_INT_CONST(x) ((llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=x })
 
 static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
 	return (llvm_label_t){ .idx = f->blocks.len - 1 }; 
@@ -164,7 +166,70 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 	return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
 }
 
-static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, var2reg_map_t* var2reg, llvm_function_t* f){
+static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f);
+static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f){
+	// NOTE: expr must be AST_EXPR_BINOP of type AST_EXPR_BINOP_LAND or AST_EXPR_BINOP_LOR
+	llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f);
+
+	// catch poison
+	if (left_operand.type == LLVM_TVALUE_POISON){
+		ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+		return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+	}
+	// catch structured types
+	if (left_operand.type == LLVM_TVALUE_REG && left_operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED){
+		printf_error(expr->binop.left->loc, "struct type '%s' is not supported for binary operation '%s'", left_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+		ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+		return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+	}
+	// catch floating point types
+	if (left_operand.type == LLVM_TVALUE_REG && left_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT){
+		printf_error(expr->binop.left->loc, "floating point type '%s' is not (yet) supported for binary operation '%s'", left_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+		ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+		return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+	}
+
+	
+	llvm_value_t left = llvm_cast_to_i1(left_operand, f);
+	llvm_label_t base_label = llvm_function_last_label(f);
+	llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
+
+	llvm_add_block(f);
+	llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+	llvm_label_t long_label = llvm_function_last_label(f);
+	llvm_basic_block_t* long_block = &f->blocks.data[long_label.idx];
+	llvm_value_t right;
+
+	// catch structured types and floats
+	if (right_operand.type == LLVM_TVALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_STRUCTURED){
+		printf_error(expr->binop.right->loc, "struct type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+		right = (llvm_value_t){ .type=LLVM_VALUE_POISON };
+	} else if (right_operand.type == LLVM_TVALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT){
+		printf_error(expr->binop.right->loc, "floating point type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+		right = (llvm_value_t){ .type=LLVM_VALUE_POISON };
+	} else {
+		right = llvm_cast_to_i1(right_operand, f);
+	}
+	
+	llvm_label_t next_label = llvm_add_block(f);
+	long_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
+	if (expr->binop.op == AST_EXPR_BINOP_LAND){
+		base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=left, .br.iftrue=long_label, .br.iffalse=next_label };
+	}else{
+		base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=left, .br.iftrue=next_label, .br.iffalse=long_label };
+	}
+
+	llvm_reg_t out = llvm_add_inst(f, (llvm_inst_t){
+		.type=LLVM_INST_PHI,
+		.phi.type=LLVM_TYPE_I1,
+		.phi.count=2,
+		.phi.labels = {base_label, long_label},
+		.phi.values = {left, right}
+	});
+	return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=out, .typed_reg.ast_type=0 }; // TODO: ast type
+}
+
+static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f){
 	switch (expr->type){
 		case AST_EXPR_CONST:
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=expr->constant.value };
@@ -217,7 +282,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, var2reg_map
 					break;
 				case AST_EXPR_UNOP_LNOT:
 					inst = (llvm_inst_t){
-						.type = LLVM_INST_ICMP,
+						.type = LLVM_INST_ICMP, // TODO: make ast type 'bool' or zext to ast type
 						.icmp.type = optype,
 						.icmp.cond = LLVM_ICMP_EQ,
 						.icmp.op1 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0 },
@@ -225,13 +290,16 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, var2reg_map
 					};
 					break;
 			}
-			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=llvm_add_inst(f, inst), .typed_reg.ast_type=0 }; // TODO: assign ast type
+			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=llvm_add_inst(f, inst), .typed_reg.ast_type=operand.typed_reg.ast_type };
 		}
 
 
 		case AST_EXPR_BINOP:
 		{
-			// TODO: short-circuiting && and ||
+			// short-circuiting && and ||
+			if (expr->binop.op == AST_EXPR_BINOP_LAND || expr->binop.op == AST_EXPR_BINOP_LOR){
+				return ast2llvm_emit_short_circuiting_expr(expr, var2reg, f);
+			}
 			llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f);
 			llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f);
 
@@ -244,6 +312,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, var2reg_map
 			if (left_operand.type == LLVM_TVALUE_REG && right_operand.type == LLVM_TVALUE_REG
 				&& !ast_datatype_eq(left_operand.typed_reg.ast_type, right_operand.typed_reg.ast_type)){
 				printf_error(expr->loc, "binary operation '%s' doesn't support differing types '%s' and '%s'", ast_expr_binop_string(expr->binop.op), left_operand.typed_reg.ast_type->name, right_operand.typed_reg.ast_type->name);
+				return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
 			}
 
 			// catch structured types
@@ -306,7 +375,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, var2reg_map
 					inst.type = LLVM_INST_SUB;
 					break;
 				case AST_EXPR_BINOP_MUL:
-					inst.type = LLVM_INST_MUL; // TODO: should i32*i32 give i64?
+					inst.type = LLVM_INST_MUL;
 					break;
 				case AST_EXPR_BINOP_DIV:
 					inst.type = signed_op ? LLVM_INST_SDIV : LLVM_INST_UDIV;
@@ -435,7 +504,7 @@ static void merge_blocks(llvm_function_t* f, unsigned int n, ...){ // variadic a
 
 	for (ast_variable_ptr_set_iterator_t iter=ast_variable_ptr_set_iter(&vars_to_merge); iter.current; iter = ast_variable_ptr_set_iter_next(iter)){
 		const ast_variable_t* var = iter.current->value;
-		llvm_inst_t inst = (llvm_inst_t){
+		llvm_inst_t inst = (llvm_inst_t){ // TODO: type
 			.type=LLVM_INST_PHI,
 			.phi.count=n
 		};
@@ -460,10 +529,11 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			llvm_label_t base_label = llvm_function_last_label(f);
 			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
 
-			llvm_label_t iftrue_label = llvm_add_block(f);
-			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
+			llvm_add_block(f);
 			var2reg_map_t var2reg_iftrue = var2reg_map_copy(var2reg);
 			ast2llvm_emit_stmt(stmt->if_.iftrue, &var2reg_iftrue, f);
+			llvm_label_t iftrue_label = llvm_function_last_label(f);
+			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
 
 			llvm_label_t next_label = llvm_add_block(f);
 			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
@@ -483,15 +553,17 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			llvm_label_t base_label = llvm_function_last_label(f);
 			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
 
-			llvm_label_t iftrue_label = llvm_add_block(f);
-			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
+			llvm_add_block(f);
 			var2reg_map_t var2reg_iftrue = var2reg_map_copy(var2reg);
 			ast2llvm_emit_stmt(stmt->if_else.iftrue, &var2reg_iftrue, f);
+			llvm_label_t iftrue_label = llvm_function_last_label(f);
+			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
 
-			llvm_label_t iffalse_label = llvm_add_block(f);
-			llvm_basic_block_t* iffalse_block = &f->blocks.data[iffalse_label.idx];
+			llvm_add_block(f);
 			var2reg_map_t var2reg_iffalse = var2reg_map_copy(var2reg);
 			ast2llvm_emit_stmt(stmt->if_else.iffalse, &var2reg_iffalse, f);
+			llvm_label_t iffalse_label = llvm_function_last_label(f);
+			llvm_basic_block_t* iffalse_block = &f->blocks.data[iffalse_label.idx];
 
 			llvm_label_t next_label = llvm_add_block(f);
 			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
