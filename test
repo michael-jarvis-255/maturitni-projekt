@@ -6,9 +6,9 @@ i32 foo(i32 X){
 	i32 q;
 	i16 w = 15;
 
-	i32 bar(i32 w){
-		return q;
-	}
+	if (X > 13){
+		q = 5;
+	} else y = y*10;
 	
 	return y;
 }

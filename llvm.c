@@ -217,7 +217,19 @@ static void llvm_block_body_to_target(const llvm_basic_block_t* block, print_tar
 }
 
 static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
-	tprint(t, "define <type> <name>(<arg>, <arg>){\n"); // TODO
+	tprint(t, "define ");
+	if (f->has_return)
+		llvm_type_to_target(f->rettype, t);
+	else
+		tprint(t, "void");
+	tprintf(t, " %s(", f->name);
+	for (unsigned int i=0; i < f->arg_count; i++){
+		llvm_type_to_target(f->args[i], t);
+		tprintf(t, " %%%u", i);
+		if (i+1 < f->arg_count)
+			tprint(t, ", ");
+	}
+	tprint(t, "){\n");
 
 	for (unsigned int i = 0; i < f->blocks.len; i++){
 		tprintf(t, "l%u:\n", i);

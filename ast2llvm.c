@@ -562,8 +562,19 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func){
 	llvm_function_t f;
 	f.name = strdup(func.name);
 	f.blocks = create_llvm_basic_block_list();
-	// TODO init return type
-	// TODO init argument list
+
+	if (func.return_type_ref){
+		f.has_return = true;
+		f.rettype = ast_type_to_llvm_type(func.return_type_ref);
+	}else{
+		f.has_return = false;
+	}
+
+	f.arg_count = func.args.len;
+	f.args = malloc(f.arg_count*sizeof(llvm_type_t));
+	for (unsigned int i=0; i < func.args.len; i++){
+		f.args[i] = ast_type_to_llvm_type(func.args.data[i]->var.type_ref);
+	}
 
 	var2reg_map_t var2reg = create_var2reg_map();
 	for (unsigned int i=0; i < func.args.len; i++){

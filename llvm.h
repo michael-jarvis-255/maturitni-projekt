@@ -159,8 +159,10 @@ create_list_type_header(llvm_basic_block, false);
 typedef struct llvm_function_t {
 	const char* name;
 	llvm_basic_block_list_t blocks; // entry block is always block 0
-	// return type
-	// argument list
+	bool has_return;
+	llvm_type_t rettype;
+	unsigned int arg_count;
+	llvm_type_t* args;
 } llvm_function_t;
 
 

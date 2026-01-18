@@ -10,12 +10,12 @@
 	int yylex ();
 %}
 
-%token <expr> TK_INT
-%token <str> TK_STRING
+%token <expr> TK_INT "integer"
+%token <str> TK_STRING "string"
 %token <name> TK_NAME
-%token <var_ref> TK_VAR
-%token <type_ref> TK_TYPE
-%token <func_ref> TK_FUNC
+%token <var_ref> TK_VAR "variable name"
+%token <type_ref> TK_TYPE "type name"
+%token <func_ref> TK_FUNC "function name"
 %token TK_IF "if"
 %token TK_ELSE "else"
 %token TK_FOR "for"
@@ -33,7 +33,7 @@
 %token TK_SHR ">>"
 %token TK_SHL "<<"
 
-%define parse.error detailed
+%define parse.error custom
 
 %%
 
@@ -269,3 +269,29 @@ single_var_declaration:
 
 
 %%
+
+#define COLOUR_INFO "\033[36m"
+#define COLOUR_WARNING "\033[33m"
+#define COLOUR_ERROR "\033[31m"
+#define STYLE_BOLD "\033[1m"
+#define STYLE_RESET "\033[0m"
+static int yyreport_syntax_error(const yypcontext_t* ctx){
+	unsigned int buflen = 0;
+	char buf[1024];
+	buf[0] = 0;
+
+	#define MAX_EXPECTED 10
+	yysymbol_kind_t expected[MAX_EXPECTED];
+	int n = yypcontext_expected_tokens(ctx, expected, MAX_EXPECTED);
+	for (int i=0; i<n; i++){
+		buflen += snprintf(buf + buflen, sizeof(buf)-buflen, i == 0 ? ", expected %s%s%s%s" : " or %s%s%s%s", COLOUR_INFO, STYLE_BOLD, yysymbol_name(expected[i]), STYLE_RESET);
+		if (buflen > sizeof(buf)) {
+			buf[0] = 0;
+			break;
+		}
+	}
+	
+	loc_t loc = *yypcontext_location(ctx);
+	printf_error(loc, "%ssyntax error:%s unexpected %s%s%s%s%s", STYLE_BOLD, STYLE_RESET, COLOUR_ERROR, STYLE_BOLD, yysymbol_name(yypcontext_token(ctx)), STYLE_RESET, buf);
+	return 0;
+}
