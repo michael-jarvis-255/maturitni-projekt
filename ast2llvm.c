@@ -472,6 +472,44 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 	}
 }
 
+static llvm_type_t get_reg_type(llvm_reg_t reg, const llvm_function_t* f){
+	llvm_inst_t inst;
+	for (unsigned int bi=0; bi < f->blocks.len; bi++){
+		llvm_basic_block_t* block = &f->blocks.data[bi];
+		if (block->regbase + block->instructions.len > reg.idx){
+			inst = block->instructions.data[reg.idx - block->regbase];
+			break;
+		}
+	}
+	switch (inst.type){
+		case LLVM_INST_ADD:
+		case LLVM_INST_SUB:
+		case LLVM_INST_MUL:
+		case LLVM_INST_UDIV:
+		case LLVM_INST_SDIV:
+		case LLVM_INST_UREM:
+		case LLVM_INST_SREM:
+		case LLVM_INST_SHL:
+		case LLVM_INST_LSHR:
+		case LLVM_INST_ASHR:
+		case LLVM_INST_AND:
+		case LLVM_INST_OR:
+		case LLVM_INST_XOR:
+			return inst.binop.type;
+		case LLVM_INST_ICMP:
+			return inst.icmp.type;
+		case LLVM_INST_PHI:
+			return inst.phi.type;
+		case LLVM_INST_ZEXT:
+			return inst.ext.to;
+		case LLVM_INST_NOP:
+			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=64 };
+		case LLVM_INST_LOAD: // TODO
+		case LLVM_INST_STORE: // TODO
+		case LLVM_INST_CALL: // TODO
+	}
+}
+
 static void merge_blocks(llvm_function_t* f, unsigned int n, ...){ // variadic arguments must be "llvm_label_t, var2reg_map_t*, " n times
 	if (n == 0) return;
 
@@ -508,11 +546,15 @@ static void merge_blocks(llvm_function_t* f, unsigned int n, ...){ // variadic a
 			.type=LLVM_INST_PHI,
 			.phi.count=n
 		};
+		llvm_type_t phitype;
 		for (unsigned int i=0; i<n; i++){
 			inst.phi.labels[i] = labels[i];
 			llvm_reg_t r = var2reg_map_get(maps[i], var, LLVM_INVALID_REG);
 			inst.phi.values[i] = LLVM_REG_EQ(r, LLVM_INVALID_REG) ? (llvm_value_t){ .type=LLVM_VALUE_UNDEF } : (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=r };
+			if (!LLVM_REG_EQ(r, LLVM_INVALID_REG))
+				phitype = get_reg_type(r, f);
 		}
+		inst.phi.type = phitype;
 		llvm_reg_t new = llvm_add_inst(f, inst);
 		for (unsigned int i=0; i<n; i++){
 			var2reg_map_set(maps[i], var, new);
@@ -539,7 +581,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
 			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_label, .br.iffalse=next_label };
 
-			merge_blocks(f, 3,
+			merge_blocks(f, 2,
 				base_label,    var2reg,
 				iftrue_label, &var2reg_iftrue
 			);
@@ -560,8 +602,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
 
 			llvm_add_block(f);
-			var2reg_map_t var2reg_iffalse = var2reg_map_copy(var2reg);
-			ast2llvm_emit_stmt(stmt->if_else.iffalse, &var2reg_iffalse, f);
+			ast2llvm_emit_stmt(stmt->if_else.iffalse, var2reg, f);
 			llvm_label_t iffalse_label = llvm_function_last_label(f);
 			llvm_basic_block_t* iffalse_block = &f->blocks.data[iffalse_label.idx];
 
@@ -570,14 +611,11 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 			iffalse_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
 			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_label, .br.iffalse=iffalse_label };
 
-			merge_blocks(f, 3,
-				base_label,     var2reg,
+			merge_blocks(f, 2,
 				iftrue_label,  &var2reg_iftrue,
-				iffalse_label, &var2reg_iffalse
+				iffalse_label, var2reg
 			);
-
 			var2reg_map_free(&var2reg_iftrue);
-			var2reg_map_free(&var2reg_iffalse);
 			return;
 		}
 		case AST_STMT_EXPR:

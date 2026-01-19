@@ -1,7 +1,7 @@
 MAKEFLAGS += -rR
-GCCFLAGS = -Wall -Wextra -Wpedantic
+GCCFLAGS = -Wall -Wextra -Wpedantic -g
 ifneq ($(OS),Windows_NT)
-	GCCFLAGS += -g -fsanitize=address,undefined
+	GCCFLAGS += -fsanitize=address,undefined
 endif
 
 a.out: build/lex.y.c build/parse.tab.c ast.c ast2llvm.c llvm.c main.c

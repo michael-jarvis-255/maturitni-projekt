@@ -29,6 +29,7 @@ int main(int argc, char** argv){
 	// TODO: if an error was generated (with print_error), stop compilation
 
 	// emit all functions in top context
+	FILE* outfile = fopen("out.ll", "w");
 	for (context_iterator_t iter = context_iter(&top_level_context); iter.current; iter = context_iter_next(iter)){
 		ast_id_t* id = iter.current->value;
 		if (id->type != AST_ID_FUNC) continue;
@@ -37,10 +38,12 @@ int main(int argc, char** argv){
 		llvm_function_t func = ast2llvm_emit_func(id->func);
 		
 		char* llvm_code = llvm_func_to_string(&func);
+		llvm_func_to_stream(&func, outfile);
 		puts(llvm_code);
 		free(llvm_code);
 		puts("----");
 	}
+	fclose(outfile);
 	
 	ast_cleanup_context();
 	fclose(code);

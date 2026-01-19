@@ -65,7 +65,7 @@ static void llvm_type_to_target(const llvm_type_t type, print_target_t* t){
 static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 	switch (val.type){
 		case LLVM_VALUE_UNDEF:
-			tprint(t, "undefined");
+			tprint(t, "undef");
 			break;
 		case LLVM_VALUE_POISON:
 			tprint(t, "poison");
@@ -145,7 +145,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_type_to_target(inst.icmp.type, t);
 			tprint(t, " ");
 			llvm_value_to_target(inst.icmp.op1, t);
-			tprint(t, " ");
+			tprint(t, ", ");
 			llvm_value_to_target(inst.icmp.op2, t);
 			return;
 		case LLVM_INST_PHI:
@@ -154,7 +154,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			for (unsigned int i=0; i < inst.phi.count; i++){
 				tprint(t, " [");
 				llvm_value_to_target(inst.phi.values[i], t);
-				tprintf(t, ",l%u]", inst.phi.labels[i].idx);
+				tprintf(t, ",%%l%u]", inst.phi.labels[i].idx);
 				if (i+1 != inst.phi.count) tprint(t, ",");
 			}
 			return;
@@ -168,6 +168,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_type_to_target(inst.ext.to, t);
 			return;
 		case LLVM_INST_NOP:
+			tprint(t, "or i64 0, ");
 			llvm_value_to_target(inst.nop.value, t);
 			return;
 	}
@@ -176,7 +177,7 @@ binary_op:
 	llvm_type_to_target(inst.binop.type, t);
 	tprint(t, " ");
 	llvm_value_to_target(inst.binop.first, t);
-	tprint(t, " ");
+	tprint(t, ", ");
 	llvm_value_to_target(inst.binop.second, t);
 	return;
 }
@@ -197,12 +198,12 @@ static void llvm_term_inst_to_target(const llvm_term_inst_t inst, print_target_t
 			tprint(t, "\n");
 			return;
 		case LLVM_TERM_INST_JMP:
-			tprintf(t, "br label l%u\n", inst.jmp.target.idx);
+			tprintf(t, "br label %%l%u\n", inst.jmp.target.idx);
 			return;
 		case LLVM_TERM_INST_BR:
 			tprint(t, "br i1 ");
 			llvm_value_to_target(inst.br.cond, t);
-			tprintf(t, ", label l%u, label l%u\n", inst.br.iftrue.idx, inst.br.iffalse.idx);
+			tprintf(t, ", label %%l%u, label %%l%u\n", inst.br.iftrue.idx, inst.br.iffalse.idx);
 			return;
 	}
 }
@@ -222,7 +223,7 @@ static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
 		llvm_type_to_target(f->rettype, t);
 	else
 		tprint(t, "void");
-	tprintf(t, " %s(", f->name);
+	tprintf(t, " @%s(", f->name);
 	for (unsigned int i=0; i < f->arg_count; i++){
 		llvm_type_to_target(f->args[i], t);
 		tprintf(t, " %%%u", i);
