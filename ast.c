@@ -625,27 +625,53 @@ void print_ast(){
 #define STYLE_BOLD "\033[1m"
 #define STYLE_RESET "\033[0m"
 
+#define TABSZ 4
+static unsigned int standard_print(const char* msg, const unsigned int n, unsigned int col){ // col is column that print starts at (for expanding tabs)
+	for (unsigned int i=0; i<n; i++){
+		char c = msg[i];
+		
+		if (c >= 0x7f) continue;
+		if (c >= 0x20) {
+			printf("%c", c);
+			col++;
+			continue;
+		}
+		if (c == '\t'){
+			do {
+				printf(" ");
+				col++;
+			} while (col % TABSZ);
+		}
+		if (c == 0) break;
+	}
+	return col;
+}
+
 static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){ // TODO: correctly handle tabs and unprintable characters
 	printf("%sline %u: %s%s:%s %s\n", STYLE_BOLD, loc.first_line+1, colour, msg_type, STYLE_RESET, msg);
 	unsigned int tilde_count = 0;
+	unsigned int col = 0;
 	if (loc.first_line == loc.last_line){
-		printf("%5u |    %.*s%s%.*s%s%s\n", loc.first_line+1,
-			loc.first_column, source_lines[loc.first_line],
-			colour,
-			loc.last_column - loc.first_column, source_lines[loc.first_line] + loc.first_column,
-			STYLE_RESET,
-			source_lines[loc.first_line] + loc.last_column);
+		printf("%5u |    ", loc.first_line+1);
+		col = standard_print(source_lines[loc.first_line], loc.first_column, col);
+		printf("%s", colour);
+		unsigned int col2 = standard_print(source_lines[loc.first_line] + loc.first_column, loc.last_column - loc.first_column, col);
+		printf("%s", STYLE_RESET);
+		standard_print(source_lines[loc.first_line] + loc.last_column, -1, col2);
+		printf("\n");
+		
 		tilde_count = loc.last_column - loc.first_column - 1;
 	}else{
-		printf("%5u |    %.*s%s%s%s\n", loc.first_line+1,
-			loc.first_column, source_lines[loc.first_line],
-			colour,
-			source_lines[loc.first_line] + loc.first_column,
-			STYLE_RESET);
+		printf("%5u |    ", loc.first_line+1);
+		col = standard_print(source_lines[loc.first_line], loc.first_column, col);
+		printf("%s", colour);
+		standard_print(source_lines[loc.first_line] + loc.first_column, -1, col);
+		printf("%s\n", STYLE_RESET);
+
 		tilde_count = strlen(source_lines[loc.first_line]) - loc.first_column - 1;
 	}
 
-	printf("      |    %*s%s^", loc.first_column, "", colour);
+	printf("      |    %*s%s^", col, "", colour);
 	for (unsigned int i=0; i<tilde_count; i++){
 		printf("~");
 	}
@@ -654,7 +680,6 @@ static void print_msg(loc_t loc, const char* msg_type, const char* msg, const ch
 	if (loc.first_line != loc.last_line){
 		printf("      |    %s...%s\n", colour, STYLE_RESET);
 	}
-	//printf("%i:%i - %i:%i\n", loc.first_line, loc.first_column, loc.last_line, loc.last_column);
 }
 
 void print_info(loc_t loc, char* msg){
