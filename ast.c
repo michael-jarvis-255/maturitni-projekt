@@ -18,6 +18,7 @@ create_list_type_impl(ast_id_ptr, false)
 create_hashmap_type_impl(str, ast_id_t*, context)
 
 context_t top_level_context;
+bool received_error;
 static context_stack_t context_stack;
 static char** source_lines;
 
@@ -475,6 +476,7 @@ static void get_source_lines_from_file(FILE* source){
 }
 
 void ast_init_context(FILE* source){
+	received_error = false;
 	get_source_lines_from_file(source);
 	context_stack = create_context_ptr_list();
 	top_level_context = create_context();
@@ -662,6 +664,7 @@ void print_warning(loc_t loc, char* msg){
 	print_msg(loc, "warning", msg, COLOUR_WARNING);
 }
 void print_error(loc_t loc, char* msg){
+	received_error = true;
 	print_msg(loc, "error", msg, COLOUR_ERROR);
 }
 
@@ -684,6 +687,7 @@ void printf_warning(loc_t loc, char* msg, ...){
 	va_end(args);
 }
 void printf_error(loc_t loc, char* msg, ...){
+	received_error = true;
 	va_list args;
 	va_start(args, msg);
 	vprintf_msg(loc, "error", COLOUR_ERROR, msg, args);

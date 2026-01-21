@@ -257,6 +257,7 @@ void printf_info(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 
 void printf_warning(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
 void printf_error(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
 
+extern bool received_error;
 extern context_t top_level_context;
 
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b);

@@ -26,7 +26,10 @@ int main(int argc, char** argv){
 	yyin = code;
 	yyparse();
 
-	// TODO: if an error was generated (with print_error), stop compilation
+	// if an error was generated (with print_error), stop compilation
+	if (received_error){
+		return 1;
+	}
 
 	// emit all functions in top context
 	FILE* outfile = fopen("out.ll", "w");
@@ -44,6 +47,9 @@ int main(int argc, char** argv){
 		puts("----");
 	}
 	fclose(outfile);
+	if (received_error){
+		return 1;
+	}
 	
 	ast_cleanup_context();
 	fclose(code);
