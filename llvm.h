@@ -143,6 +143,7 @@ typedef struct llvm_inst_t {
 			llvm_value_t operand;
 		} ext;
 		struct {
+			llvm_type_t type;
 			llvm_value_t value;
 		} nop;
 	};

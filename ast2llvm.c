@@ -29,7 +29,10 @@ create_hashmap_type_header(ast_variable_ptr, llvm_reg_t, var2reg_map);
 #define LLVM_INT_CONST(x) ((llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=x })
 
 static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
-	return (llvm_label_t){ .idx = f->blocks.len - 1 }; 
+	return (llvm_label_t){ .idx = f->blocks.len - 1 };
+}
+static inline llvm_basic_block_t* llvm_function_last_block(llvm_function_t* f){
+	return &f->blocks.data[f->blocks.len - 1];
 }
 static inline llvm_reg_t llvm_block_last_reg(const llvm_basic_block_t* b){
 	return (llvm_reg_t){ .idx = b->regbase + b->instructions.len - 1};
@@ -473,6 +476,10 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 }
 
 static llvm_type_t get_reg_type(llvm_reg_t reg, const llvm_function_t* f){
+	if (reg.idx < f->arg_count){
+		return f->args[reg.idx];
+	}
+
 	llvm_inst_t inst;
 	for (unsigned int bi=0; bi < f->blocks.len; bi++){
 		llvm_basic_block_t* block = &f->blocks.data[bi];
@@ -563,27 +570,64 @@ static void merge_blocks(llvm_function_t* f, unsigned int n, ...){ // variadic a
 	ast_variable_ptr_set_free(&vars_to_merge);
 }
 
+// NOTE: 'f' must end in an empty block
+static var2reg_map_t phi_alias_all(llvm_function_t* f, const var2reg_map_t* var2reg, llvm_label_t prev){
+	var2reg_map_t new_map = create_var2reg_map();
+	for (var2reg_map_iterator_t iter = var2reg_map_iter(var2reg); iter.current; iter = var2reg_map_iter_next(iter)){
+		const ast_variable_t* var = iter.current->key;
+		llvm_reg_t reg = iter.current->value;
+		llvm_reg_t newreg = llvm_add_inst(f, (llvm_inst_t){
+			.type=LLVM_INST_PHI,
+			.phi.count=1,
+			.phi.type=get_reg_type(reg, f),
+			.phi.labels={prev},
+			.phi.values={ (llvm_value_t){.type=LLVM_VALUE_REG, .reg=reg} }
+		});
+
+		var2reg_map_insert(&new_map, var, newreg);
+	}
+	return new_map;
+}
+
+// NOTE: prev_map must be unchanged from call to phi_alias_all()
+static void merge_vars_prepared(llvm_basic_block_t* phiblock, const var2reg_map_t* prev_map, const var2reg_map_t* new_map, llvm_label_t from){
+	unsigned int i = 0;
+	for (var2reg_map_iterator_t iter = var2reg_map_iter(prev_map); iter.current; iter = var2reg_map_iter_next(iter)){
+		const ast_variable_t* var = iter.current->key;
+		llvm_reg_t reg = iter.current->value;
+		llvm_inst_t* inst = &phiblock->instructions.data[i];
+		if (inst->type != LLVM_INST_PHI || inst->phi.count != 1 || !LLVM_REG_EQ(inst->phi.values[0].reg, reg)){
+			printf("internal error\n"); exit(1);
+		}
+
+		inst->phi.count = 2;
+		inst->phi.labels[1] = from;
+		inst->phi.values[1] = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=var2reg_map_get(new_map, var, LLVM_INVALID_REG) };
+
+		i++;
+	}
+}
+
 static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_function_t* f){
 	switch (stmt->type){
 		case AST_STMT_IF:
 		{
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_.cond, var2reg, f), f);
 			llvm_label_t base_label = llvm_function_last_label(f);
-			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
 
 			llvm_add_block(f);
 			var2reg_map_t var2reg_iftrue = var2reg_map_copy(var2reg);
+			llvm_label_t iftrue_start = llvm_function_last_label(f);
 			ast2llvm_emit_stmt(stmt->if_.iftrue, &var2reg_iftrue, f);
-			llvm_label_t iftrue_label = llvm_function_last_label(f);
-			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
+			llvm_label_t iftrue_end = llvm_function_last_label(f);			
 
 			llvm_label_t next_label = llvm_add_block(f);
-			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
-			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_label, .br.iffalse=next_label };
+			f->blocks.data[iftrue_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
+			f->blocks.data[base_label.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_start, .br.iffalse=next_label };
 
 			merge_blocks(f, 2,
 				base_label,    var2reg,
-				iftrue_label, &var2reg_iftrue
+				iftrue_end, &var2reg_iftrue
 			);
 			
 			var2reg_map_free(&var2reg_iftrue);
@@ -593,27 +637,26 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 		{
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_else.cond, var2reg, f), f);
 			llvm_label_t base_label = llvm_function_last_label(f);
-			llvm_basic_block_t* base_block = &f->blocks.data[base_label.idx];
 
 			llvm_add_block(f);
 			var2reg_map_t var2reg_iftrue = var2reg_map_copy(var2reg);
+			llvm_label_t iftrue_start = llvm_function_last_label(f);
 			ast2llvm_emit_stmt(stmt->if_else.iftrue, &var2reg_iftrue, f);
-			llvm_label_t iftrue_label = llvm_function_last_label(f);
-			llvm_basic_block_t* iftrue_block = &f->blocks.data[iftrue_label.idx];
+			llvm_label_t iftrue_end = llvm_function_last_label(f);
 
 			llvm_add_block(f);
+			llvm_label_t iffalse_start = llvm_function_last_label(f);
 			ast2llvm_emit_stmt(stmt->if_else.iffalse, var2reg, f);
-			llvm_label_t iffalse_label = llvm_function_last_label(f);
-			llvm_basic_block_t* iffalse_block = &f->blocks.data[iffalse_label.idx];
+			llvm_label_t iffalse_end = llvm_function_last_label(f);
 
 			llvm_label_t next_label = llvm_add_block(f);
-			iftrue_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
-			iffalse_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
-			base_block->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_label, .br.iffalse=iffalse_label };
+			f->blocks.data[iftrue_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
+			f->blocks.data[iffalse_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
+			f->blocks.data[base_label.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=iftrue_start, .br.iffalse=iffalse_start };
 
 			merge_blocks(f, 2,
-				iftrue_label,  &var2reg_iftrue,
-				iffalse_label, var2reg
+				iftrue_end,  &var2reg_iftrue,
+				iffalse_end, var2reg
 			);
 			var2reg_map_free(&var2reg_iftrue);
 			return;
@@ -637,12 +680,12 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 						}
 						else{
 							printf_error(stmt->loc, "attempt to assign type '%s' to variable '%s' of type '%s'", val.typed_reg.ast_type->name, stmt->assign.var_ref->name, stmt->assign.var_ref->type_ref->name);
-							new = llvm_add_inst(f, (llvm_inst_t){ .type=LLVM_INST_NOP, .nop.value=POISON_VALUE});
+							new = llvm_add_inst(f, (llvm_inst_t){ .type=LLVM_INST_NOP, .nop.type=ast_type_to_llvm_type(stmt->assign.var_ref->type_ref), .nop.value=POISON_VALUE});
 						}
 						break;
 					case LLVM_TVALUE_INT_CONST:
 					case LLVM_TVALUE_POISON:
-						new = llvm_add_inst(f, (llvm_inst_t){ .type=LLVM_INST_NOP, .nop.value=llvm_untype_value(val)});
+						new = llvm_add_inst(f, (llvm_inst_t){ .type=LLVM_INST_NOP, .nop.type=ast_type_to_llvm_type(stmt->assign.var_ref->type_ref), .nop.value=llvm_untype_value(val)});
 						break;
 				}
 				var2reg_map_set(var2reg, stmt->assign.var_ref, new);
@@ -664,7 +707,31 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, var2reg_map_t* var2reg, llvm_fu
 				return;
 			}
 		case AST_STMT_FOR:		printf("<unimplemented (for)>\n"); exit(1); // TODO
-		case AST_STMT_WHILE:	printf("<unimplemented (while)>\n"); exit(1); // TODO
+		case AST_STMT_WHILE:
+			llvm_label_t base_label = llvm_function_last_label(f);
+			
+			llvm_add_block(f);
+			llvm_label_t cond_start = llvm_function_last_label(f);
+			var2reg_map_t var2reg_new = phi_alias_all(f, var2reg, base_label);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, &var2reg_new, f), f);
+			llvm_label_t cond_end = llvm_function_last_label(f);
+			
+			llvm_add_block(f);
+			llvm_label_t body_start = llvm_function_last_label(f);
+			ast2llvm_emit_stmt(stmt->while_.body, &var2reg_new, f);
+			llvm_label_t body_end = llvm_function_last_label(f);
+
+			// finish the PHI instructions
+			merge_vars_prepared(&f->blocks.data[cond_start.idx], var2reg, &var2reg_new, body_end);
+
+			llvm_label_t next = llvm_add_block(f);
+			f->blocks.data[base_label.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			f->blocks.data[cond_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
+			f->blocks.data[body_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+
+			var2reg_map_free(var2reg);
+			*var2reg = var2reg_new;
+			return;
 	}
 }
 

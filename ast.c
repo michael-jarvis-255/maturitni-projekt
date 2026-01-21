@@ -310,11 +310,11 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 		case AST_STMT_RETURN:
 			free_ast_expr_v(stmt.return_.val);
 			break;
-		case AST_STMT_FOR:
+		case AST_STMT_WHILE:
 			free_ast_expr_v(stmt.while_.cond);
 			free_ast_stmt(stmt.while_.body);
 			break;
-		case AST_STMT_WHILE:
+		case AST_STMT_FOR:
 			free_ast_expr_v(stmt.for_.cond);
 			free_ast_stmt(stmt.for_.init);
 			free_ast_stmt(stmt.for_.step);

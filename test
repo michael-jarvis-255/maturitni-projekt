@@ -9,6 +9,11 @@ i32 foo(i32 X){
 	if (X > 13){
 		q = 5;
 	} else y = y*10;
+
+	while (y) {
+		y = y - 1;
+		w = w + 13;
+	}
 	
-	return y;
+	return w;
 }

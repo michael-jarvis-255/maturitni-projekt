@@ -168,7 +168,9 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_type_to_target(inst.ext.to, t);
 			return;
 		case LLVM_INST_NOP:
-			tprint(t, "or i64 0, ");
+			tprint(t, "or ");
+			llvm_type_to_target(inst.nop.type, t);
+			tprint(t, " 0, ");
 			llvm_value_to_target(inst.nop.value, t);
 			return;
 	}
