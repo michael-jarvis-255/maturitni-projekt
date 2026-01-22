@@ -37,9 +37,9 @@ int main(int argc, char** argv){
 		ast_id_t* id = iter.current->value;
 		if (id->type != AST_ID_FUNC) continue;
 
-		printf("-- EMIT '%s' --\n", iter.current->key);
 		llvm_function_t func = ast2llvm_emit_func(id->func);
 		
+		printf("-- EMIT '%s' --\n", iter.current->key);
 		char* llvm_code = llvm_func_to_string(&func);
 		llvm_func_to_stream(&func, outfile);
 		puts(llvm_code);

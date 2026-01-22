@@ -4,7 +4,8 @@
 
 typedef char char_t;
 create_list_type_header(char, false);
-create_list_type_impl(char, false);
+create_list_type_impl(char, false)
+create_list_type_impl(llvm_arg, false)
 
 typedef enum {
 	PRINT_TARGET_STRING,
@@ -158,7 +159,20 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 				if (i+1 != inst.phi.count) tprint(t, ",");
 			}
 			return;
-		case LLVM_INST_CALL: return; // TODO
+		case LLVM_INST_CALL: // TODO functions returning 'void'
+			tprint(t, "call ");
+			llvm_type_to_target(inst.call.rettype, t);
+			tprintf(t, " @%s(", inst.call.name);
+			for (unsigned int i=0; i < inst.call.args.len; i++){
+				llvm_type_to_target(inst.call.args.data[i].type, t);
+				tprint(t, " ");
+				llvm_value_to_target(inst.call.args.data[i].val, t);
+				if (i+1 < inst.call.args.len){
+					tprint(t, ", ");
+				}
+			}
+			tprint(t, ")");
+			return;
 		case LLVM_INST_ZEXT:
 			tprint(t, "zext ");
 			llvm_type_to_target(inst.ext.from, t);
@@ -239,7 +253,7 @@ static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
 		llvm_block_body_to_target(&f->blocks.data[i], t);
 	}
 	
-	tprint(t, "}");
+	tprint(t, "}\n\n");
 }
 
 void llvm_func_to_stream(const llvm_function_t* f, FILE* stream){

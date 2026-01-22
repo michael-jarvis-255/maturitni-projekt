@@ -1,10 +1,14 @@
 i32 x;
 i32 y = 15;
 
-i32 foo(i32 X){
+u64 myfunc(u64 a, u64 b){
+	return 15*3;
+}
+
+u64 foo(i32 X){
 	i32 y = X + 45;
-	i32 q;
-	i16 w = 15;
+	u64 q;
+	u64 w = 15;
 
 	if (X > 13){
 		q = 5;
@@ -14,6 +18,8 @@ i32 foo(i32 X){
 		y = y - 1;
 		w = w + 13;
 	}
+
+	u64 res = myfunc(w, q);
 	
 	return w;
 }

@@ -41,6 +41,13 @@ typedef struct llvm_value_t {
 	};
 } llvm_value_t;
 
+typedef struct {
+	llvm_type_t type;
+	llvm_value_t val;
+} llvm_arg_t;
+
+create_list_type_header(llvm_arg, false);
+
 typedef enum { // NOTE: these aren't all available LLVM IR instructions, just those used here
 	LLVM_TERM_INST_NULL, // shouldn't appear in resulting code
 	LLVM_TERM_INST_RET_VOID,
@@ -134,8 +141,9 @@ typedef struct llvm_inst_t {
 			llvm_value_t values[LLVM_PHI_MAX];
 		} phi;
 		struct {
-			// func ptr
-			// function args
+			const char* name;
+			llvm_type_t rettype;
+			llvm_arg_list_t args;
 		} call;
 		struct {
 			llvm_type_t from;

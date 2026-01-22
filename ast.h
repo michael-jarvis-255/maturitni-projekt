@@ -146,7 +146,7 @@ typedef struct ast_stmt_t {
 			ast_expr_t val;
 		} assign;
 		struct {
-			ast_expr_t val;
+			ast_expr_t* val;
 		} return_;
 		struct {
 			ast_expr_t cond;

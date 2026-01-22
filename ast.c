@@ -61,7 +61,10 @@ void print_ast_id(const ast_id_t* id, int depth){
 		case AST_ID_FUNC:
 			ntabs(depth); printf("function '%s':\n", id->func.name);
 			ntabs(depth+1); printf("return type: '%s'\n", id->func.return_type_ref->name);
-			// TODO: arguments ?
+			ntabs(depth+1); printf("arguments:\n");
+			for (unsigned int i=0; i<id->func.args.len; i++){
+				ntabs(depth+2); printf("'%s' of type '%s'\n", id->func.args.data[i]->var.name, id->func.args.data[i]->var.type_ref->name);
+			}
 			ntabs(depth+1); printf("context:\n");
 			print_ast_context(id->func.context, depth+2);
 			ntabs(depth+1); printf("body:\n");
@@ -187,7 +190,14 @@ void print_ast_expr(const ast_expr_t* exp){
 			return;
 
 		case AST_EXPR_FUNC_CALL:
-			printf("TODO");
+			printf("%s(", exp->func_call.func_ref->name);
+			for (unsigned int i=0; i < exp->func_call.arglist.len; i++){
+				print_ast_expr(&exp->func_call.arglist.data[i]);
+				if (i+1 < exp->func_call.arglist.len){
+					printf(", ");
+				}
+			}
+			printf(")");
 			return;
 			
 		case AST_EXPR_UNOP:
@@ -255,7 +265,7 @@ ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr){
 	return (ast_stmt_t){
 		.type = AST_STMT_RETURN,
 		.loc = loc,
-		.return_.val = expr
+		.return_.val = convert_to_ptr(expr)
 	};
 }
 
@@ -308,7 +318,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 		case AST_STMT_CONTINUE:
 			break;
 		case AST_STMT_RETURN:
-			free_ast_expr_v(stmt.return_.val);
+			free_ast_expr(stmt.return_.val);
 			break;
 		case AST_STMT_WHILE:
 			free_ast_expr_v(stmt.while_.cond);
@@ -363,7 +373,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			break;
 		case AST_STMT_RETURN:
 			ntabs(depth); printf("return ");
-			print_ast_expr(&stmt->return_.val);
+			print_ast_expr(stmt->return_.val);
 			printf(";\n");
 			break;
 		case AST_STMT_WHILE:
@@ -540,6 +550,15 @@ void ast_init_context(FILE* source){
 		.signed_ = false
 	});
 
+	// boolean
+	ast_context_insert_type("bool", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_INTEGRAL,
+		.ptr_count = 0,
+		.bitwidth = 1,
+		.signed_ = false
+	});
+
 	// floating point types
 	ast_context_insert_type("f64", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
@@ -647,7 +666,7 @@ static unsigned int standard_print(const char* msg, const unsigned int n, unsign
 	return col;
 }
 
-static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){ // TODO: correctly handle tabs and unprintable characters
+static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){
 	printf("%sline %u: %s%s:%s %s\n", STYLE_BOLD, loc.first_line+1, colour, msg_type, STYLE_RESET, msg);
 	unsigned int tilde_count = 0;
 	unsigned int col = 0;
