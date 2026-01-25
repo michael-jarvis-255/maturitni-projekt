@@ -47,12 +47,24 @@ static inline void ntabs(unsigned int n){ nspaces(n*4); }
 void print_ast_id(const ast_id_t* id, int depth){
 	switch (id->type){
 		case AST_ID_TYPE:
-			ntabs(depth); printf("type '%s", id->type_.name);
-			for (unsigned int i=0; i<id->type_.ptr_count; i++)
-				printf("*");
-			printf("':\n");
-			ntabs(depth+1); printf("signed: %s\n", id->type_.signed_ ? "signed" : "unsigned");
-			ntabs(depth+1); printf("bitwidth: %u\n", id->type_.bitwidth);
+			ntabs(depth); printf("type '%s':\n", id->type_.name);
+			switch (id->type_.kind){
+				case AST_DATATYPE_INTEGRAL:
+					ntabs(depth+1); printf("integeral\n");
+					ntabs(depth+1); printf("signed: %s\n", id->type_.integral.signed_ ? "signed" : "unsigned");
+					ntabs(depth+1); printf("bitwidth: %u\n", id->type_.integral.bitwidth);
+					break;
+				case AST_DATATYPE_FLOAT:
+					ntabs(depth+1); printf("floating point\n");
+					ntabs(depth+1); printf("bitwidth: %u\n", id->type_.floating.bitwidth);
+					break;
+				case AST_DATATYPE_POINTER:
+					ntabs(depth+1); printf("pointer to type '%s'\n", id->type_.pointer.base->name);
+					break;
+				case AST_DATATYPE_STRUCTURED:
+					ntabs(depth+1); printf("<structured type, unimplemented>"); // TODO
+					break;
+			}
 			break;
 		case AST_ID_VAR:
 			ntabs(depth); printf("variable '%s':\n", id->var.name);
@@ -78,6 +90,8 @@ const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 		case AST_EXPR_UNOP_BNOT: return "~";
 		case AST_EXPR_UNOP_LNOT: return "!";
 		case AST_EXPR_UNOP_NEG: return "-";
+		case AST_EXPR_UNOP_REF: return "&";
+		case AST_EXPR_UNOP_DEREF: return "*";
 	}
 	printf("INTERNAL ERROR\n");
 	exit(1);
@@ -496,81 +510,81 @@ void ast_init_context(FILE* source){
 	ast_context_insert_type("i64", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 64,
-		.signed_ = true
+		.integral.bitwidth = 64,
+		.integral.signed_ = true,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("u64", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 64,
-		.signed_ = false
+		.integral.bitwidth = 64,
+		.integral.signed_ = false,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("i32", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 32,
-		.signed_ = true
+		.integral.bitwidth = 32,
+		.integral.signed_ = true,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("u32", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 32,
-		.signed_ = false
+		.integral.bitwidth = 32,
+		.integral.signed_ = false,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("i16", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 16,
-		.signed_ = true
+		.integral.bitwidth = 16,
+		.integral.signed_ = true,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("u16", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 16,
-		.signed_ = false
+		.integral.bitwidth = 16,
+		.integral.signed_ = false,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("i8", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 8,
-		.signed_ = true
+		.integral.bitwidth = 8,
+		.integral.signed_ = true,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("u8", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 8,
-		.signed_ = false
+		.integral.bitwidth = 8,
+		.integral.signed_ = false,
+		.ptr_type = 0
 	});
 
 	// boolean
 	ast_context_insert_type("bool", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_INTEGRAL,
-		.ptr_count = 0,
-		.bitwidth = 1,
-		.signed_ = false
+		.integral.bitwidth = 1,
+		.integral.signed_ = false,
+		.ptr_type = 0
 	});
 
 	// floating point types
 	ast_context_insert_type("f64", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_FLOAT,
-		.ptr_count = 0,
-		.bitwidth = 64,
+		.floating.bitwidth = 64,
+		.ptr_type = 0
 	});
 	ast_context_insert_type("f32", (ast_datatype_t){
 		.declare_loc = (loc_t){0},
 		.kind = AST_DATATYPE_FLOAT,
-		.ptr_count = 0,
-		.bitwidth = 32,
+		.floating.bitwidth = 32,
+		.ptr_type = 0
 	});
 }
 void current_context_insert(const char* name, ast_id_t* value){
@@ -740,17 +754,34 @@ void printf_error(loc_t loc, char* msg, ...){
 
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
 	if (a->kind != b->kind) return false;
-	if (a->ptr_count != b->ptr_count) return false;
 	switch (a->kind){
 		case AST_DATATYPE_INTEGRAL:
-			if (a->bitwidth != b->bitwidth) return false;
-			if (a->signed_ != b->signed_) return false;
+			if (a->integral.bitwidth != b->integral.bitwidth) return false;
+			if (a->integral.signed_ != b->integral.signed_) return false;
 			break;
 		case AST_DATATYPE_FLOAT:
-			if (a->bitwidth != b->bitwidth) return false;
+			if (a->floating.bitwidth != b->floating.bitwidth) return false;
 			break;
 		case AST_DATATYPE_STRUCTURED:
-			break;
+			break; // TODO
+		case AST_DATATYPE_POINTER:
+			return ast_datatype_eq(a->pointer.base, b->pointer.base);
 	}
 	return true;
+}
+
+ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base){
+	if (base->ptr_type) return base->ptr_type;
+
+	char* name = malloc(strlen(base->name)+2);
+	strcpy(name, base->name);
+	strcat(name, "*");
+	ast_datatype_t ptr = (ast_datatype_t){
+		.declare_loc = base->declare_loc,
+		.name = name,
+		.kind = AST_DATATYPE_POINTER,
+		.pointer.base = base,
+		.ptr_type = 0
+	};
+	return base->ptr_type = convert_to_ptr(ptr);
 }

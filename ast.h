@@ -20,15 +20,27 @@ typedef enum {
 	AST_DATATYPE_INTEGRAL,
 	AST_DATATYPE_FLOAT,
 	AST_DATATYPE_STRUCTURED,
+	AST_DATATYPE_POINTER,
 } ast_datatype_enum_t;
 
 typedef struct ast_datatype_t {
 	loc_t declare_loc;
 	char* name;
 	ast_datatype_enum_t kind;
-	unsigned int ptr_count; // 0 if type is not a ptr, 1 if it is `name*`, 2 if `name**` and so on
-	unsigned int bitwidth;
-	bool signed_;
+
+	union {
+		struct {
+			unsigned int bitwidth;
+			bool signed_;
+		} integral;
+		struct {
+			unsigned int bitwidth;
+		} floating;
+		struct {
+			struct ast_datatype_t* base;
+		} pointer;
+	};
+	struct ast_datatype_t* ptr_type;
 } ast_datatype_t;
 
 typedef struct ast_variable_t {
@@ -49,6 +61,8 @@ typedef enum {
 	AST_EXPR_UNOP_NEG,
 	AST_EXPR_UNOP_BNOT,
 	AST_EXPR_UNOP_LNOT,
+	AST_EXPR_UNOP_REF, // TODO: '&' shouldn't be a unop but it's own expr type (because it doesn't take an expr but a var/struct field (lvalue))
+	AST_EXPR_UNOP_DEREF,
 } ast_expr_unop_enum_t;
 
 typedef enum {
@@ -261,5 +275,6 @@ extern bool received_error;
 extern context_t top_level_context;
 
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b);
+ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base);
 
 #endif

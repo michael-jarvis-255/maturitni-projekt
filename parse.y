@@ -12,7 +12,7 @@
 
 %token <expr> TK_INT "integer"
 %token <str> TK_STRING "string"
-%token <name> TK_NAME
+%token <name> TK_NAME "name"
 %token <var_ref> TK_VAR "variable name"
 %token <type_ref> TK_TYPE "type name"
 %token <func_ref> TK_FUNC "function name"
@@ -47,7 +47,7 @@ declaration_list:
 %nterm <type_ref> type;
 type:
 	TK_TYPE
-//|	type '*'		{ $$ = $1; $$.ptr_count++; }
+|	type '*'		{ $$ = get_ast_pointer_type($1); }
 
 %nterm <name> name;
 name:
@@ -61,6 +61,11 @@ exp0: // TODO: unary oparations
 |	TK_VAR		{ $$ = create_ast_expr_var_ref(@$, $1); }
 |	function_call
 |	'(' exp ')'	{ $$ = $2; }
+|	'-' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_NEG, $op); }
+|	'~' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_BNOT, $op); }
+|	'!' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_LNOT, $op); }
+|	'*' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_DEREF, $op); }
+|	'&' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_REF, $op); }
 
 exp1:
 	exp1[l] '*' exp0[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MUL, $l, $r); }

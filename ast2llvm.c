@@ -114,9 +114,11 @@ static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
 		case AST_DATATYPE_FLOAT:
 			return (llvm_type_t){ .type=LLVM_TYPE_FLOAT };
 		case AST_DATATYPE_INTEGRAL:
-			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=t->bitwidth };
+			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=t->integral.bitwidth };
 		case AST_DATATYPE_STRUCTURED:
 			return (llvm_type_t){ .type=LLVM_TYPE_STRUCT };
+		case AST_DATATYPE_POINTER:
+			exit(1); // TODO
 	}
 }
 
@@ -204,6 +206,12 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 		ast2llvm_emit_expr(expr->binop.right, var2reg, f);
 		return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
 	}
+	//catch pointer types
+	if (left_operand.type == LLVM_TVALUE_REG && left_operand.typed_reg.ast_type->kind == AST_DATATYPE_POINTER){
+		printf_error(expr->binop.left->loc, "pointer type '%s' is not supported for binary operation '%s'", left_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+		ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+		return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+	}
 
 	
 	llvm_value_t left = llvm_cast_to_i1(left_operand, f);
@@ -223,6 +231,9 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 	} else if (right_operand.type == LLVM_TVALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_FLOAT){
 		printf_error(expr->binop.right->loc, "floating point type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
 		right = (llvm_value_t){ .type=LLVM_VALUE_POISON };
+	} else if (right_operand.type == LLVM_TVALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_POINTER){
+		printf_error(expr->binop.right->loc, "pointer type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+		return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
 	} else {
 		right = llvm_cast_to_i1(right_operand, f);
 	}
@@ -252,6 +263,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 		case AST_EXPR_VAR_REF:
 			return llvm_var2reg_get_typed_value(var2reg, expr->var_ref, expr->loc);
 		case AST_EXPR_FUNC_CALL:
+		{
 			llvm_typed_value_list_t arglist = create_llvm_typed_value_list();
 			for (unsigned int i=0; i < expr->func_call.arglist.len; i++){
 				llvm_typed_value_t arg = ast2llvm_emit_expr(&expr->func_call.arglist.data[i], var2reg, f);
@@ -303,6 +315,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			}
 			llvm_reg_t ret = llvm_add_inst(f, inst);
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=ret, .typed_reg.ast_type=expr->func_call.func_ref->return_type_ref };
+		}
 		case AST_EXPR_UNOP:
 		{
 			llvm_typed_value_t operand = ast2llvm_emit_expr(expr->unop.operand, var2reg, f);
@@ -323,6 +336,9 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					return POISON_TYPED_VALUE;
 				case AST_DATATYPE_FLOAT:
 					printf_error(expr->unop.operand->loc, "floating point type '%s' is not yet supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
+					return POISON_TYPED_VALUE;
+				case AST_DATATYPE_POINTER:
+					printf_error(expr->unop.operand->loc, "pointer type '%s' is not yet supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
 					return POISON_TYPED_VALUE;
 				case AST_DATATYPE_INTEGRAL:
 					break;
@@ -401,6 +417,16 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
 			}
 
+			// catch pointer types
+			if (left_operand.type == LLVM_TVALUE_REG && left_operand.typed_reg.ast_type->kind == AST_DATATYPE_POINTER){
+				printf_error(expr->binop.left->loc, "pointer type '%s' is not supported for binary operation '%s'", left_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+			}
+			if (right_operand.type == LLVM_TVALUE_REG && right_operand.typed_reg.ast_type->kind == AST_DATATYPE_POINTER){
+				printf_error(expr->binop.right->loc, "pointer type '%s' is not supported for binary operation '%s'", right_operand.typed_reg.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				return (llvm_typed_value_t){ .type=LLVM_TVALUE_POISON };
+			}
+
 			// catch constant expressions
 			if (left_operand.type == LLVM_TVALUE_INT_CONST && right_operand.type == LLVM_TVALUE_INT_CONST){
 				return llvm_int_const_binop(expr, left_operand, right_operand);
@@ -410,10 +436,10 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			bool signed_op;
 			if (left_operand.type == LLVM_TVALUE_REG){
 				restype   = left_operand.typed_reg.ast_type;
-				signed_op = left_operand.typed_reg.ast_type->signed_;
+				signed_op = left_operand.typed_reg.ast_type->integral.signed_;
 			}else{
 				restype   = right_operand.typed_reg.ast_type;
-				signed_op = right_operand.typed_reg.ast_type->signed_;
+				signed_op = right_operand.typed_reg.ast_type->integral.signed_;
 			}
 			llvm_type_t optype = ast_type_to_llvm_type(restype);
 
