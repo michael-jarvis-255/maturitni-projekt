@@ -379,6 +379,9 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						case AST_EXPR_UNOP_NEG: operand.int_const = -operand.int_const; break;
 						case AST_EXPR_UNOP_BNOT: operand.int_const = ~operand.int_const; break;
 						case AST_EXPR_UNOP_LNOT: operand.int_const = !operand.int_const; break;
+						case AST_EXPR_UNOP_DEREF:
+							print_error(expr->loc, "cannot dereference integer constant of type 'u64'");
+							return POISON_TYPED_VALUE;
 					}
 					return operand;
 				case LLVM_TVALUE_REG: break;
@@ -391,8 +394,23 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					printf_error(expr->unop.operand->loc, "floating point type '%s' is not yet supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
 					return POISON_TYPED_VALUE;
 				case AST_DATATYPE_POINTER:
-					printf_error(expr->unop.operand->loc, "pointer type '%s' is not yet supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
-					return POISON_TYPED_VALUE;
+					switch (expr->unop.op){
+						case AST_EXPR_UNOP_NEG:
+						case AST_EXPR_UNOP_BNOT:
+						case AST_EXPR_UNOP_LNOT:
+							printf_error(expr->unop.operand->loc, "pointer type '%s' is not supported for unary operation '%s'", operand.typed_reg.ast_type->name, ast_expr_unop_string(expr->unop.op));
+							return POISON_TYPED_VALUE;
+						case AST_EXPR_UNOP_DEREF:
+						{
+							ast_datatype_t* base_type = operand.typed_reg.ast_type->pointer.base;
+							llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+								.type = LLVM_INST_LOAD,
+								.load.type = ast_type_to_llvm_type(base_type),
+								.load.ptr = llvm_untype_value(operand)
+							});
+							return (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg = reg, .typed_reg.ast_type = base_type };
+						}
+					}
 				case AST_DATATYPE_INTEGRAL:
 					break;
 			}
@@ -425,6 +443,9 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						.icmp.op2 = llvm_untype_value(operand)
 					};
 					break;
+				case AST_EXPR_UNOP_DEREF:
+					printf_error(expr->loc, "cannot dereference value of type '%s'", operand.typed_reg.ast_type->name);
+					return POISON_TYPED_VALUE;
 			}
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=llvm_add_inst(f, inst), .typed_reg.ast_type=operand.typed_reg.ast_type };
 		}

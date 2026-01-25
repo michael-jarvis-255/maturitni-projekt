@@ -61,7 +61,6 @@ typedef enum {
 	AST_EXPR_UNOP_NEG,
 	AST_EXPR_UNOP_BNOT,
 	AST_EXPR_UNOP_LNOT,
-	AST_EXPR_UNOP_REF, // TODO: '&' shouldn't be a unop but it's own expr type (because it doesn't take an expr but a var/struct field (lvalue))
 	AST_EXPR_UNOP_DEREF,
 } ast_expr_unop_enum_t;
 

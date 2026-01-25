@@ -90,7 +90,6 @@ const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 		case AST_EXPR_UNOP_BNOT: return "~";
 		case AST_EXPR_UNOP_LNOT: return "!";
 		case AST_EXPR_UNOP_NEG: return "-";
-		case AST_EXPR_UNOP_REF: return "&";
 		case AST_EXPR_UNOP_DEREF: return "*";
 	}
 	printf("INTERNAL ERROR\n");
