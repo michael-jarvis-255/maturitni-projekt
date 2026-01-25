@@ -112,7 +112,7 @@ static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
 		case AST_DATATYPE_STRUCTURED:
 			return (llvm_type_t){ .type=LLVM_TYPE_STRUCT };
 		case AST_DATATYPE_POINTER:
-			exit(1); // TODO
+			return (llvm_type_t){ .type=LLVM_TYPE_POINTER };
 	}
 }
 
@@ -634,6 +634,15 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					});
 			}
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=out, .typed_reg.ast_type = restype };
+		}
+		case AST_EXPR_REF:
+		{
+			llvm_reg_t reg = var2reg_map_get(var2reg, expr->ref.var, LLVM_INVALID_REG);
+			if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
+				print_error(expr->loc, "getting reference of global variable is currently unimplemented"); // TODO
+				return POISON_TYPED_VALUE;
+			}
+			return (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg = reg, .typed_reg.ast_type = get_ast_pointer_type(expr->ref.var->type_ref) };
 		}
 	}
 }

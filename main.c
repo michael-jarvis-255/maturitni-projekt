@@ -28,6 +28,7 @@ int main(int argc, char** argv){
 
 	// if an error was generated (with print_error), stop compilation
 	if (received_error){
+		printf("compilation stopped due to error(s)\n");
 		return 1;
 	}
 
@@ -48,6 +49,7 @@ int main(int argc, char** argv){
 	}
 	fclose(outfile);
 	if (received_error){
+		printf("compilation stopped due to error(s)\n");
 		return 1;
 	}
 	

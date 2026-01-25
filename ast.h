@@ -55,6 +55,7 @@ typedef enum {
 	AST_EXPR_FUNC_CALL,
 	AST_EXPR_UNOP,
 	AST_EXPR_BINOP,
+	AST_EXPR_REF,
 } ast_expr_enum_t;
 
 typedef enum {
@@ -116,6 +117,9 @@ typedef struct ast_expr_t {
 			struct ast_func_t* func_ref;
 			ast_expr_list_t arglist;
 		} func_call;
+		struct {
+			ast_variable_t* var;
+		} ref;
 	};
 } ast_expr_t;
 
@@ -226,6 +230,7 @@ ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var);
 ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right);
 ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t opernad);
+ast_expr_t create_ast_expr_ref(loc_t loc, ast_variable_t* var);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
 void print_ast_expr(const ast_expr_t* exp);

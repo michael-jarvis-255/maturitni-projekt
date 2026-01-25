@@ -9,6 +9,7 @@ u64 foo(i32 X){
 	i32 y = X + 45;
 	u64 q;
 	u64 w = 15;
+	u64* ptr;
 
 	if (X > 13){
 		q = 5;
@@ -21,5 +22,5 @@ u64 foo(i32 X){
 
 	u64 res = myfunc(w, q);
 	
-	return w;
+	return *ptr;
 }

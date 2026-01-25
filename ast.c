@@ -169,6 +169,13 @@ ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t o
 	};
 }
 
+ast_expr_t create_ast_expr_ref(loc_t loc, ast_variable_t* var){
+	return (ast_expr_t){
+		.type = AST_EXPR_REF,
+		.loc = loc,
+		.ref.var = var
+	};
+}
 
 void free_ast_expr(ast_expr_t* exp){
 	free_ast_expr_v(*exp);
@@ -178,6 +185,7 @@ void free_ast_expr_v(ast_expr_t exp){
 	switch (exp.type){
 		case AST_EXPR_CONST:
 		case AST_EXPR_VAR_REF:
+		case AST_EXPR_REF:
 			break;
 		case AST_EXPR_FUNC_CALL:
 			deep_free_ast_expr_list(&exp.func_call.arglist);
@@ -224,6 +232,10 @@ void print_ast_expr(const ast_expr_t* exp){
 			printf("%s", ast_expr_binop_string(exp->binop.op));
 			print_ast_expr(exp->binop.right);
 			printf(")");
+			return;
+
+		case AST_EXPR_REF:
+			printf("*%s", exp->ref.var->name);
 			return;
 	}
 }
