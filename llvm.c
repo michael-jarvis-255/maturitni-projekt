@@ -60,6 +60,9 @@ static void llvm_type_to_target(const llvm_type_t type, print_target_t* t){
 		case LLVM_TYPE_STRUCT:
 			tprintf(t, "???");
 			break;
+		case LLVM_TYPE_POINTER:
+			tprintf(t, "ptr");
+			break;
 	}
 }
 
@@ -124,8 +127,19 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			goto binary_op;
 		
 		// memory access
-		case LLVM_INST_LOAD: // TODO
-		case LLVM_INST_STORE: // TODO
+		case LLVM_INST_LOAD:
+			tprint(t, "load ");
+			llvm_type_to_target(inst.load.type, t);
+			tprint(t, ", ptr ");
+			llvm_value_to_target(inst.load.ptr, t);
+			return;
+		case LLVM_INST_STORE:
+			tprint(t, "store ");
+			llvm_type_to_target(inst.store.type, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.store.value, t);
+			tprint(t, ", ptr ");
+			llvm_value_to_target(inst.store.ptr, t);
 			return;
 		
 		// other
@@ -181,11 +195,9 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			tprint(t, " to ");
 			llvm_type_to_target(inst.ext.to, t);
 			return;
-		case LLVM_INST_NOP:
-			tprint(t, "or ");
-			llvm_type_to_target(inst.nop.type, t);
-			tprint(t, " 0, ");
-			llvm_value_to_target(inst.nop.value, t);
+		case LLVM_INST_ALLOCA:
+			tprint(t, "alloca ");
+			llvm_type_to_target(inst.alloca.type, t);
 			return;
 	}
 
@@ -226,7 +238,10 @@ static void llvm_term_inst_to_target(const llvm_term_inst_t inst, print_target_t
 
 static void llvm_block_body_to_target(const llvm_basic_block_t* block, print_target_t* t){
 	for (unsigned int i = 0; i < block->instructions.len; i++){
-		tprintf(t, "    %%%u = ", block->regbase + i);
+		if (block->instructions.data[i].type != LLVM_INST_STORE)
+			tprintf(t, "    %%%u = ", block->regbase + i);
+		else
+			tprint(t, "    ");
 		llvm_inst_body_to_target(block->instructions.data[i], t);
 		tprint(t, "\n");
 	}

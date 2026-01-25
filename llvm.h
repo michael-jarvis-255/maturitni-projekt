@@ -15,6 +15,7 @@ typedef enum {
 	LLVM_TYPE_INTEGRAL,
 	LLVM_TYPE_STRUCT,
 	LLVM_TYPE_FLOAT,
+	LLVM_TYPE_POINTER,
 } llvm_type_enum_t;
 
 typedef struct llvm_type_t {
@@ -98,7 +99,7 @@ typedef enum {
 	LLVM_INST_PHI,
 	LLVM_INST_CALL,
 	LLVM_INST_ZEXT,
-	LLVM_INST_NOP,
+	LLVM_INST_ALLOCA,
 } llvm_inst_enum_t;
 
 typedef enum {
@@ -123,11 +124,13 @@ typedef struct llvm_inst_t {
 			llvm_value_t first, second;
 		} binop;
 		struct {
-			// ptr value
+			llvm_type_t type;
+			llvm_value_t ptr;
 		} load;
 		struct {
-			// value
-			// ptr value
+			llvm_type_t type;
+			llvm_value_t value;
+			llvm_value_t ptr;
 		} store;
 		struct {
 			llvm_icmp_enum_t cond;
@@ -152,8 +155,7 @@ typedef struct llvm_inst_t {
 		} ext;
 		struct {
 			llvm_type_t type;
-			llvm_value_t value;
-		} nop;
+		} alloca;
 	};
 } llvm_inst_t;
 create_list_type_header(llvm_inst, false);
