@@ -455,6 +455,17 @@ ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_
 	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, &var_id->var, value)};
 }
 
+ast_decl_t create_ast_decl_typedef(loc_t loc, ast_datatype_t* type, ast_name_t name){
+	ast_id_t* type_id = malloc(sizeof(ast_id_t));
+	type_id->type = AST_ID_TYPE;
+	type_id->type_ = *type;
+	type_id->type_.declare_loc = loc;
+	type_id->type_.name = name.name;
+	current_context_insert(name.name, type_id);
+
+	return (ast_decl_t){.type=AST_DECL_DUMMY};
+}
+
 static void ast_context_insert_type(const char* name, ast_datatype_t type){
 	ast_id_t* id = malloc(sizeof(ast_id_t));
 	id->type = AST_ID_TYPE;

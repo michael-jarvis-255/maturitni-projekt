@@ -45,6 +45,7 @@ while		update_yylloc(yyleng); return TK_WHILE;
 break		update_yylloc(yyleng); return TK_BREAK;
 continue	update_yylloc(yyleng); return TK_CONTINUE;
 return		update_yylloc(yyleng); return TK_RETURN;
+typedef		update_yylloc(yyleng); return TK_TYPEDEF;
 
 \<\=	update_yylloc(yyleng); return TK_LE;
 \>\=	update_yylloc(yyleng); return TK_GE;

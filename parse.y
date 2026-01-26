@@ -23,6 +23,7 @@
 %token TK_BREAK "break"
 %token TK_CONTINUE "continue"
 %token TK_RETURN "return"
+%token TK_TYPEDEF "typedef"
 
 %token TK_LE "<="
 %token TK_GE ">="
@@ -233,6 +234,7 @@ if_ending_for_loop:
 declaration:
 	function_declaration
 |	single_var_declaration
+|	typedef_declaration
 
 %nterm <decl> function_declaration;
 function_declaration:
@@ -271,7 +273,9 @@ single_var_declaration:
 	type name	';'				{ $$ = create_ast_decl_var(@$, $type, $name); }
 |	type name '=' exp[val] ';'	{ $$ = create_ast_decl_var_assign(@$, $type, $name, $val); }
 
-
+%nterm <decl> typedef_declaration;
+typedef_declaration:
+	TK_TYPEDEF type name ';'	{ $$ = create_ast_decl_typedef(@$, $type, $name); }
 
 %%
 
