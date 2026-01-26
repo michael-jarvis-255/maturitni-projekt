@@ -101,6 +101,8 @@ static void T##_grow(T##_t* map){	\
 	free(old_buckets);	\
 }	\
 	\
+/* NOTE: inserting a key that already exists must create a second entry with duplicate key. */	\
+/* It is undefined which is returned with T##_get(). Both must be iterated over when iterating. */	\
 void T##_insert(T##_t* map, Tk key, Tv value){	\
 	if (map->size > map->bcap*2)	\
 		T##_grow(map);	\

@@ -24,6 +24,7 @@
 %token TK_CONTINUE "continue"
 %token TK_RETURN "return"
 %token TK_TYPEDEF "typedef"
+%token TK_STRUCT "struct"
 
 %token TK_LE "<="
 %token TK_GE ">="
@@ -49,6 +50,17 @@ declaration_list:
 type:
 	TK_TYPE
 |	type '*'		{ $$ = get_ast_pointer_type($1); }
+|	anonymous_struct
+
+%nterm <type_ref> anonymous_struct;
+anonymous_struct:
+	anonymous_struct_head '}'	{ $$ = ast_anon_struct_finalise($1); }
+
+%nterm <type_ref> anonymous_struct_head;
+anonymous_struct_head:
+	TK_STRUCT '{'	{ $$ = create_ast_anon_struct_head(@$); }
+|	anonymous_struct_head type name ';'		{ $$ = $1; ast_anon_struct_head_append($$, @name, $type, $name); } // TODO: loc should be @type + @name, not just @name
+
 
 %nterm <name> name;
 name:

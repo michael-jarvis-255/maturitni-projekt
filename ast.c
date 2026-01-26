@@ -42,6 +42,39 @@ void free_ast_id(ast_id_t* id){
 	free_ast_id_v(*id);
 	free(id);
 }
+
+ast_datatype_t* create_ast_anon_struct_head(loc_t loc){
+	ast_datatype_t strct = (ast_datatype_t){
+		.kind = AST_DATATYPE_STRUCTURED,
+		.declare_loc = loc, // TODO: track more than just the 'struct {' header
+		.structure.elements = create_ast_variable_list()
+	};
+	return convert_to_ptr(strct);
+}
+void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name){
+	ast_variable_t elem = (ast_variable_t){
+		.declare_loc = loc,
+		.name = elem_name.name,
+		.type_ref = elem_type
+	};
+	ast_variable_list_append(&strct->structure.elements, elem);
+}
+ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct){
+	char* name = strdup("<anonymous struct>");
+
+	ast_id_t* type_id = malloc(sizeof(ast_id_t));
+	type_id->type = AST_ID_TYPE;
+	type_id->type_ = *strct;
+	type_id->type_.name = name;
+
+	context_t* ctx = context_stack.data[context_stack.len-1];
+	context_insert(ctx, name, type_id); // we are being cheeky and inserting even when "<anonymous struct>" might already be in the context // TODO: find a more elegant solution
+
+	free(strct->name);
+	free(strct);
+	return &type_id->type_;
+}
+
 static inline void nspaces(unsigned int n){ printf("%*.s", n, ""); }
 static inline void ntabs(unsigned int n){ nspaces(n*4); }
 void print_ast_id(const ast_id_t* id, int depth){

@@ -28,7 +28,7 @@
 
 DIGIT [0-9]
 ID_START [a-zA-Z_]
-ID_CHAR [0-9a-zA-Z]
+ID_CHAR [0-9a-zA-Z_]
 
 %%
 
@@ -46,6 +46,7 @@ break		update_yylloc(yyleng); return TK_BREAK;
 continue	update_yylloc(yyleng); return TK_CONTINUE;
 return		update_yylloc(yyleng); return TK_RETURN;
 typedef		update_yylloc(yyleng); return TK_TYPEDEF;
+struct		update_yylloc(yyleng); return TK_STRUCT;
 
 \<\=	update_yylloc(yyleng); return TK_LE;
 \>\=	update_yylloc(yyleng); return TK_GE;

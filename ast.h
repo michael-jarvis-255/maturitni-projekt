@@ -23,6 +23,16 @@ typedef enum {
 	AST_DATATYPE_POINTER,
 } ast_datatype_enum_t;
 
+struct ast_datatype_t;
+
+typedef struct ast_variable_t {
+	loc_t declare_loc;
+	char* name;
+	struct ast_datatype_t* type_ref;
+} ast_variable_t;
+
+create_list_type_header(ast_variable, false);
+
 typedef struct ast_datatype_t {
 	loc_t declare_loc;
 	char* name;
@@ -39,15 +49,12 @@ typedef struct ast_datatype_t {
 		struct {
 			struct ast_datatype_t* base;
 		} pointer;
+		struct {
+			ast_variable_list_t elements;
+		} structure;
 	};
 	struct ast_datatype_t* ptr_type;
 } ast_datatype_t;
-
-typedef struct ast_variable_t {
-	loc_t declare_loc;
-	char* name;
-	ast_datatype_t* type_ref;
-} ast_variable_t;
 
 typedef enum {
 	AST_EXPR_CONST,
@@ -190,7 +197,6 @@ typedef struct ast_decl_t {
 	};
 } ast_decl_t;
 
-create_list_type_header(ast_variable, false);
 typedef ast_id_t* ast_id_ptr_t;
 create_list_type_header(ast_id_ptr, false);
 
@@ -224,6 +230,10 @@ typedef context_ptr_list_t context_stack_t;
 
 void free_ast_id_v(ast_id_t id);
 void free_ast_id(ast_id_t* id);
+
+ast_datatype_t* create_ast_anon_struct_head(loc_t loc);
+void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name);
+ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct);
 
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
 ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var);

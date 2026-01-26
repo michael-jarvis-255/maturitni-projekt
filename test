@@ -2,6 +2,16 @@ i32 x;
 i32 y = 15;
 
 typedef u64 ulong;
+typedef struct {
+	ulong x;
+	ulong y;
+} vector2_t;
+
+typedef struct {
+	ulong x;
+	ulong y;
+	ulong z;
+} vector3_t;
 
 u64 myfunc(u64 a, u64 b){
 	return 15*3;
