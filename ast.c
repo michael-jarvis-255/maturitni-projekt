@@ -15,6 +15,7 @@ create_list_type_impl(ast_stmt, true)
 create_list_type_impl(context_ptr, true)
 create_list_type_impl(ast_expr, true)
 create_list_type_impl(ast_id_ptr, false)
+create_list_type_impl(ast_lvalue_member_access, false)
 create_hashmap_type_impl(str, ast_id_t*, context)
 
 context_t top_level_context;
@@ -47,7 +48,7 @@ ast_datatype_t* create_ast_anon_struct_head(loc_t loc){
 	ast_datatype_t strct = (ast_datatype_t){
 		.kind = AST_DATATYPE_STRUCTURED,
 		.declare_loc = loc, // TODO: track more than just the 'struct {' header
-		.structure.elements = create_ast_variable_list()
+		.structure.members = create_ast_variable_list()
 	};
 	return convert_to_ptr(strct);
 }
@@ -57,7 +58,7 @@ void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_
 		.name = elem_name.name,
 		.type_ref = elem_type
 	};
-	ast_variable_list_append(&strct->structure.elements, elem);
+	ast_variable_list_append(&strct->structure.members, elem);
 }
 ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct){
 	char* name = strdup("<anonymous struct>");
@@ -73,6 +74,42 @@ ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct){
 	free(strct->name);
 	free(strct);
 	return &type_id->type_;
+}
+
+ast_lvalue_t create_ast_lvalue(ast_variable_t* var){
+	return (ast_lvalue_t){
+		.base_var = var,
+		.type = var->type_ref,
+		.member_access = create_ast_lvalue_member_access_list()
+	};
+}
+
+ast_lvalue_t ast_lvalue_extend(ast_lvalue_t lvalue, bool deref, ast_name_t member_name){
+	if (deref){
+		if (lvalue.type->kind != AST_DATATYPE_POINTER){
+			printf_error(lvalue.loc, "invalid type access with '->' (type '%s' is not a pointer)", lvalue.type->name);
+			return lvalue; // TODO: return some kind of error value
+		}
+		lvalue.type = lvalue.type->pointer.base;
+	}
+	if (lvalue.type->kind != AST_DATATYPE_STRUCTURED){
+		printf_error(lvalue.loc, "invalid type access with '.' (type '%s' is not a struct)", lvalue.type->name);
+		return lvalue; // TODO: return some kind of error value
+	}
+	for (unsigned int i=0; i < lvalue.type->structure.members.len; i++){
+		const ast_variable_t* member = &lvalue.type->structure.members.data[i];
+		if (strcmp(member->name, member_name.name) == 0){
+			lvalue.type = member->type_ref;
+			ast_lvalue_member_access_list_append(&lvalue.member_access, (ast_lvalue_member_access_t){.deref = deref, .member_idx = i});
+			return lvalue;
+		}
+	}
+	printf_error(lvalue.loc, "struct type '%s' does not contain member '%s'", lvalue.type->name, member_name.name);
+	return lvalue; // TODO: return some kind of error value
+}
+
+void free_ast_lvalue_v(ast_lvalue_t lvalue){
+	shallow_free_ast_lvalue_member_access_list(&lvalue.member_access);
 }
 
 static inline void nspaces(unsigned int n){ printf("%*.s", n, ""); }
@@ -169,11 +206,11 @@ ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value){
 		.constant.value = value
 	};
 }
-ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var_ref){
+ast_expr_t create_ast_expr_lvalue(loc_t loc, ast_lvalue_t lvalue){
 	return (ast_expr_t){
-		.type = AST_EXPR_VAR_REF,
+		.type = AST_EXPR_LVALUE,
 		.loc = loc,
-		.var_ref = var_ref
+		.lvalue = lvalue
 	};
 }
 ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref){
@@ -202,11 +239,11 @@ ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t o
 	};
 }
 
-ast_expr_t create_ast_expr_ref(loc_t loc, ast_variable_t* var){
+ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue){
 	return (ast_expr_t){
 		.type = AST_EXPR_REF,
 		.loc = loc,
-		.ref.var = var
+		.ref.lvalue = lvalue
 	};
 }
 
@@ -217,8 +254,10 @@ void free_ast_expr(ast_expr_t* exp){
 void free_ast_expr_v(ast_expr_t exp){
 	switch (exp.type){
 		case AST_EXPR_CONST:
-		case AST_EXPR_VAR_REF:
 		case AST_EXPR_REF:
+			break;
+		case AST_EXPR_LVALUE:
+			free_ast_lvalue_v(exp.lvalue);
 			break;
 		case AST_EXPR_FUNC_CALL:
 			deep_free_ast_expr_list(&exp.func_call.arglist);
@@ -233,14 +272,30 @@ void free_ast_expr_v(ast_expr_t exp){
 	}
 }
 
+static void print_ast_lvalue(ast_lvalue_t lvalue){
+	printf("%s", lvalue.base_var->name);
+	ast_datatype_t* type = lvalue.base_var->type_ref;
+	for (unsigned int i=0; i < lvalue.member_access.len; i++){
+		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
+		if (member_access.deref){
+			printf("->");
+			type = type->pointer.base;
+		}else{
+			printf(".");
+		}
+		printf("%s", type->structure.members.data[member_access.member_idx].name);
+		type = type->structure.members.data[member_access.member_idx].type_ref;
+	}
+}
+
 void print_ast_expr(const ast_expr_t* exp){
 	switch (exp->type){
 		case AST_EXPR_CONST:
 			printf("%lu", exp->constant.value);
 			return;
 
-		case AST_EXPR_VAR_REF:
-			printf("%s", exp->var_ref->name);
+		case AST_EXPR_LVALUE:
+			print_ast_lvalue(exp->lvalue);
 			return;
 
 		case AST_EXPR_FUNC_CALL:
@@ -268,7 +323,8 @@ void print_ast_expr(const ast_expr_t* exp){
 			return;
 
 		case AST_EXPR_REF:
-			printf("*%s", exp->ref.var->name);
+			printf("*");
+			print_ast_lvalue(exp->ref.lvalue);
 			return;
 	}
 }
@@ -294,11 +350,11 @@ ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr){
 		.expr = expr
 	};
 }
-ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_variable_t* var_ref, ast_expr_t value){
+ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_lvalue_t lvalue, ast_expr_t value){
 	return (ast_stmt_t){
 		.type = AST_STMT_ASSIGN,
 		.loc = loc,
-		.assign.var_ref = var_ref,
+		.assign.lvalue = lvalue,
 		.assign.val = value
 	};
 }
@@ -419,7 +475,8 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			}
 			break;
 		case AST_STMT_ASSIGN:
-			ntabs(depth); printf("%s = ", stmt->assign.var_ref->name);
+			ntabs(depth);
+			print_ast_lvalue(stmt->assign.lvalue); printf(" = ");
 			print_ast_expr(&stmt->assign.val);
 			printf(";\n");
 			break;
@@ -485,7 +542,7 @@ ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_
 	var_id->var.name = name.name;
 	current_context_insert(name.name, var_id);
 
-	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, &var_id->var, value)};
+	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var), value)};
 }
 
 ast_decl_t create_ast_decl_typedef(loc_t loc, ast_datatype_t* type, ast_name_t name){
@@ -818,7 +875,7 @@ bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
 			if (a->floating.bitwidth != b->floating.bitwidth) return false;
 			break;
 		case AST_DATATYPE_STRUCTURED:
-			break; // TODO
+			return a == b;
 		case AST_DATATYPE_POINTER:
 			return ast_datatype_eq(a->pointer.base, b->pointer.base);
 	}

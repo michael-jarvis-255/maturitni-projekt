@@ -14,7 +14,13 @@ typedef struct {
 } vector3_t;
 
 u64 myfunc(u64 a, u64 b){
-	return 15*3;
+	vector2_t vec;
+	vec.x = 15;
+	vec.y = 58;
+
+	ulong* xptr = &vec.x;
+
+	return vec.y * *xptr;
 }
 
 u64 foo(i32 X){

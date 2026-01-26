@@ -58,7 +58,13 @@ static void llvm_type_to_target(const llvm_type_t type, print_target_t* t){
 			tprintf(t, "f%u", type.int_bitwidth);
 			break;
 		case LLVM_TYPE_STRUCT:
-			tprintf(t, "???");
+			tprint(t, "{ ");
+			for (unsigned int i=0; i < type.structure.member_count; i++){
+				llvm_type_to_target(type.structure.member_types[i], t);
+				if (i+1 < type.structure.member_count)
+					tprint(t, ", ");
+			}
+			tprint(t, " }");
 			break;
 		case LLVM_TYPE_POINTER:
 			tprintf(t, "ptr");
@@ -198,6 +204,20 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 		case LLVM_INST_ALLOCA:
 			tprint(t, "alloca ");
 			llvm_type_to_target(inst.alloca.type, t);
+			return;
+		case LLVM_INST_EXTRACT_VALUE:
+			tprint(t, "extractvalue ");
+			llvm_type_to_target(inst.extract.aggregate_type, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.extract.value, t);
+			tprintf(t, ", %u", inst.extract.member_idx);
+			return;
+		case LLVM_INST_GET_ELEMENT_PTR:
+			tprint(t, "getelementptr ");
+			llvm_type_to_target(inst.getelementptr.aggregate_type, t);
+			tprint(t, ", ptr ");
+			llvm_value_to_target(inst.getelementptr.ptr, t);
+			tprintf(t, ", i32 %u", inst.getelementptr.member_idx);
 			return;
 	}
 

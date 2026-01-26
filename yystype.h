@@ -8,6 +8,7 @@ typedef union YYSTYPE {
 	ast_name_t name;
 	ast_datatype_t* type_ref;
 	ast_variable_t* var_ref;
+	ast_lvalue_t lvalue;
 	ast_func_t* func_ref;
 	context_t* context;
 	ast_id_ptr_list_t id_ptr_list;

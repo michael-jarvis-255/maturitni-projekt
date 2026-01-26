@@ -50,15 +50,29 @@ typedef struct ast_datatype_t {
 			struct ast_datatype_t* base;
 		} pointer;
 		struct {
-			ast_variable_list_t elements;
+			ast_variable_list_t members;
 		} structure;
 	};
 	struct ast_datatype_t* ptr_type;
 } ast_datatype_t;
 
+typedef struct ast_lvalue_member_access_t {
+	bool deref; // '.' if false, '->' if true
+	unsigned int member_idx;
+} ast_lvalue_member_access_t;
+
+create_list_type_header(ast_lvalue_member_access, false);
+
+typedef struct {
+	loc_t loc; // TODO
+	ast_variable_t* base_var;
+	ast_datatype_t* type; // the type after all member accesses
+	ast_lvalue_member_access_list_t member_access;
+} ast_lvalue_t;
+
 typedef enum {
 	AST_EXPR_CONST,
-	AST_EXPR_VAR_REF,
+	AST_EXPR_LVALUE,
 	AST_EXPR_FUNC_CALL,
 	AST_EXPR_UNOP,
 	AST_EXPR_BINOP,
@@ -110,7 +124,7 @@ typedef struct ast_expr_t {
 		struct {
 			unsigned long value;
 		} constant;
-		ast_variable_t* var_ref;
+		ast_lvalue_t lvalue;
 		struct {
 			ast_expr_unop_enum_t op;
 			struct ast_expr_t* operand;
@@ -125,7 +139,7 @@ typedef struct ast_expr_t {
 			ast_expr_list_t arglist;
 		} func_call;
 		struct {
-			ast_variable_t* var;
+			ast_lvalue_t lvalue;
 		} ref;
 	};
 } ast_expr_t;
@@ -166,7 +180,7 @@ typedef struct ast_stmt_t {
 			context_t* context;
 		} block;
 		struct {
-			ast_variable_t* var_ref;
+			ast_lvalue_t lvalue;
 			ast_expr_t val;
 		} assign;
 		struct {
@@ -235,19 +249,22 @@ ast_datatype_t* create_ast_anon_struct_head(loc_t loc);
 void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name);
 ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct);
 
+ast_lvalue_t create_ast_lvalue(ast_variable_t* var);
+ast_lvalue_t ast_lvalue_extend(ast_lvalue_t lvalue, bool deref, ast_name_t member_name);
+
 ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value);
-ast_expr_t create_ast_expr_var_ref(loc_t loc, ast_variable_t* var);
+ast_expr_t create_ast_expr_lvalue(loc_t loc, ast_lvalue_t lvalue);
 ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right);
 ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t opernad);
-ast_expr_t create_ast_expr_ref(loc_t loc, ast_variable_t* var);
+ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
 void print_ast_expr(const ast_expr_t* exp);
 
 ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context);
 ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr);
-ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_variable_t* name, ast_expr_t value);
+ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_lvalue_t lvalue, ast_expr_t value);
 ast_stmt_t create_ast_stmt_if(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue);
 ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
 ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr);

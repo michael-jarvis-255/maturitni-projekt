@@ -56,6 +56,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 \|\|	update_yylloc(yyleng); return TK_LOR;
 \>\>	update_yylloc(yyleng); return TK_SHR;
 \<\<	update_yylloc(yyleng); return TK_SHL;
+\-\>	update_yylloc(yyleng); return TK_ARROW;
 
 {DIGIT}+				update_yylloc(yyleng); yylval.expr = create_ast_expr_const(yylloc, atoll(yytext)); return TK_INT;
 {ID_START}{ID_CHAR}*	{ 

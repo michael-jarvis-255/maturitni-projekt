@@ -21,7 +21,11 @@ typedef enum {
 typedef struct llvm_type_t {
 	llvm_type_enum_t type;
 	union {
-		unsigned int int_bitwidth;
+		unsigned int int_bitwidth; // TODO: rename to just 'bitwidth'
+		struct {
+			unsigned int member_count;
+			struct llvm_type_t* member_types;
+		} structure;
 	};
 } llvm_type_t;
 
@@ -100,6 +104,8 @@ typedef enum {
 	LLVM_INST_CALL,
 	LLVM_INST_ZEXT,
 	LLVM_INST_ALLOCA,
+	LLVM_INST_EXTRACT_VALUE,
+	LLVM_INST_GET_ELEMENT_PTR,
 } llvm_inst_enum_t;
 
 typedef enum {
@@ -156,6 +162,16 @@ typedef struct llvm_inst_t {
 		struct {
 			llvm_type_t type;
 		} alloca;
+		struct {
+			llvm_type_t aggregate_type;
+			llvm_value_t value;
+			unsigned int member_idx;
+		} extract;
+		struct {
+			llvm_type_t aggregate_type;
+			llvm_value_t ptr;
+			unsigned int member_idx;
+		} getelementptr;
 	};
 } llvm_inst_t;
 create_list_type_header(llvm_inst, false);

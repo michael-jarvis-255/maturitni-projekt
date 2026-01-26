@@ -57,18 +57,6 @@ static inline llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 	}
 	return v;
 }
-static inline bool llvm_type_eq(const llvm_type_t a, const llvm_type_t b){
-	if (a.type != b.type) return false;
-	switch (a.type){
-		case LLVM_TYPE_INTEGRAL:
-		case LLVM_TYPE_FLOAT:
-			return a.int_bitwidth == b.int_bitwidth;
-		case LLVM_TYPE_POINTER:
-			return true;
-		case LLVM_TYPE_STRUCT:
-			return false; // TODO
-	}
-}
 
 static unsigned long ast_variable_ptr_hash(ast_variable_ptr p){
 	unsigned long h = 1337;
@@ -110,7 +98,15 @@ static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
 		case AST_DATATYPE_INTEGRAL:
 			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=t->integral.bitwidth };
 		case AST_DATATYPE_STRUCTURED:
-			return (llvm_type_t){ .type=LLVM_TYPE_STRUCT };
+			llvm_type_t type = (llvm_type_t){
+				.type=LLVM_TYPE_STRUCT,
+				.structure.member_count = t->structure.members.len,
+				.structure.member_types = malloc(sizeof(llvm_type_t)*t->structure.members.len)
+			};
+			for (unsigned int i = 0; i < type.structure.member_count; i++){
+				type.structure.member_types[i] = ast_type_to_llvm_type(t->structure.members.data[i].type_ref);
+			}
+			return type;
 		case AST_DATATYPE_POINTER:
 			return (llvm_type_t){ .type=LLVM_TYPE_POINTER };
 	}
@@ -128,6 +124,71 @@ static inline llvm_typed_value_t llvm_var2reg_get_typed_value(const var2reg_map_
 		.load.type = ast_type_to_llvm_type(var->type_ref)
 	});
 	return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=reg, .typed_reg.ast_type=var->type_ref };
+}
+
+static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, loc_t loc, llvm_function_t* f){
+	llvm_reg_t reg = var2reg_map_get(var2reg, lvalue.base_var, LLVM_INVALID_REG);
+	if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
+		printf_error(loc, "use of global variable '%s' is unimplemented", lvalue.base_var->name); // TODO: implement it
+		return POISON_TYPED_VALUE;
+	}
+	ast_datatype_t* type = lvalue.base_var->type_ref;
+	reg = llvm_add_inst(f, (llvm_inst_t){
+		.type = LLVM_INST_LOAD,
+		.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
+		.load.type = ast_type_to_llvm_type(type)
+	});
+
+	for (unsigned int i=0; i < lvalue.member_access.len; i++){
+		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
+		if (member_access.deref){
+			type = type->pointer.base;
+			reg = llvm_add_inst(f, (llvm_inst_t){
+				.type = LLVM_INST_LOAD,
+				.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
+				.load.type = ast_type_to_llvm_type(type)
+			});
+		}
+		reg = llvm_add_inst(f, (llvm_inst_t){
+			.type = LLVM_INST_EXTRACT_VALUE,
+			.extract.aggregate_type = ast_type_to_llvm_type(type),
+			.extract.value = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
+			.extract.member_idx = member_access.member_idx
+		});
+		type = type->structure.members.data[member_access.member_idx].type_ref;
+	}
+
+	return (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg=reg, .typed_reg.ast_type=type };
+}
+
+static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, loc_t loc, llvm_function_t* f){
+	llvm_reg_t reg = var2reg_map_get(var2reg, lvalue.base_var, LLVM_INVALID_REG);
+	if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
+		printf_error(loc, "use of global variable '%s' is unimplemented", lvalue.base_var->name); // TODO: implement it
+		return POISON_TYPED_VALUE;
+	}
+	ast_datatype_t* type = lvalue.base_var->type_ref; // the type that 'reg' is pointing to
+
+	for (unsigned int i=0; i < lvalue.member_access.len; i++){
+		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
+		if (member_access.deref){
+			reg = llvm_add_inst(f, (llvm_inst_t){
+				.type = LLVM_INST_LOAD,
+				.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
+				.load.type = ast_type_to_llvm_type(type)
+			});
+			type = type->pointer.base;
+		}
+		reg = llvm_add_inst(f, (llvm_inst_t){
+			.type = LLVM_INST_GET_ELEMENT_PTR,
+			.getelementptr.aggregate_type = ast_type_to_llvm_type(type),
+			.getelementptr.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
+			.getelementptr.member_idx = member_access.member_idx
+		});
+		type = type->structure.members.data[member_access.member_idx].type_ref;
+	}
+
+	return (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg=reg, .typed_reg.ast_type=get_ast_pointer_type(type) };
 }
 
 static void ast2llvm_alloca_context(const context_t* ctx, var2reg_map_t* var2reg, llvm_function_t* f){
@@ -313,8 +374,8 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 	switch (expr->type){
 		case AST_EXPR_CONST:
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=expr->constant.value };
-		case AST_EXPR_VAR_REF:
-			return llvm_var2reg_get_typed_value(var2reg, expr->var_ref, expr->loc, f);
+		case AST_EXPR_LVALUE:
+			return ast2llvm_read_lvalue(var2reg, expr->lvalue, expr->loc, f);
 		case AST_EXPR_FUNC_CALL:
 		{
 			llvm_typed_value_list_t arglist = create_llvm_typed_value_list();
@@ -636,14 +697,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=out, .typed_reg.ast_type = restype };
 		}
 		case AST_EXPR_REF:
-		{
-			llvm_reg_t reg = var2reg_map_get(var2reg, expr->ref.var, LLVM_INVALID_REG);
-			if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
-				print_error(expr->loc, "getting reference of global variable is currently unimplemented"); // TODO
-				return POISON_TYPED_VALUE;
-			}
-			return (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg = reg, .typed_reg.ast_type = get_ast_pointer_type(expr->ref.var->type_ref) };
-		}
+			return ast2llvm_get_lvalue_pointer(var2reg, expr->ref.lvalue, expr->loc, f);
 	}
 }
 
@@ -698,32 +752,44 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		case AST_STMT_ASSIGN:
 			{
 				llvm_typed_value_t val = ast2llvm_emit_expr(&stmt->assign.val, var2reg, f);
+				ast_datatype_t* target_type = stmt->assign.lvalue.type;
 				switch (val.type){
 					case LLVM_TVALUE_REG:
-						if (!ast_datatype_eq(stmt->assign.var_ref->type_ref, val.typed_reg.ast_type)){
-							printf_error(stmt->loc, "attempt to assign type '%s' to variable '%s' of type '%s'", val.typed_reg.ast_type->name, stmt->assign.var_ref->name, stmt->assign.var_ref->type_ref->name);
+						if (!ast_datatype_eq(target_type, val.typed_reg.ast_type)){
+							printf_error(stmt->loc, "attempt to assign type '%s' to %s '%s' of type '%s'",
+								val.typed_reg.ast_type->name,
+								target_type->name,
+								stmt->assign.lvalue.member_access.len ? "member" : "variable",
+								stmt->assign.lvalue.member_access.len ?
+									stmt->assign.lvalue.type->structure.members.data[stmt->assign.lvalue.member_access.data[stmt->assign.lvalue.member_access.len-1].member_idx].type_ref->name
+									: stmt->assign.lvalue.base_var->name
+								);
 							val = POISON_TYPED_VALUE;
 						}
 						break;
 					case LLVM_TVALUE_INT_CONST:
-						if (!ast_datatype_eq(stmt->assign.var_ref->type_ref, &context_get(&top_level_context, "u64", (void*)0)->type_)){
-							printf_error(stmt->loc, "attempt to assign type 'u64' to variable '%s' of type '%s'", stmt->assign.var_ref->name, stmt->assign.var_ref->type_ref->name);
+						if (!ast_datatype_eq(target_type, &context_get(&top_level_context, "u64", (void*)0)->type_)){
+							printf_error(stmt->loc, "attempt to assign type 'u64' to %s '%s' of type '%s'",
+								target_type->name,
+								stmt->assign.lvalue.member_access.len ? "member" : "variable",
+								stmt->assign.lvalue.member_access.len ?
+									stmt->assign.lvalue.type->structure.members.data[stmt->assign.lvalue.member_access.data[stmt->assign.lvalue.member_access.len-1].member_idx].type_ref->name
+									: stmt->assign.lvalue.base_var->name
+								);
 							val = POISON_TYPED_VALUE;
 						}
 						break;
 					case LLVM_TVALUE_POISON:
 						break;
 				}
-				llvm_reg_t ptr = var2reg_map_get(var2reg, stmt->assign.var_ref, LLVM_INVALID_REG);
-				if (LLVM_REG_EQ(ptr, LLVM_INVALID_REG)){
-					printf_error(stmt->loc, "attempt to assign to global variable '%s' (globals not yet supported)", stmt->assign.var_ref->name);
-					break;
-				}
+				llvm_typed_value_t ptr = ast2llvm_get_lvalue_pointer(var2reg, stmt->assign.lvalue, stmt->loc, f);
+				if (ptr.type == LLVM_TVALUE_POISON)
+					return;
 				llvm_add_inst(f, (llvm_inst_t){
 					.type = LLVM_INST_STORE,
-					.store.type = ast_type_to_llvm_type(stmt->assign.var_ref->type_ref),
+					.store.type = ast_type_to_llvm_type(target_type),
 					.store.value = llvm_untype_value(val),
-					.store.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=ptr }
+					.store.ptr = llvm_untype_value(ptr)
 				});
 				return;
 			}

@@ -34,6 +34,7 @@
 %token TK_LOR "||"
 %token TK_SHR ">>"
 %token TK_SHL "<<"
+%token TK_ARROW "->"
 
 %define parse.error custom
 
@@ -61,24 +62,29 @@ anonymous_struct_head:
 	TK_STRUCT '{'	{ $$ = create_ast_anon_struct_head(@$); }
 |	anonymous_struct_head type name ';'		{ $$ = $1; ast_anon_struct_head_append($$, @name, $type, $name); } // TODO: loc should be @type + @name, not just @name
 
+%nterm <lvalue> lvalue;
+lvalue:
+	TK_VAR	{ $$ = create_ast_lvalue($1); }
+|	lvalue '.' name	{ $$ = ast_lvalue_extend($1, false, $name); }
+|	lvalue TK_ARROW name	{ $$ = ast_lvalue_extend($1, true, $name); }
 
 %nterm <name> name;
 name:
 	TK_NAME
-|	type		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
+|	TK_TYPE		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 |	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0: // TODO: unary oparations
 	TK_INT		{ $$ = $1; }
-|	TK_VAR		{ $$ = create_ast_expr_var_ref(@$, $1); }
+|	lvalue		{ $$ = create_ast_expr_lvalue(@$, $1); }
 |	function_call
 |	'(' exp ')'	{ $$ = $2; }
 |	'-' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_NEG, $op); }
 |	'~' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_BNOT, $op); }
 |	'!' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_LNOT, $op); }
 |	'*' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_DEREF, $op); }
-|	'&' TK_VAR[var]	{ $$ = create_ast_expr_ref(@$, $var); }
+|	'&' lvalue		{ $$ = create_ast_expr_ref(@$, $lvalue); }
 
 exp1:
 	exp1[l] '*' exp0[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MUL, $l, $r); }
@@ -212,7 +218,7 @@ continue_stmt:
 
 %nterm <stmt> single_assign_stmt;
 single_assign_stmt:
-	TK_VAR[var] '=' exp[val]	{ $$ = create_ast_stmt_assign(@$, $var, $val); }
+	lvalue '=' exp[val]	{ $$ = create_ast_stmt_assign(@$, $lvalue, $val); }
 
 // if-else constructs always bind as tightly as possible, so 'if (x) if (y) else z;' will parse as 'if (x) {if (y) else z;}'
 %nterm <stmt> if_stmt;
