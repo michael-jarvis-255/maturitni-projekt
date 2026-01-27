@@ -301,3 +301,82 @@ char* llvm_func_to_string(const llvm_function_t* f){
 	char_list_append(&t.string, '\0');
 	return t.string.data;
 }
+
+static void free_llvm_type(llvm_type_t type){
+	switch (type.type){
+		case LLVM_TYPE_INTEGRAL:
+		case LLVM_TYPE_FLOAT:
+		case LLVM_TYPE_POINTER:
+			break;
+		case LLVM_TYPE_STRUCT:
+			for (unsigned int i=0; i<type.structure.member_count; i++){
+				free_llvm_type(type.structure.member_types[i]);
+			}
+			free(type.structure.member_types);
+	}
+}
+
+static void free_llvm_inst(llvm_inst_t inst){
+	switch (inst.type){
+		case LLVM_INST_ADD:
+		case LLVM_INST_SUB:
+		case LLVM_INST_MUL:
+		case LLVM_INST_UDIV:
+		case LLVM_INST_SDIV:
+		case LLVM_INST_UREM:
+		case LLVM_INST_SREM:
+		case LLVM_INST_SHL:
+		case LLVM_INST_LSHR:
+		case LLVM_INST_ASHR:
+		case LLVM_INST_AND:
+		case LLVM_INST_OR:
+		case LLVM_INST_XOR:
+			free_llvm_type(inst.binop.type);
+			break;
+		case LLVM_INST_LOAD:
+			free_llvm_type(inst.load.type);
+			break;
+		case LLVM_INST_STORE:
+			free_llvm_type(inst.store.type);
+			break;
+		case LLVM_INST_ICMP:
+			free_llvm_type(inst.icmp.type);
+			break;
+		case LLVM_INST_PHI:
+			free_llvm_type(inst.phi.type);
+			break;
+		case LLVM_INST_ZEXT:
+			free_llvm_type(inst.ext.from);
+			free_llvm_type(inst.ext.to);
+			break;
+		case LLVM_INST_ALLOCA:
+			free_llvm_type(inst.alloca.type);
+			break;
+		case LLVM_INST_EXTRACT_VALUE:
+			free_llvm_type(inst.extract.aggregate_type);
+			break;
+		case LLVM_INST_GET_ELEMENT_PTR:
+			free_llvm_type(inst.getelementptr.aggregate_type);
+			break;
+		case LLVM_INST_CALL:
+			free(inst.call.name);
+			shallow_free_llvm_arg_list(&inst.call.args);
+			break;
+	}
+}
+
+static void free_llvm_basic_block(llvm_basic_block_t block){
+	for (unsigned int i = 0; i < block.instructions.len; i++){
+		free_llvm_inst(block.instructions.data[i]);
+	}
+	shallow_free_llvm_inst_list(&block.instructions);
+}
+
+void free_llvm_function(llvm_function_t func){
+	free(func.name);
+	for (unsigned int i = 0; i < func.blocks.len; i++){
+		free_llvm_basic_block(func.blocks.data[i]);
+	}
+	shallow_free_llvm_basic_block_list(&func.blocks);
+	free(func.args);
+}

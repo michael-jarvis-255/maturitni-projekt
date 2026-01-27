@@ -150,7 +150,7 @@ typedef struct llvm_inst_t {
 			llvm_value_t values[LLVM_PHI_MAX];
 		} phi;
 		struct {
-			const char* name;
+			char* name;
 			llvm_type_t rettype;
 			llvm_arg_list_t args;
 		} call;
@@ -184,7 +184,7 @@ typedef struct llvm_basic_block_t {
 create_list_type_header(llvm_basic_block, false);
 
 typedef struct llvm_function_t {
-	const char* name;
+	char* name;
 	llvm_basic_block_list_t blocks; // entry block is always block 0
 	bool has_return;
 	llvm_type_t rettype;
@@ -196,5 +196,7 @@ typedef struct llvm_function_t {
 
 void llvm_func_to_stream(const llvm_function_t* f, FILE* stream);
 char* llvm_func_to_string(const llvm_function_t* f);
+
+void free_llvm_function(const llvm_function_t func);
 
 #endif

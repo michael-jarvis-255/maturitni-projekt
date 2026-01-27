@@ -26,7 +26,7 @@ static char** source_lines;
 void free_ast_id_v(ast_id_t id){
 	switch (id.type){
 		case AST_ID_TYPE:
-			free((void*)id.type_.name);
+			free_ast_datatype(&id.type_);
 			break;
 		case AST_ID_VAR:
 			free((void*)id.var.name);
@@ -48,6 +48,7 @@ ast_datatype_t* create_ast_anon_struct_head(loc_t loc){
 	ast_datatype_t strct = (ast_datatype_t){
 		.kind = AST_DATATYPE_STRUCTURED,
 		.declare_loc = loc, // TODO: track more than just the 'struct {' header
+		.name = strdup("<anonymous struct>"),
 		.structure.members = create_ast_variable_list()
 	};
 	return convert_to_ptr(strct);
@@ -61,17 +62,16 @@ void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_
 	ast_variable_list_append(&strct->structure.members, elem);
 }
 ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct){
-	char* name = strdup("<anonymous struct>");
-
 	ast_id_t* type_id = malloc(sizeof(ast_id_t));
 	type_id->type = AST_ID_TYPE;
 	type_id->type_ = *strct;
-	type_id->type_.name = name;
 
+	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the context
+	// we are placing it into the context so that it can be free()'d
+	// TODO: find a more elegant solution
 	context_t* ctx = context_stack.data[context_stack.len-1];
-	context_insert(ctx, name, type_id); // we are being cheeky and inserting even when "<anonymous struct>" might already be in the context // TODO: find a more elegant solution
+	context_insert(ctx, type_id->type_.name, type_id);
 
-	free(strct->name);
 	free(strct);
 	return &type_id->type_;
 }
@@ -88,12 +88,14 @@ ast_lvalue_t ast_lvalue_extend(ast_lvalue_t lvalue, bool deref, ast_name_t membe
 	if (deref){
 		if (lvalue.type->kind != AST_DATATYPE_POINTER){
 			printf_error(lvalue.loc, "invalid type access with '->' (type '%s' is not a pointer)", lvalue.type->name);
+			free(member_name.name);
 			return lvalue; // TODO: return some kind of error value
 		}
 		lvalue.type = lvalue.type->pointer.base;
 	}
 	if (lvalue.type->kind != AST_DATATYPE_STRUCTURED){
 		printf_error(lvalue.loc, "invalid type access with '.' (type '%s' is not a struct)", lvalue.type->name);
+		free(member_name.name);
 		return lvalue; // TODO: return some kind of error value
 	}
 	for (unsigned int i=0; i < lvalue.type->structure.members.len; i++){
@@ -101,10 +103,12 @@ ast_lvalue_t ast_lvalue_extend(ast_lvalue_t lvalue, bool deref, ast_name_t membe
 		if (strcmp(member->name, member_name.name) == 0){
 			lvalue.type = member->type_ref;
 			ast_lvalue_member_access_list_append(&lvalue.member_access, (ast_lvalue_member_access_t){.deref = deref, .member_idx = i});
+			free(member_name.name);
 			return lvalue;
 		}
 	}
 	printf_error(lvalue.loc, "struct type '%s' does not contain member '%s'", lvalue.type->name, member_name.name);
+	free(member_name.name);
 	return lvalue; // TODO: return some kind of error value
 }
 
@@ -255,6 +259,7 @@ void free_ast_expr_v(ast_expr_t exp){
 	switch (exp.type){
 		case AST_EXPR_CONST:
 		case AST_EXPR_REF:
+			free_ast_lvalue_v(exp.ref.lvalue);
 			break;
 		case AST_EXPR_LVALUE:
 			free_ast_lvalue_v(exp.lvalue);
@@ -426,6 +431,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 				free_context(stmt.block.context);
 			break;
 		case AST_STMT_ASSIGN:
+			free_ast_lvalue_v(stmt.assign.lvalue);
 			free_ast_expr_v(stmt.assign.val);
 			break;
 		case AST_STMT_BREAK:
@@ -545,12 +551,43 @@ ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_
 	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var), value)};
 }
 
-ast_decl_t create_ast_decl_typedef(loc_t loc, ast_datatype_t* type, ast_name_t name){
+static ast_datatype_t ast_datatype_alias(const ast_datatype_t* original, loc_t declare_loc, char* new_name){
+	ast_datatype_t type = (ast_datatype_t){
+		.declare_loc = declare_loc,
+		.name = new_name,
+		.kind = original->kind,
+		.ptr_type = 0
+	};
+	switch (original->kind){
+		case AST_DATATYPE_INTEGRAL:
+			type.integral.bitwidth = original->integral.bitwidth;
+			type.integral.signed_ = original->integral.signed_;
+			break;
+		case AST_DATATYPE_FLOAT:
+			type.floating.bitwidth = original->floating.bitwidth;
+			break;
+		case AST_DATATYPE_STRUCTURED:
+			type.structure.members = create_ast_variable_list();
+			for (unsigned int i=0; i < original->structure.members.len; i++){
+				ast_variable_t* member = &original->structure.members.data[i];
+				ast_variable_list_append(&type.structure.members, (ast_variable_t){
+					.declare_loc = member->declare_loc,
+					.name = strdup(member->name),
+					.type_ref = member->type_ref
+				});
+			}
+			break;
+		case AST_DATATYPE_POINTER:
+			type.pointer.base = original->pointer.base;
+			break;
+	}
+	return type;
+}
+
+ast_decl_t create_ast_decl_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name){
 	ast_id_t* type_id = malloc(sizeof(ast_id_t));
 	type_id->type = AST_ID_TYPE;
-	type_id->type_ = *type;
-	type_id->type_.declare_loc = loc;
-	type_id->type_.name = name.name;
+	type_id->type_ = ast_datatype_alias(type, loc, name.name);
 	current_context_insert(name.name, type_id);
 
 	return (ast_decl_t){.type=AST_DECL_DUMMY};
@@ -896,4 +933,25 @@ ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base){
 		.ptr_type = 0
 	};
 	return base->ptr_type = convert_to_ptr(ptr);
+}
+
+void free_ast_datatype(ast_datatype_t* type){
+	free(type->name);
+	type->name = 0;
+	switch (type->kind){
+		case AST_DATATYPE_INTEGRAL:
+		case AST_DATATYPE_FLOAT:
+		case AST_DATATYPE_POINTER:
+			break;
+		case AST_DATATYPE_STRUCTURED:
+			for (unsigned int i = 0; i < type->structure.members.len; i++){
+				free(type->structure.members.data[i].name);
+			}
+			shallow_free_ast_variable_list(&type->structure.members);
+			break;
+	}
+	if (type->ptr_type){
+		free_ast_datatype(type->ptr_type);
+		free(type->ptr_type);
+	}
 }

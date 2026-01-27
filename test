@@ -1,5 +1,3 @@
-i32 x;
-i32 y = 15;
 
 typedef u64 ulong;
 typedef struct {

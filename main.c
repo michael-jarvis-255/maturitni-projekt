@@ -46,6 +46,8 @@ int main(int argc, char** argv){
 		puts(llvm_code);
 		free(llvm_code);
 		puts("----");
+
+		free_llvm_function(func);
 	}
 	fclose(outfile);
 	if (received_error){

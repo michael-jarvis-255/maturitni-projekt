@@ -277,7 +277,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body);
 ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name);
 ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
-ast_decl_t create_ast_decl_typedef(loc_t loc, ast_datatype_t* type, ast_name_t name);
+ast_decl_t create_ast_decl_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name);
 
 void ast_init_context(FILE* source);
 void current_context_insert(const char* name, ast_id_t* value);
@@ -308,5 +308,6 @@ extern context_t top_level_context;
 
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b);
 ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base);
+void free_ast_datatype(ast_datatype_t* type);
 
 #endif

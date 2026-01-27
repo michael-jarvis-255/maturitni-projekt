@@ -98,6 +98,7 @@ static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
 		case AST_DATATYPE_INTEGRAL:
 			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=t->integral.bitwidth };
 		case AST_DATATYPE_STRUCTURED:
+		{
 			llvm_type_t type = (llvm_type_t){
 				.type=LLVM_TYPE_STRUCT,
 				.structure.member_count = t->structure.members.len,
@@ -107,6 +108,7 @@ static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
 				type.structure.member_types[i] = ast_type_to_llvm_type(t->structure.members.data[i].type_ref);
 			}
 			return type;
+		}
 		case AST_DATATYPE_POINTER:
 			return (llvm_type_t){ .type=LLVM_TYPE_POINTER };
 	}
@@ -387,11 +389,13 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			if (arglist.len > expr->func_call.func_ref->args.len){
 				printf_error(expr->loc, "too many arguments for call to function '%s'", expr->func_call.func_ref->name);
 				printf_info(expr->func_call.func_ref->declare_loc, "declared here");
+				shallow_free_llvm_typed_value_list(&arglist);
 				return POISON_TYPED_VALUE;
 			}
 			if (arglist.len < expr->func_call.func_ref->args.len) {
 				printf_error(expr->loc, "too few arguments for call to function '%s'", expr->func_call.func_ref->name);
 				printf_info(expr->func_call.func_ref->declare_loc, "declared here");
+				shallow_free_llvm_typed_value_list(&arglist);
 				return POISON_TYPED_VALUE;
 			}
 			for (unsigned int i=0; i < arglist.len; i++){
@@ -403,6 +407,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						printf_error(expr->func_call.arglist.data[i].loc, "incompatible argument of type 'u64' (expecting '%s')",
 							expr->func_call.func_ref->args.data[i]->var.type_ref->name);
 						printf_info(expr->func_call.func_ref->declare_loc, "declared here");
+						shallow_free_llvm_typed_value_list(&arglist);
 						return POISON_TYPED_VALUE;
 					case LLVM_TVALUE_REG:
 						if (ast_datatype_eq(arglist.data[i].typed_reg.ast_type, expr->func_call.func_ref->args.data[i]->var.type_ref))
@@ -411,6 +416,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							arglist.data[i].typed_reg.ast_type->name,
 							expr->func_call.func_ref->args.data[i]->var.type_ref->name);
 						printf_info(expr->func_call.func_ref->declare_loc, "declared here");
+						shallow_free_llvm_typed_value_list(&arglist);
 						return POISON_TYPED_VALUE;
 				}
 			}
@@ -428,6 +434,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				});
 			}
 			llvm_reg_t ret = llvm_add_inst(f, inst);
+			shallow_free_llvm_typed_value_list(&arglist);
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .typed_reg.reg=ret, .typed_reg.ast_type=expr->func_call.func_ref->return_type_ref };
 		}
 		case AST_EXPR_UNOP:
