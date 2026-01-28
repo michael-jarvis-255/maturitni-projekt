@@ -217,7 +217,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_type_to_target(inst.getelementptr.aggregate_type, t);
 			tprint(t, ", ptr ");
 			llvm_value_to_target(inst.getelementptr.ptr, t);
-			tprintf(t, ", i32 %u", inst.getelementptr.member_idx);
+			tprintf(t, ", i32 0, i32 %u", inst.getelementptr.member_idx);
 			return;
 	}
 
