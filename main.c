@@ -3,8 +3,36 @@
 #include "build/parse.tab.h"
 #include "ast.h"
 #include "ast2llvm.h"
+#include <unistd.h>
+#include <string.h>
 
 extern FILE *yyin;
+
+char* process_file(const char* cmd, char* infile, const char* suffix){
+	char* tmpfile = malloc(strlen("/tmp/XXXXXX")+strlen(suffix)+1);
+	strcpy(tmpfile, "/tmp/XXXXXX");
+	strcat(tmpfile, suffix);
+
+	int fd = mkstemps(tmpfile, strlen(suffix));
+	char buf[strlen(cmd) + 1 + strlen(infile) + 1 + strlen("-o") + 1 + strlen(tmpfile) + 1];
+	strcpy(buf, cmd);
+	strcat(buf, " ");
+	strcat(buf, infile);
+	strcat(buf, " -o ");
+	strcat(buf, tmpfile);
+
+	int res = system(buf);
+	close(fd);
+	unlink(infile);
+	free(infile);
+	
+	if (res){
+		//printf("error: command '%s' failed with code %i\n", buf, res);
+		exit(1);
+	}
+
+	return tmpfile;
+}
 
 int main(int argc, char** argv){
 	if (argc != 2){
@@ -32,29 +60,32 @@ int main(int argc, char** argv){
 		return 1;
 	}
 
-	// emit all functions in top context
-	FILE* outfile = fopen("out.ll", "w");
+	// emit all functions to llvm ir
+	char* fp = strdup("/tmp/XXXXXX.ll");
+	FILE* outfile = fdopen(mkstemps(fp, 3), "w");
 	for (context_iterator_t iter = context_iter(&top_level_context); iter.current; iter = context_iter_next(iter)){
 		ast_id_t* id = iter.current->value;
 		if (id->type != AST_ID_FUNC) continue;
 
-		llvm_function_t func = ast2llvm_emit_func(id->func);
-		
-		printf("-- EMIT '%s' --\n", iter.current->key);
-		char* llvm_code = llvm_func_to_string(&func);
+		llvm_function_t func = ast2llvm_emit_func(id->func);		
 		llvm_func_to_stream(&func, outfile);
-		puts(llvm_code);
-		free(llvm_code);
-		puts("----");
-
 		free_llvm_function(func);
 	}
 	fclose(outfile);
+	fclose(code);
+	ast_cleanup_context();
+	
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");
+		unlink(fp);
 		return 1;
 	}
-	
-	ast_cleanup_context();
-	fclose(code);
+
+	// use llvm to compile to object
+	fp = process_file("llvm-as", fp, ".bc");
+	fp = process_file("opt -O3", fp, ".bc");
+	fp = process_file("llc -O3 -filetype=obj", fp, ".o");
+	fp = process_file("ld -lc -L /lib/x86_64-linux-gnu -dynamic-linker /lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/crt1.o", fp, ".o");
+	printf("generated %s\n", fp);
+	free(fp);
 }
