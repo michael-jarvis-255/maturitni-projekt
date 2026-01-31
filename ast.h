@@ -77,6 +77,7 @@ typedef enum {
 	AST_EXPR_UNOP,
 	AST_EXPR_BINOP,
 	AST_EXPR_REF,
+	AST_EXPR_CAST,
 } ast_expr_enum_t;
 
 typedef enum {
@@ -135,12 +136,16 @@ typedef struct ast_expr_t {
 			struct ast_expr_t* right;
 		} binop;
 		struct {
-			struct ast_func_t* func_ref;
+			const struct ast_func_t* func_ref;
 			ast_expr_list_t arglist;
 		} func_call;
 		struct {
 			ast_lvalue_t lvalue;
 		} ref;
+		struct {
+			struct ast_expr_t* expr;
+			const ast_datatype_t* type_ref;
+		} cast;
 	};
 } ast_expr_t;
 
@@ -258,6 +263,7 @@ ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right);
 ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t opernad);
 ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue);
+ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, const ast_datatype_t* type);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
 void print_ast_expr(const ast_expr_t* exp);

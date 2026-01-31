@@ -201,6 +201,22 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			tprint(t, " to ");
 			llvm_type_to_target(inst.ext.to, t);
 			return;
+		case LLVM_INST_SEXT:
+			tprint(t, "sext ");
+			llvm_type_to_target(inst.ext.from, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.ext.operand, t);
+			tprint(t, " to ");
+			llvm_type_to_target(inst.ext.to, t);
+			return;
+		case LLVM_INST_TRUNC:
+			tprint(t, "trunc ");
+			llvm_type_to_target(inst.trunc.from, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.trunc.operand, t);
+			tprint(t, " to ");
+			llvm_type_to_target(inst.trunc.to, t);
+			return;
 		case LLVM_INST_ALLOCA:
 			tprint(t, "alloca ");
 			llvm_type_to_target(inst.alloca.type, t);
@@ -345,9 +361,14 @@ static void free_llvm_inst(llvm_inst_t inst){
 		case LLVM_INST_PHI:
 			free_llvm_type(inst.phi.type);
 			break;
+		case LLVM_INST_SEXT:
 		case LLVM_INST_ZEXT:
 			free_llvm_type(inst.ext.from);
 			free_llvm_type(inst.ext.to);
+			break;
+		case LLVM_INST_TRUNC:
+			free_llvm_type(inst.trunc.from);
+			free_llvm_type(inst.trunc.to);
 			break;
 		case LLVM_INST_ALLOCA:
 			free_llvm_type(inst.alloca.type);

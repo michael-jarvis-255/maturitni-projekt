@@ -85,6 +85,7 @@ exp0: // TODO: unary oparations
 |	'!' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_LNOT, $op); }
 |	'*' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_DEREF, $op); }
 |	'&' lvalue		{ $$ = create_ast_expr_ref(@$, $lvalue); }
+|	'(' type ')' exp0[op]	{ $$ = create_ast_expr_cast(@$, $op, $type); }
 
 exp1:
 	exp1[l] '*' exp0[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MUL, $l, $r); }

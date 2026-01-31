@@ -251,6 +251,15 @@ ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue){
 	};
 }
 
+ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, const ast_datatype_t* type){
+	return (ast_expr_t){
+		.type = AST_EXPR_CAST,
+		.loc = loc,
+		.cast.expr = convert_to_ptr(expr),
+		.cast.type_ref = type
+	};
+}
+
 void free_ast_expr(ast_expr_t* exp){
 	free_ast_expr_v(*exp);
 	free(exp);
@@ -273,6 +282,9 @@ void free_ast_expr_v(ast_expr_t exp){
 		case AST_EXPR_BINOP:
 			free_ast_expr(exp.binop.left);
 			free_ast_expr(exp.binop.right);
+			break;
+		case AST_EXPR_CAST:
+			free_ast_expr(exp.cast.expr);
 			break;
 	}
 }
@@ -330,6 +342,12 @@ void print_ast_expr(const ast_expr_t* exp){
 		case AST_EXPR_REF:
 			printf("*");
 			print_ast_lvalue(exp->ref.lvalue);
+			return;
+
+		case AST_EXPR_CAST:
+			printf("(%s)(", exp->cast.type_ref->name);
+			print_ast_expr(exp->cast.expr);
+			printf(")");
 			return;
 	}
 }

@@ -41,7 +41,7 @@ u64 foo(i32 X){
 	return *ptr;
 }
 
-u64 main(i32 argc, u8** argv){
+u32 main(i32 argc, u8** argv){
 	foo(argc);
-	return 42;
+	return (u32)42;
 }

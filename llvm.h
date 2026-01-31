@@ -103,6 +103,8 @@ typedef enum {
 	LLVM_INST_PHI,
 	LLVM_INST_CALL,
 	LLVM_INST_ZEXT,
+	LLVM_INST_SEXT,
+	LLVM_INST_TRUNC,
 	LLVM_INST_ALLOCA,
 	LLVM_INST_EXTRACT_VALUE,
 	LLVM_INST_GET_ELEMENT_PTR,
@@ -159,6 +161,11 @@ typedef struct llvm_inst_t {
 			llvm_type_t to;
 			llvm_value_t operand;
 		} ext;
+		struct {
+			llvm_type_t from;
+			llvm_type_t to;
+			llvm_value_t operand;
+		} trunc;
 		struct {
 			llvm_type_t type;
 		} alloca;

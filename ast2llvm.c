@@ -15,7 +15,7 @@ typedef struct llvm_typed_value_t {
 		unsigned long int_const;
 		struct {
 			llvm_reg_t reg;
-			ast_datatype_t* ast_type;
+			const ast_datatype_t* ast_type;
 		} typed_reg;
 	};
 } llvm_typed_value_t;
@@ -91,7 +91,7 @@ static llvm_reg_t llvm_add_inst(llvm_function_t* f, llvm_inst_t inst){
 	return llvm_block_last_reg(block);
 }
 
-static llvm_type_t ast_type_to_llvm_type(ast_datatype_t* t){
+static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	switch (t->kind){
 		case AST_DATATYPE_FLOAT:
 			return (llvm_type_t){ .type=LLVM_TYPE_FLOAT };
@@ -134,7 +134,7 @@ static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, con
 		printf_error(loc, "use of global variable '%s' is unimplemented", lvalue.base_var->name); // TODO: implement it
 		return POISON_TYPED_VALUE;
 	}
-	ast_datatype_t* type = lvalue.base_var->type_ref;
+	const ast_datatype_t* type = lvalue.base_var->type_ref;
 	reg = llvm_add_inst(f, (llvm_inst_t){
 		.type = LLVM_INST_LOAD,
 		.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
@@ -298,6 +298,126 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 			.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_INT_CONST, .int_const = 0}
 		});
 	return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
+}
+
+// if err == 0, print an error if cannot cast
+// else, set *err to whether cast failed, and cast is treated as implicit
+static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_datatype_t* trgt_type, llvm_function_t* f, bool* err, loc_t loc){
+	if (err) *err = false;
+	const bool implicit = err ? true : false;
+	const char* warning_string = 0;
+
+	const ast_datatype_t* src_type;
+	switch (value.type){
+		case LLVM_TVALUE_POISON:
+			return value;
+		case LLVM_TVALUE_INT_CONST:
+			src_type = &context_get(&top_level_context, "u64", (void*)0)->type_;
+			break;
+		case LLVM_TVALUE_REG:
+			src_type = value.typed_reg.ast_type;
+			break;
+	}
+
+	if (ast_datatype_eq(src_type, trgt_type))
+		return value;
+
+	switch (src_type->kind){
+		case AST_DATATYPE_POINTER:
+			switch (trgt_type->kind){
+				case AST_DATATYPE_POINTER:
+					goto no_cast;
+				case AST_DATATYPE_STRUCTURED:
+				case AST_DATATYPE_FLOAT:
+					goto error;
+				case AST_DATATYPE_INTEGRAL:
+					goto error; // TODO
+			}
+		case AST_DATATYPE_STRUCTURED:
+			goto error; // case where struct types are the same is already handled
+		case AST_DATATYPE_FLOAT:
+			goto error; // TODO
+		case AST_DATATYPE_INTEGRAL:
+			switch (trgt_type->kind){
+				case AST_DATATYPE_POINTER:
+					goto error; // TODO
+				case AST_DATATYPE_STRUCTURED:
+					goto error;
+				case AST_DATATYPE_FLOAT:
+					goto error; // TODO
+				case AST_DATATYPE_INTEGRAL:
+				{
+					bool src_signed = src_type->integral.signed_;
+					bool trgt_signed = trgt_type->integral.signed_;
+					unsigned int src_width = src_type->integral.bitwidth;
+					unsigned int trgt_width = trgt_type->integral.bitwidth;
+
+					if (src_width == trgt_width){
+						if (src_signed == trgt_signed)
+							goto no_cast;
+						
+						warning_string = "mismatched signedness";
+						goto implicit_warning;
+					}
+
+					if (src_width > trgt_width){
+						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+							.type = LLVM_INST_TRUNC,
+							.trunc.operand = llvm_untype_value(value),
+							.trunc.from = ast_type_to_llvm_type(src_type),
+							.trunc.to = ast_type_to_llvm_type(trgt_type)	
+						});
+						value = (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg = reg, .typed_reg.ast_type = trgt_type };
+						
+						warning_string = src_signed == trgt_signed ? "truncating may change value" : "truncating may change value, mismatched signedness";
+						goto implicit_warning;
+					}
+
+					// src_width < trgt_width
+					if (src_signed == false){
+						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+							.type = LLVM_INST_ZEXT,
+							.ext.operand = llvm_untype_value(value),
+							.ext.from = ast_type_to_llvm_type(src_type),
+							.ext.to = ast_type_to_llvm_type(trgt_type)	
+						});
+						return (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg = reg, .typed_reg.ast_type = trgt_type };
+					}
+					
+					// src_signed == true
+					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+						.type = LLVM_INST_SEXT,
+						.ext.operand = llvm_untype_value(value),
+						.ext.from = ast_type_to_llvm_type(src_type),
+						.ext.to = ast_type_to_llvm_type(trgt_type)	
+					});
+					value = (llvm_typed_value_t){ .type = LLVM_TVALUE_REG, .typed_reg.reg = reg, .typed_reg.ast_type = trgt_type };
+
+					if (src_signed == trgt_signed)
+						return value;
+					warning_string = "mismatched signedness";
+					goto implicit_warning;
+				}
+			}
+	}
+
+error:
+	if (err){
+		*err = true;
+	}else{
+		printf_error(loc, "invalid cast from type '%s' to type '%s'", src_type->name, trgt_type->name);
+	}
+	return POISON_TYPED_VALUE;
+
+implicit_warning:
+	if (implicit){
+		printf_warning(loc, "implicit cast from type '%s' to type '%s': %s", src_type->name, trgt_type->name, warning_string);
+	}
+no_cast:
+	if (value.type == LLVM_TVALUE_INT_CONST)
+		return value; // TODO: somehow indicate the type
+	value.typed_reg.ast_type = trgt_type;
+	return value;
 }
 
 static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f);
@@ -574,7 +694,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return llvm_int_const_binop(expr, left_operand, right_operand);
 			}
 
-			ast_datatype_t* restype;
+			const ast_datatype_t* restype;
 			bool signed_op;
 			if (left_operand.type == LLVM_TVALUE_REG){
 				restype   = left_operand.typed_reg.ast_type;
@@ -705,6 +825,11 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 		}
 		case AST_EXPR_REF:
 			return ast2llvm_get_lvalue_pointer(var2reg, expr->ref.lvalue, expr->loc, f);
+		case AST_EXPR_CAST:
+		{
+			llvm_typed_value_t val = ast2llvm_emit_expr(expr->cast.expr, var2reg, f);
+			return ast2llvm_cast(val, expr->cast.type_ref, f, 0, expr->loc);
+		}
 	}
 }
 
