@@ -3,11 +3,12 @@ from subprocess import PIPE, Popen
 import sys
 sys.set_int_max_str_digits(6000)
 
-MAX_NUMBER = 2**8192#2**8192#
+MAX_BITS = 4096
 TEST_COUNT = 1000
 
 for i in range(TEST_COUNT): # TODO: test different sizes (long a with short b, etc.)
-    a,b = [random.randrange(-MAX_NUMBER, MAX_NUMBER) for _ in "ab"]
+    al,bl = [random.randrange(0, MAX_BITS) for _ in "ab"]
+    a,b = [random.randrange(-2**l, 2**l) for l in (al, bl)]
     print(i, end='\r')
     op = random.choice(['+', '-', '*'])
     p = Popen(["./a.out", str(a), op, str(b)], stdout=PIPE)

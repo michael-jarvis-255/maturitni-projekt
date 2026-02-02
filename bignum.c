@@ -4,15 +4,6 @@
 #include <string.h>
 #include <limits.h>
 
-
-#include <stdio.h> // TODO: remove
-static void print_bignum(const bignum_t* x){
-	char* str = bignum_to_string(x);
-	printf("%s\n", str);
-	free(str);
-}
-
-
 typedef unsigned long ulong;
 typedef struct bignum_t {
 	ulong* arr;
@@ -291,10 +282,10 @@ void bignum_mul(bignum_t* a, const bignum_t* b){
 		bignum_unsigned_add(acc, tmp);
 		bignum_shift_left(a, 32);
 	}
+	acc->sign = a->sign != b->sign;
 	// TODO: this feels hacky
 	free(a->arr);
-	a->arr = acc->arr;
-	a->sign = a->sign != b->sign;
+	*a = *acc;
 	free(acc);
 	free_bignum(tmp);
 }
