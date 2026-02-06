@@ -31,6 +31,9 @@ int main(int argc, char** argv){
 		case '*':
 			bignum_mul(a, b);
 			break;
+		case '/':
+			bignum_div(a, b);
+			break;
 		default:
 			fprintf(stderr, "unknown operation '%s'", argv[2]);
 			return 1;

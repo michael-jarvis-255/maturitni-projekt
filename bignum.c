@@ -37,6 +37,7 @@ static inline ulong sub_carry(ulong a, ulong b, bool c, bool* carry_out){ // ret
 	return abc;
 }
 static inline unsigned int bignum_extract_uint(const bignum_t* x, unsigned int idx){
+	if (idx/2 >= x->size) return 0;
 	ulong val = x->arr[idx/2];
 	if (idx % 2){
 		val >>= 32;
@@ -101,6 +102,15 @@ void bignum_set_ulong(bignum_t* bignum, ulong value){
 }
 
 // these functions ignore the sign of a and b
+static void bignum_unsigned_add_ulong(bignum_t* a, ulong x){
+	bool carry = false;
+	unsigned int i = 0;
+	do {
+		bignum_grow(a, i+1);
+		a->arr[i] = add_carry(a->arr[i], i ? 0 : x, (ulong)carry, &carry);
+	} while (carry);
+}
+
 static void bignum_unsigned_add(bignum_t* a, const bignum_t* b){
 	bignum_grow(a, b->size);
 	bool carry = false;
@@ -211,6 +221,13 @@ static unsigned int bignum_divmod_uint(bignum_t* a, unsigned int b){
 	return carry;
 }
 
+static int bignum_cmp_ulong(const bignum_t* a, ulong x){
+	if (bignum_used_size(a) > 1) return 1;
+	if (a->arr[0] == x) return 0;
+	if (a->arr[0] > x) return 1;
+	return -1;
+}
+
 void bignum_from_string(bignum_t* dst, const char* s){
 	bignum_set_ulong(dst, 0);
 	while (*s == '-'){
@@ -223,7 +240,7 @@ void bignum_from_string(bignum_t* dst, const char* s){
 	}
 }
 
-char* bignum_to_string(const bignum_t* x){ // TODO: correctly handle when x=0
+char* bignum_to_string(const bignum_t* x){
 	char* str = malloc(20*x->size + 2); // 2^64 is 20 characters in decimal + sign + null
 	bignum_t* num = bignum_copy(x);
 
@@ -236,10 +253,16 @@ char* bignum_to_string(const bignum_t* x){ // TODO: correctly handle when x=0
 	for (unsigned int i = 0; i <= 20*x->size; i++){
 		start[i] = '0' + bignum_divmod_uint(num, 10);
 	}
+	free_bignum(num);
 
 	// reverse string
 	char* end = &start[20*x->size];
-	while (*end == '0') end--;
+	while (*end == '0' && end >= start) end--;
+	if (start > end){ // x == 0
+		str[0] = '0';
+		str[1] = 0;
+		return str;
+	}
 	end[1] = 0;
 	
 	while (start < end){
@@ -250,8 +273,6 @@ char* bignum_to_string(const bignum_t* x){ // TODO: correctly handle when x=0
 		start++;
 		end--;
 	}
-
-	free_bignum(num);
 	return str;
 }
 
@@ -289,5 +310,60 @@ void bignum_mul(bignum_t* a, const bignum_t* b){
 	free(acc);
 	free_bignum(tmp);
 }
-void bignum_div(bignum_t* a, const bignum_t* b); // TODO
+void bignum_div(bignum_t* a, const bignum_t* b){
+	if (bignum_unsigned_cmp(a, b) == -1){
+		bignum_set_ulong(a, 0);
+	}
+	if (bignum_cmp_ulong(a, 0) == 0){
+		return; // TODO: throw error?
+	}
+
+	bool asign = a->sign;
+	bignum_t* tmp = create_bignum();
+	bignum_t* tmp2 = create_bignum();
+	bignum_t* res = create_bignum();
+
+	ulong btop = b->arr[bignum_used_size(b)-1];
+	unsigned int btop_pos = 2*(bignum_used_size(b) - 1);
+	if (btop >> 32){
+		btop >>= 32;
+		btop_pos++;
+	}
+
+	for (unsigned int j = 2*a->size; j > 0; j--){
+		unsigned int i = j - 1;
+
+		bignum_set(tmp, b);
+		bignum_shift_left(tmp, 32*i);
+
+		while (bignum_unsigned_cmp(a, tmp) > -1){
+			ulong A = ((ulong)bignum_extract_uint(a, btop_pos+i+1) << 32) + bignum_extract_uint(a, btop_pos+i);
+			ulong d = A / (btop + 1);
+			if (d == 0) d++;
+			
+			bignum_set(tmp2, tmp);
+			bignum_mul_uint(tmp2, d);
+			bignum_unsigned_sub(a, tmp2);
+			
+			// TODO: add shifted ulong directly, instead of through tmp2
+			bignum_set_ulong(tmp2, d);
+			bignum_shift_left(tmp2, 32*i);
+			bignum_unsigned_add(res, tmp2);
+		}
+	}
+
+	while (bignum_unsigned_cmp(a, b) > -1){
+		bignum_unsigned_sub(a, b);
+		bignum_unsigned_add_ulong(res, 1);
+	}
+
+	
+	res->sign = asign != b->sign;
+	// TODO: this feels hacky
+	free(a->arr);
+	*a = *res;
+	free(res);
+	free_bignum(tmp);
+	free_bignum(tmp2);
+}
 
