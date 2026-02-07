@@ -203,7 +203,7 @@ static inline loc_t loc_from_ast_id(ast_id_t* id){
 	exit(1);
 }
 
-ast_expr_t create_ast_expr_const(loc_t loc, unsigned long value){
+ast_expr_t create_ast_expr_const(loc_t loc, bignum_t* value){
 	return (ast_expr_t){
 		.type = AST_EXPR_CONST,
 		.loc = loc,
@@ -267,6 +267,8 @@ void free_ast_expr(ast_expr_t* exp){
 void free_ast_expr_v(ast_expr_t exp){
 	switch (exp.type){
 		case AST_EXPR_CONST:
+			free_bignum(exp.constant.value);
+			break;
 		case AST_EXPR_REF:
 			free_ast_lvalue_v(exp.ref.lvalue);
 			break;
@@ -308,9 +310,12 @@ static void print_ast_lvalue(ast_lvalue_t lvalue){
 void print_ast_expr(const ast_expr_t* exp){
 	switch (exp->type){
 		case AST_EXPR_CONST:
-			printf("%lu", exp->constant.value);
+		{
+			char* str = bignum_to_string(exp->constant.value);
+			printf("%s", str);
+			free(str);
 			return;
-
+		}
 		case AST_EXPR_LVALUE:
 			print_ast_lvalue(exp->lvalue);
 			return;

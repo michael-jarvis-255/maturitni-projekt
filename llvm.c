@@ -84,8 +84,12 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 			tprintf(t, "%%%u", val.reg.idx);
 			break;
 		case LLVM_VALUE_INT_CONST:
-			tprintf(t, "%lu", val.int_const);
+		{
+			char* str = bignum_to_string(val.int_const);
+			tprintf(t, "%s", str);
+			free(str);
 			break;
+		}
 	}
 }
 
@@ -332,6 +336,18 @@ static void free_llvm_type(llvm_type_t type){
 	}
 }
 
+static void free_llvm_value(llvm_value_t value){
+	switch (value.type){
+		case LLVM_VALUE_INT_CONST:
+			free_bignum(value.int_const);
+			break;
+		case LLVM_VALUE_REG:
+		case LLVM_VALUE_POISON:
+		case LLVM_VALUE_UNDEF:
+			break;
+	}
+}
+
 static void free_llvm_inst(llvm_inst_t inst){
 	switch (inst.type){
 		case LLVM_INST_ADD:
@@ -348,40 +364,70 @@ static void free_llvm_inst(llvm_inst_t inst){
 		case LLVM_INST_OR:
 		case LLVM_INST_XOR:
 			free_llvm_type(inst.binop.type);
+			free_llvm_value(inst.binop.first);
+			free_llvm_value(inst.binop.second);
 			break;
 		case LLVM_INST_LOAD:
 			free_llvm_type(inst.load.type);
+			free_llvm_value(inst.load.ptr);
 			break;
 		case LLVM_INST_STORE:
 			free_llvm_type(inst.store.type);
+			free_llvm_value(inst.store.value);
+			free_llvm_value(inst.store.ptr);
 			break;
 		case LLVM_INST_ICMP:
 			free_llvm_type(inst.icmp.type);
+			free_llvm_value(inst.icmp.op1);
+			free_llvm_value(inst.icmp.op2);
 			break;
 		case LLVM_INST_PHI:
 			free_llvm_type(inst.phi.type);
+			for (unsigned int i=0; i < inst.phi.count; i++) free_llvm_value(inst.phi.values[i]);
 			break;
 		case LLVM_INST_SEXT:
 		case LLVM_INST_ZEXT:
 			free_llvm_type(inst.ext.from);
 			free_llvm_type(inst.ext.to);
+			free_llvm_value(inst.ext.operand);
 			break;
 		case LLVM_INST_TRUNC:
 			free_llvm_type(inst.trunc.from);
 			free_llvm_type(inst.trunc.to);
+			free_llvm_value(inst.trunc.operand);
 			break;
 		case LLVM_INST_ALLOCA:
 			free_llvm_type(inst.alloca.type);
 			break;
 		case LLVM_INST_EXTRACT_VALUE:
 			free_llvm_type(inst.extract.aggregate_type);
+			free_llvm_value(inst.extract.value);
 			break;
 		case LLVM_INST_GET_ELEMENT_PTR:
 			free_llvm_type(inst.getelementptr.aggregate_type);
+			free_llvm_value(inst.getelementptr.ptr);
 			break;
 		case LLVM_INST_CALL:
 			free(inst.call.name);
+			for (unsigned int i = 0; i < inst.call.args.len; i++)
+				free_llvm_value(inst.call.args.data[i].val);
 			shallow_free_llvm_arg_list(&inst.call.args);
+			break;
+	}
+}
+
+static void free_llvm_term_inst(llvm_term_inst_t inst){
+	switch (inst.type){
+		case LLVM_TERM_INST_RET:
+			free_llvm_type(inst.ret.type);
+			free_llvm_value(inst.ret.value);
+			break;
+		case LLVM_TERM_INST_BR:
+			free_llvm_value(inst.br.cond);
+			break;
+		case LLVM_TERM_INST_JMP:
+		case LLVM_TERM_INST_NULL:
+		case LLVM_TERM_INST_RET_VOID:
 			break;
 	}
 }
@@ -391,6 +437,7 @@ static void free_llvm_basic_block(llvm_basic_block_t block){
 		free_llvm_inst(block.instructions.data[i]);
 	}
 	shallow_free_llvm_inst_list(&block.instructions);
+	free_llvm_term_inst(block.term_inst);
 }
 
 void free_llvm_function(llvm_function_t func){

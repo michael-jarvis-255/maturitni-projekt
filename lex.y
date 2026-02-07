@@ -58,7 +58,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 \<\<	update_yylloc(yyleng); return TK_SHL;
 \-\>	update_yylloc(yyleng); return TK_ARROW;
 
-{DIGIT}+				update_yylloc(yyleng); yylval.expr = create_ast_expr_const(yylloc, atoll(yytext)); return TK_INT;
+{DIGIT}+				update_yylloc(yyleng); bignum_t* num = create_bignum(); bignum_from_string(num, yytext); yylval.expr = create_ast_expr_const(yylloc, num); return TK_INT;
 {ID_START}{ID_CHAR}*	{ 
 							update_yylloc(yyleng);
 							char* name = malloc(yyleng+1);

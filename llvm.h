@@ -41,7 +41,7 @@ typedef enum {
 typedef struct llvm_value_t {
 	llvm_value_enum_t type;
 	union {
-		unsigned long int_const;
+		bignum_t* int_const;
 		llvm_reg_t reg;
 	};
 } llvm_value_t;

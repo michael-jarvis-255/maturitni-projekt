@@ -78,6 +78,19 @@ void bignum_set_uint(bignum_t* bignum, uint value){
 	bignum->sign = false;
 }
 
+static inline void bignum_move_and_free(bignum_t* dst, bignum_t* src){
+	free(dst->arr);
+	*dst = *src;
+	free(src);
+}
+static unsigned int bignum_used_size(const bignum_t* x){
+	for (unsigned int j = x->size; j > 0; j--){
+		unsigned int i = j-1;
+		if (x->arr[i]) return j;
+	}
+	return 0;
+}
+
 // these functions ignore the sign of a and b
 static void bignum_unsigned_add_uint(bignum_t* a, uint x){
 	bool carry = false;
@@ -108,6 +121,12 @@ static int bignum_unsigned_cmp(const bignum_t* a, const bignum_t* b){ // returns
 	}
 	return 0;
 }
+static int bignum_unsigned_cmp_uint(const bignum_t* a, uint x){
+	if (bignum_used_size(a) > 1) return 1;
+	if (a->arr[0] == x) return 0;
+	if (a->arr[0] > x) return 1;
+	return -1;
+}
 static void bignum_unsigned_sub(bignum_t* a, const bignum_t* b){ // NOTE: always sets the sign of a
 	if (bignum_unsigned_cmp(a, b) == -1){
 		bool carry = false;
@@ -124,7 +143,19 @@ static void bignum_unsigned_sub(bignum_t* a, const bignum_t* b){ // NOTE: always
 	// carry should be guaranteed to be 0 here, since a >= b
 	a->sign = false;
 }
-static void bignum_mul_uint(bignum_t* a, uint b){
+static void bignum_unsigned_sub_uint(bignum_t* a, uint b){ // NOTE: always sets the sign of a
+	if (bignum_unsigned_cmp_uint(a, b) == -1){ // b > a
+		a->arr[0] = b - a->arr[0];
+		a->sign = true;
+		return;
+	}
+
+	bool carry = false;
+	for (unsigned int i = 0; i==0 || carry; i++)
+		bignum_insert(a, i, subc(bignum_extract(a, i), i ? 0 : b, &carry));
+	a->sign = false;
+}
+void bignum_mul_uint(bignum_t* a, uint b){
 	uint carry = 0;
 	unsigned int i = 0;
 	for (; i < a->size; i++){
@@ -138,14 +169,7 @@ static void bignum_mul_uint(bignum_t* a, uint b){
 	if (carry)
 		bignum_insert(a, i, carry);
 }
-static unsigned int bignum_used_size(const bignum_t* x){
-	for (unsigned int j = x->size; j > 0; j--){
-		unsigned int i = j-1;
-		if (x->arr[i]) return j;
-	}
-	return 0;
-}
-static void bignum_shift_left(bignum_t* x, uint shift){
+void bignum_shift_left_uint(bignum_t* x, uint shift){
 	unsigned int block_shift = shift / 32;
 	bignum_grow(x, bignum_used_size(x) + block_shift + 1);
 	if (block_shift){
@@ -173,7 +197,7 @@ static void bignum_shift_left(bignum_t* x, uint shift){
 	}
 }
 
-static unsigned int bignum_divmod_uint(bignum_t* a, uint b){
+unsigned int bignum_divmod_uint(bignum_t* a, uint b){
 	uint carry = 0;
 	for (unsigned int j = a->size; j > 0; j--){
 		unsigned int i = j-1;
@@ -184,13 +208,6 @@ static unsigned int bignum_divmod_uint(bignum_t* a, uint b){
 		carry = current % b;
 	}
 	return carry;
-}
-
-static int bignum_cmp_uint(const bignum_t* a, uint x){
-	if (bignum_used_size(a) > 1) return 1;
-	if (a->arr[0] == x) return 0;
-	if (a->arr[0] > x) return 1;
-	return -1;
 }
 
 void bignum_from_string(bignum_t* dst, const char* s){
@@ -222,7 +239,7 @@ char* bignum_to_string(const bignum_t* x){
 
 	// reverse string
 	char* end = &start[10*x->size];
-	while (*end == '0' && end >= start) end--;
+	while (end >= start && *end == '0') end--;
 	if (start > end){ // x == 0
 		str[0] = '0';
 		str[1] = 0;
@@ -259,6 +276,25 @@ void bignum_sub(bignum_t* a, const bignum_t* b){
 	bignum_unsigned_sub(a, b);
 	a->sign = a->sign != sign;
 }
+void bignum_add_uint(bignum_t* a, uint b){
+	if (a->sign == false){
+		bignum_unsigned_add_uint(a, b);
+		return;
+	}
+	bool sign = a->sign;
+	bignum_unsigned_sub_uint(a, b);
+	a->sign = a->sign != sign;
+}
+void bignum_sub_uint(bignum_t* a, uint b){
+	if (a->sign == true){
+		bignum_unsigned_add_uint(a, b);
+		return;
+	}
+	bool sign = a->sign;
+	bignum_unsigned_sub_uint(a, b);
+	a->sign = a->sign != sign;
+}
+
 void bignum_mul(bignum_t* a, const bignum_t* b){
 	bignum_t* acc = create_bignum();
 	bignum_t* tmp = create_bignum();
@@ -266,27 +302,21 @@ void bignum_mul(bignum_t* a, const bignum_t* b){
 		bignum_set(tmp, a);
 		bignum_mul_uint(tmp, bignum_extract(b, i));
 		bignum_unsigned_add(acc, tmp);
-		bignum_shift_left(a, 32);
+		bignum_shift_left_uint(a, 32);
 	}
 	acc->sign = a->sign != b->sign;
-	// TODO: this feels hacky
-	free(a->arr);
-	*a = *acc;
-	free(acc);
+	bignum_move_and_free(a, acc);
 	free_bignum(tmp);
 }
-void bignum_div(bignum_t* a, const bignum_t* b){
-	if (bignum_unsigned_cmp(a, b) == -1){
-		bignum_set_uint(a, 0);
-	}
-	if (bignum_cmp_uint(a, 0) == 0){
-		return; // TODO: throw error?
+static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b){ // return div, leave mod in a
+	bignum_t* res = create_bignum();
+	if (bignum_unsigned_cmp_uint(a, 0) == 0){
+		return res; // TODO: throw error?
 	}
 
 	bool asign = a->sign;
 	bignum_t* tmp = create_bignum();
 	bignum_t* tmp2 = create_bignum();
-	bignum_t* res = create_bignum();
 
 	ulong btop = b->arr[bignum_used_size(b)-1];
 	unsigned int btop_pos = (bignum_used_size(b) - 1);
@@ -295,7 +325,7 @@ void bignum_div(bignum_t* a, const bignum_t* b){
 		unsigned int i = j - 1;
 
 		bignum_set(tmp, b);
-		bignum_shift_left(tmp, 32*i);
+		bignum_shift_left_uint(tmp, 32*i);
 
 		while (bignum_unsigned_cmp(a, tmp) > -1){
 			ulong A = ((ulong)bignum_extract(a, btop_pos+i+1) << 32) + bignum_extract(a, btop_pos+i);
@@ -308,7 +338,7 @@ void bignum_div(bignum_t* a, const bignum_t* b){
 			
 			// TODO: add shifted ulong directly, instead of through tmp2
 			bignum_set_uint(tmp2, d);
-			bignum_shift_left(tmp2, 32*i);
+			bignum_shift_left_uint(tmp2, 32*i);
 			bignum_unsigned_add(res, tmp2);
 		}
 	}
@@ -318,13 +348,93 @@ void bignum_div(bignum_t* a, const bignum_t* b){
 		bignum_unsigned_add_uint(res, 1);
 	}
 
-	
 	res->sign = asign != b->sign;
-	// TODO: this feels hacky
-	free(a->arr);
-	*a = *res;
-	free(res);
 	free_bignum(tmp);
 	free_bignum(tmp2);
+	return res;
+}
+void bignum_div(bignum_t* a, const bignum_t* b){
+	bignum_t* res = bignum_divmod(a, b);
+	bignum_move_and_free(a, res);
+}
+// TODO: test everything below here
+void bignum_mod(bignum_t* a, const bignum_t* b){
+	bignum_t* res = bignum_divmod(a, b);
+	free_bignum(res);
 }
 
+int bignum_cmp(const bignum_t* a, const bignum_t* b){ // returns 1 if a > b, 0 if a == b and -1 if a < b
+	int unsigned_cmp = bignum_unsigned_cmp(a, b);
+	if (unsigned_cmp == 0) return 0;
+	if (a->sign != b->sign){
+		if (a->sign) return -1; // a is negative
+		return 1; // b is negative
+	}
+	return a->sign ? -unsigned_cmp : unsigned_cmp; // flip if negative
+}
+int bignum_cmp_uint(const bignum_t* a, uint x){
+	if (bignum_used_size(a) > 1) return a->sign ? -1 : 1;
+	if (a->arr[0] == x) return 0;
+	if (a->arr[0] > x) return a->sign ? -1 : 1;
+	return a->sign ? 1 : -1;
+}
+
+void bignum_xor(bignum_t* a, const bignum_t* b){
+	unsigned int sz = (a->size > b->size) ? a->size : b->size;
+	for (unsigned int j = sz; j > 0; j--){
+		unsigned int i = j-1;
+		bignum_insert(a, i, bignum_extract(a, i) ^ bignum_extract(b, i));
+	}
+}
+void bignum_and(bignum_t* a, const bignum_t* b){
+	unsigned int sz = (a->size > b->size) ? a->size : b->size;
+	for (unsigned int j = sz; j > 0; j--){
+		unsigned int i = j-1;
+		bignum_insert(a, i, bignum_extract(a, i) & bignum_extract(b, i));
+	}
+}
+void bignum_or(bignum_t* a, const bignum_t* b){
+	unsigned int sz = (a->size > b->size) ? a->size : b->size;
+	for (unsigned int j = sz; j > 0; j--){
+		unsigned int i = j-1;
+		bignum_insert(a, i, bignum_extract(a, i) | bignum_extract(b, i));
+	}
+}
+
+bool bignum_trunc(bignum_t* a, unsigned int bitwidth, bool is_signed){
+	bool changed = false;
+	if (is_signed){
+		bitwidth--;
+		if (a->sign){
+			bignum_t* tmp = create_bignum();
+			bignum_set_uint(tmp, 1);
+			bignum_shift_left_uint(tmp, bitwidth);
+			if (bignum_unsigned_cmp(a, tmp) == 0){
+				return false;
+			}
+			free_bignum(tmp);
+		}
+	}
+
+	for (unsigned int i = 0; i < a->size; i++){
+		if (32*(i+1) <= bitwidth) continue;
+		if (32*i >= bitwidth){
+			changed |= a->arr[i];
+			a->arr[i] = 0;
+			continue;
+		}
+		uint mask = UINT32_MAX >> (32*i + 32 - bitwidth);
+		changed |= a->arr[i] & ~mask;
+		a->arr[i] &= mask;
+	}
+
+	if (!is_signed && a->sign){ // 2's complement
+		bignum_t* res = create_bignum();
+		bignum_set_uint(res, 1);
+		bignum_shift_left_uint(res, bitwidth);
+		bignum_sub(res, a);
+		bignum_move_and_free(a, res);
+		changed = true;
+	}
+	return changed;
+}

@@ -13,7 +13,7 @@ typedef struct llvm_typed_value_t {
 	llvm_typed_value_enum_t type;
 	const ast_datatype_t* ast_type; // nullable for POISON (when type cannot be deduced) and INT_CONST (when type isn't specified)
 	union {
-		unsigned long int_const;
+		bignum_t* int_const;
 		llvm_reg_t reg;
 	};
 } llvm_typed_value_t;
@@ -237,12 +237,6 @@ static void ast2llvm_alloca_stmt(const ast_stmt_t* stmt, var2reg_map_t* var2reg,
 	}
 }
 
-static unsigned long ulong_truncate(unsigned long x, unsigned int bitwidth){
-	if (bitwidth == 64) return x;
-	unsigned long mask = (1l << bitwidth) - 1;
-	return x & mask;
-}
-
 static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 	if (!val.ast_type) return POISON_VALUE;
 	llvm_reg_t out = llvm_add_inst(f, 
@@ -251,7 +245,7 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 			.icmp.cond = LLVM_ICMP_NE,
 			.icmp.type = ast_type_to_llvm_type(val.ast_type),
 			.icmp.op1 = llvm_untype_value(val),
-			.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_INT_CONST, .int_const = 0}
+			.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_INT_CONST, .int_const = create_bignum() }
 		});
 	return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
 }
@@ -264,7 +258,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 	const char* warning_string = 0;
 	const ast_datatype_t* src_type = value.ast_type;
 
-	if (value.type == LLVM_TVALUE_POISON)
+	if (value.type == LLVM_TVALUE_POISON && src_type == 0)
 		goto no_cast;
 
 	if (value.type == LLVM_TVALUE_INT_CONST && src_type == 0){
@@ -276,14 +270,12 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 				return LLVM_TYPED_POISON(trgt_type);
 			case AST_DATATYPE_INTEGRAL:
 			{
-				unsigned long newval = ulong_truncate(value.int_const, trgt_type->integral.bitwidth);
-				if (newval != value.int_const){
-					if (trgt_type->integral.signed_)
-						printf_warning(loc, "casting integer constant '%lu' to type '%s' changes value to '%li'", value.int_const, trgt_type->name, (long)newval);
-					else
-						printf_warning(loc, "casting integer constant '%lu' to type '%s' changes value to '%lu'", value.int_const, trgt_type->name, newval);
+				bool changed = bignum_trunc(value.int_const, trgt_type->integral.bitwidth, trgt_type->integral.signed_);
+				if (changed){
+					char* str = bignum_to_string(value.int_const);
+					printf_warning(loc, "casting integer constant to type '%s' changes value to '%s'", trgt_type->name, str);
+					free(str);
 				}
-				value.int_const = newval;
 				goto no_cast;
 			}
 		}
@@ -463,53 +455,56 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 }
 
 static llvm_typed_value_t ast2llvm_int_const_binop(ast_expr_binop_enum_t op, llvm_typed_value_t left_operand, llvm_typed_value_t right_operand){
-       // NOTE: both left_operand and right_operand must be LLVM_TVALUE_INT_CONST and have .ast_type == 0
-       switch (op){
-               case AST_EXPR_BINOP_ADD:
-                       left_operand.int_const = left_operand.int_const + right_operand.int_const; break;
-               case AST_EXPR_BINOP_SUB:
-                       left_operand.int_const = left_operand.int_const - right_operand.int_const; break;
-               case AST_EXPR_BINOP_MUL:
-                       left_operand.int_const = left_operand.int_const * right_operand.int_const; break;
-               case AST_EXPR_BINOP_DIV: // TODO: signedness ?
-                       left_operand.int_const = left_operand.int_const / right_operand.int_const; break;
-               case AST_EXPR_BINOP_MOD: // TODO: signedness ?
-                       left_operand.int_const = left_operand.int_const % right_operand.int_const; break;
-               case AST_EXPR_BINOP_LT: // TODO: signedness ?
-                       left_operand.int_const = left_operand.int_const < right_operand.int_const; break;
-               case AST_EXPR_BINOP_GT: // TODO: signedness ?
-                       left_operand.int_const = left_operand.int_const > right_operand.int_const; break;
-               case AST_EXPR_BINOP_LE: // TODO: signedness ?
-                       left_operand.int_const = left_operand.int_const <= right_operand.int_const; break;
-               case AST_EXPR_BINOP_GE: // TODO: signedness ?
-                       left_operand.int_const = left_operand.int_const >= right_operand.int_const; break;
-               case AST_EXPR_BINOP_EQ:
-                       left_operand.int_const = left_operand.int_const == right_operand.int_const; break;
-               case AST_EXPR_BINOP_NE:
-                       left_operand.int_const = left_operand.int_const != right_operand.int_const; break;
-               case AST_EXPR_BINOP_SHL:
-                       left_operand.int_const = left_operand.int_const << right_operand.int_const; break;
-               case AST_EXPR_BINOP_SHR:
-                       left_operand.int_const = left_operand.int_const >> right_operand.int_const; break;
-               case AST_EXPR_BINOP_BXOR:
-                       left_operand.int_const = left_operand.int_const ^ right_operand.int_const; break;
-               case AST_EXPR_BINOP_BAND:
-                       left_operand.int_const = left_operand.int_const & right_operand.int_const; break;
-               case AST_EXPR_BINOP_BOR:
-                       left_operand.int_const = left_operand.int_const | right_operand.int_const; break;
-               case AST_EXPR_BINOP_LAND:
-                       left_operand.int_const = left_operand.int_const || right_operand.int_const; break;
-               case AST_EXPR_BINOP_LOR:
-                       left_operand.int_const = left_operand.int_const && right_operand.int_const; break;
-       }
-       return left_operand;
+	// NOTE: both left_operand and right_operand must be LLVM_TVALUE_INT_CONST and have .ast_type == 0
+	// TODO: if one operand is typed, cast the other to same type first
+	// TODO: if result is typed, truncate it
+	switch (op){
+		case AST_EXPR_BINOP_ADD:
+			bignum_add(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_SUB:
+			bignum_sub(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_MUL:
+			bignum_mul(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_DIV:
+			bignum_div(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_MOD:
+			bignum_mod(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_LT:
+			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) < 0); break;
+		case AST_EXPR_BINOP_GT: 
+			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) > 0); break;
+		case AST_EXPR_BINOP_LE:
+			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) <= 0); break;
+		case AST_EXPR_BINOP_GE:
+			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) >= 0); break;
+		case AST_EXPR_BINOP_EQ:
+			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) == 0); break;
+		case AST_EXPR_BINOP_NE:
+			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) != 0); break;
+		case AST_EXPR_BINOP_SHL:
+			printf("<shift left unimplemented>\n"); exit(1); // TODO
+		case AST_EXPR_BINOP_SHR:
+		printf("<shift right unimplemented>\n"); exit(1); // TODO
+		case AST_EXPR_BINOP_BXOR:
+			bignum_xor(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_BAND:
+			bignum_and(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_BOR:
+			bignum_or(left_operand.int_const, right_operand.int_const); break;
+		case AST_EXPR_BINOP_LAND:
+			bignum_set_uint(left_operand.int_const, (bignum_cmp_uint(left_operand.int_const, 0)==0) && (bignum_cmp_uint(left_operand.int_const, 0)==0)); break;
+		case AST_EXPR_BINOP_LOR:
+			bignum_set_uint(left_operand.int_const, (bignum_cmp_uint(left_operand.int_const, 0)==0) || (bignum_cmp_uint(left_operand.int_const, 0)==0)); break;
+	}
+	free_bignum(right_operand.int_const);
+	return left_operand;
 }
 
 
 static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f){
 	switch (expr->type){
 		case AST_EXPR_CONST:
-			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=expr->constant.value, .ast_type=0 };
+			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=bignum_copy(expr->constant.value), .ast_type=0 };
 		case AST_EXPR_LVALUE:
 			return ast2llvm_read_lvalue(var2reg, expr->lvalue, expr->loc, f);
 		case AST_EXPR_FUNC_CALL:
@@ -602,29 +597,35 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_SUB,
 						.binop.type = optype,
-						.binop.first = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0 },
+						.binop.first = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=create_bignum() },
 						.binop.second = llvm_untype_value(operand)
 					};
 					break;
 				case AST_EXPR_UNOP_BNOT:
+				{
+					bignum_t* val = create_bignum();
+					bignum_set_uint(val, 1);
+					bignum_shift_left_uint(val, optype.int_bitwidth);
+					bignum_sub_uint(val, 1);
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_XOR,
 						.binop.type = optype,
-						.binop.first = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0xffffffff }, // TODO: use bitwidth of optype?
+						.binop.first = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=val },
 						.binop.second = llvm_untype_value(operand)
 					};
 					break;
+				}
 				case AST_EXPR_UNOP_LNOT:
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_ICMP, // TODO: make ast type 'bool' or zext to ast type
 						.icmp.type = optype,
 						.icmp.cond = LLVM_ICMP_EQ,
-						.icmp.op1 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=0 },
+						.icmp.op1 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=create_bignum() },
 						.icmp.op2 = llvm_untype_value(operand)
 					};
 					break;
 				case AST_EXPR_UNOP_DEREF:
-					printf_error(expr->loc, "cannot dereference value of type '%s'", operand.ast_type->name);
+					printf_error(expr->loc, "cannot dereference non-pointer value of type '%s'", operand.ast_type->name);
 					return LLVM_TYPED_POISON(0);
 			}
 			return LLVM_TYPED_REG(llvm_add_inst(f, inst), operand.ast_type);
@@ -695,17 +696,6 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			const ast_datatype_t* restype = left_operand.ast_type; // NOTE: types are assumed to be the same
 			bool signed_op = restype->integral.signed_; // NOTE: assuming AST_DATATYPE_INTEGRAL
 			llvm_type_t optype = ast_type_to_llvm_type(restype);
-
-			// catch constant int truncations // TODO: check this still works
-			if (left_operand.type == LLVM_TVALUE_INT_CONST && (left_operand.int_const != ulong_truncate(left_operand.int_const, optype.int_bitwidth))){
-				printf_warning(expr->loc, "using integer constant in binary operation '%s' with type '%s' truncates it's value from %lu to %lu",
-					ast_expr_binop_string(expr->binop.op), right_operand.ast_type->name, left_operand.int_const, ulong_truncate(left_operand.int_const, optype.int_bitwidth));
-				left_operand.int_const = ulong_truncate(left_operand.int_const, optype.int_bitwidth);
-			} else if (right_operand.type == LLVM_TVALUE_INT_CONST && (right_operand.int_const != ulong_truncate(right_operand.int_const, optype.int_bitwidth))){
-				printf_warning(expr->loc, "using integer constant in binary operation '%s' with type '%s' truncates it's value from %lu to %lu",
-					ast_expr_binop_string(expr->binop.op), left_operand.ast_type->name, right_operand.int_const, ulong_truncate(right_operand.int_const, optype.int_bitwidth));
-				right_operand.int_const = ulong_truncate(right_operand.int_const, optype.int_bitwidth);
-			}
 
 			llvm_inst_t inst = (llvm_inst_t){ // this preset holds for most of the operations
 				.binop.type = optype,
