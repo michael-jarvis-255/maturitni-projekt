@@ -928,6 +928,14 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 				llvm_typed_value_t val = ast2llvm_emit_expr(stmt->return_.val, var2reg, f);
 				if (val.type == LLVM_TVALUE_POISON && val.ast_type == 0)
 					return;
+				if (val.type == LLVM_TVALUE_INT_CONST && val.ast_type == 0){
+					bool err;
+					val = ast2llvm_cast(val, ast_func.return_type_ref, f, &err, stmt->loc);
+					if (err){
+						printf_error(stmt->loc, "invalid return of integer constant (expected type '%s')", ast_func.return_type_ref->name);
+						return;
+					}
+				}
 
 				if (!ast_datatype_eq(val.ast_type, ast_func.return_type_ref)){
 					printf_error(stmt->loc, "invalid return type '%s' (expected '%s')", val.ast_type->name, ast_func.return_type_ref->name);
