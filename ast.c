@@ -764,7 +764,9 @@ void current_context_insert(const char* name, ast_id_t* value){
 	ast_id_t* exists = context_get(ctx, name, 0);
 	if (exists){
 		printf_error(loc_from_ast_id(value), "name '%s' is already defined", name);
-		print_info(loc_from_ast_id(exists), "declared here"); // TODO: what if 'exists' is a built-in datatype? (like i32 or u64)
+		if (!loc_eq(loc_from_ast_id(exists), (loc_t){0})){ // if not built-in type
+			print_info(loc_from_ast_id(exists), "declared here");
+		}
 		free_ast_id(value);
 		return;
 	}

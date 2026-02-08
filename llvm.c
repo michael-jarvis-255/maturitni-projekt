@@ -151,6 +151,30 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			tprint(t, ", ptr ");
 			llvm_value_to_target(inst.store.ptr, t);
 			return;
+
+		// conversion operators
+		case LLVM_INST_ZEXT:
+			tprint(t, "zext ");
+			goto conversion_op;
+		case LLVM_INST_SEXT:
+			tprint(t, "sext ");
+			goto conversion_op;
+		case LLVM_INST_TRUNC:
+			tprint(t, "trunc ");
+			goto conversion_op;
+		case LLVM_INST_PTR_TO_INT:
+			tprint(t, "ptrtoint ");
+			goto conversion_op;
+		case LLVM_INST_INT_TO_PTR:
+			tprint(t, "inttoptr ");
+			goto conversion_op;
+		conversion_op:
+			llvm_type_to_target(inst.conversion.from, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.conversion.value, t);
+			tprint(t, " to ");
+			llvm_type_to_target(inst.conversion.to, t);
+			return;
 		
 		// other
 		case LLVM_INST_ICMP:
@@ -196,30 +220,6 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 				}
 			}
 			tprint(t, ")");
-			return;
-		case LLVM_INST_ZEXT:
-			tprint(t, "zext ");
-			llvm_type_to_target(inst.ext.from, t);
-			tprint(t, " ");
-			llvm_value_to_target(inst.ext.operand, t);
-			tprint(t, " to ");
-			llvm_type_to_target(inst.ext.to, t);
-			return;
-		case LLVM_INST_SEXT:
-			tprint(t, "sext ");
-			llvm_type_to_target(inst.ext.from, t);
-			tprint(t, " ");
-			llvm_value_to_target(inst.ext.operand, t);
-			tprint(t, " to ");
-			llvm_type_to_target(inst.ext.to, t);
-			return;
-		case LLVM_INST_TRUNC:
-			tprint(t, "trunc ");
-			llvm_type_to_target(inst.trunc.from, t);
-			tprint(t, " ");
-			llvm_value_to_target(inst.trunc.operand, t);
-			tprint(t, " to ");
-			llvm_type_to_target(inst.trunc.to, t);
 			return;
 		case LLVM_INST_ALLOCA:
 			tprint(t, "alloca ");
@@ -387,14 +387,12 @@ static void free_llvm_inst(llvm_inst_t inst){
 			break;
 		case LLVM_INST_SEXT:
 		case LLVM_INST_ZEXT:
-			free_llvm_type(inst.ext.from);
-			free_llvm_type(inst.ext.to);
-			free_llvm_value(inst.ext.operand);
-			break;
 		case LLVM_INST_TRUNC:
-			free_llvm_type(inst.trunc.from);
-			free_llvm_type(inst.trunc.to);
-			free_llvm_value(inst.trunc.operand);
+		case LLVM_INST_PTR_TO_INT:
+		case LLVM_INST_INT_TO_PTR:
+			free_llvm_type(inst.conversion.from);
+			free_llvm_type(inst.conversion.to);
+			free_llvm_value(inst.conversion.value);
 			break;
 		case LLVM_INST_ALLOCA:
 			free_llvm_type(inst.alloca.type);

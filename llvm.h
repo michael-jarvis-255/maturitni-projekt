@@ -98,13 +98,17 @@ typedef enum {
 	LLVM_INST_LOAD,
 	LLVM_INST_STORE,
 
+	// conversion operators
+	LLVM_INST_ZEXT,
+	LLVM_INST_SEXT,
+	LLVM_INST_TRUNC,
+	LLVM_INST_PTR_TO_INT,
+	LLVM_INST_INT_TO_PTR,
+
 	// other
 	LLVM_INST_ICMP,
 	LLVM_INST_PHI,
 	LLVM_INST_CALL,
-	LLVM_INST_ZEXT,
-	LLVM_INST_SEXT,
-	LLVM_INST_TRUNC,
 	LLVM_INST_ALLOCA,
 	LLVM_INST_EXTRACT_VALUE,
 	LLVM_INST_GET_ELEMENT_PTR,
@@ -157,15 +161,9 @@ typedef struct llvm_inst_t {
 			llvm_arg_list_t args;
 		} call;
 		struct {
-			llvm_type_t from;
-			llvm_type_t to;
-			llvm_value_t operand;
-		} ext;
-		struct {
-			llvm_type_t from;
-			llvm_type_t to;
-			llvm_value_t operand;
-		} trunc;
+			llvm_type_t from, to;
+			llvm_value_t value;
+		} conversion;
 		struct {
 			llvm_type_t type;
 		} alloca;
