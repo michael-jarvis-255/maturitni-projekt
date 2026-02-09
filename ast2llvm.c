@@ -676,53 +676,69 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return LLVM_TYPED_POISON(0);
 			}
 
-			// catch invalid types
-			for (unsigned int i=0; i < 2; i++){
-				const ast_datatype_t* type = (const ast_datatype_t*[2]){ left_operand.ast_type, right_operand.ast_type }[i];
-				if (type == 0) continue; // untyped integer constant
-				
-				switch (type->kind){
-					case AST_DATATYPE_STRUCTURED:
-						printf_error(expr->binop.left->loc, "struct type '%s' is not supported for binary operation '%s'", type->name, ast_expr_binop_string(expr->binop.op));
-						return LLVM_TYPED_POISON(0);
-					case AST_DATATYPE_FLOAT:
-						printf_error(expr->binop.left->loc, "floating point type '%s' is not yet supported for binary operation '%s'", type->name, ast_expr_binop_string(expr->binop.op)); // TODO
-						return LLVM_TYPED_POISON(0);
-					case AST_DATATYPE_POINTER:
-						printf_error(expr->binop.left->loc, "pointer type '%s' is not supported for binary operation '%s'", type->name, ast_expr_binop_string(expr->binop.op));
-						return LLVM_TYPED_POISON(0);
-					case AST_DATATYPE_INTEGRAL:
-						break; // okay
-				}
-			}
-
 			// catch untyped int constants
 			if (left_operand.type == LLVM_TVALUE_INT_CONST && left_operand.ast_type == 0 && right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
 				return ast2llvm_int_const_binop(expr->binop.op, left_operand, right_operand);
 			}
 
-			// if one operand is an untyped int const, try casting it to the type of the other operand
+			// type checks
+			bool err;
 			if (left_operand.type == LLVM_TVALUE_INT_CONST && left_operand.ast_type == 0){
-				bool err;
-				left_operand = ast2llvm_cast(left_operand, right_operand.ast_type, f, &err, expr->binop.left->loc);
-				if (err) {
-					printf_error(expr->loc, "integer constant and type '%s' is not supported binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
+				switch (right_operand.ast_type->kind){
+					case AST_DATATYPE_STRUCTURED:
+						printf_error(expr->binop.right->loc, "struct type '%s' is not supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
+						return LLVM_TYPED_POISON(0);
+					case AST_DATATYPE_POINTER:
+						printf_error(expr->binop.right->loc, "pointer type '%s' is not supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op)); // TODO: implement 'ptr + number' as indexing?
+						return LLVM_TYPED_POISON(0);
+					case AST_DATATYPE_FLOAT:
+						printf_error(expr->binop.right->loc, "floating point type '%s' is not (yet) supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op)); // TODO
+						return LLVM_TYPED_POISON(0);
+					case AST_DATATYPE_INTEGRAL:
+					{
+						left_operand = ast2llvm_cast(left_operand, right_operand.ast_type, f, &err, expr->binop.left->loc); // this should never fail
+						break;
+					}
+				}
+			}else switch (left_operand.ast_type->kind){
+				case AST_DATATYPE_STRUCTURED:
+					printf_error(expr->binop.left->loc, "struct type '%s' is not supported for binary operation '%s'", left_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
 					return LLVM_TYPED_POISON(0);
+				case AST_DATATYPE_POINTER:
+					printf_error(expr->binop.left->loc, "pointer type '%s' is not supported for binary operation '%s'", left_operand.ast_type->name, ast_expr_binop_string(expr->binop.op)); // TODO: implement 'ptr + number' as indexing?
+					return LLVM_TYPED_POISON(0);
+				case AST_DATATYPE_FLOAT:
+					printf_error(expr->binop.left->loc, "floating point type '%s' is not (yet) supported for binary operation '%s'", left_operand.ast_type->name, ast_expr_binop_string(expr->binop.op)); // TODO
+					return LLVM_TYPED_POISON(0);
+				case AST_DATATYPE_INTEGRAL:
+				{
+					if (right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
+						right_operand = ast2llvm_cast(right_operand, left_operand.ast_type, f, &err, expr->binop.right->loc); // this should never fail
+					} else switch (right_operand.ast_type->kind){
+						case AST_DATATYPE_STRUCTURED:
+							printf_error(expr->binop.right->loc, "struct type '%s' is not supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
+							return LLVM_TYPED_POISON(0);
+						case AST_DATATYPE_POINTER:
+							printf_error(expr->binop.right->loc, "pointer type '%s' is not supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op)); // TODO: implement 'ptr + number' as indexing?
+							return LLVM_TYPED_POISON(0);
+						case AST_DATATYPE_FLOAT:
+							printf_error(expr->binop.right->loc, "floating point type '%s' is not (yet) supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op)); // TODO
+							return LLVM_TYPED_POISON(0);
+						case AST_DATATYPE_INTEGRAL:
+						{
+							// both left and right are integral
+							if (left_operand.ast_type->integral.bitwidth > right_operand.ast_type->integral.bitwidth){
+								right_operand = ast2llvm_cast(right_operand, left_operand.ast_type, f, &err, expr->binop.right->loc);
+							}else{
+								left_operand = ast2llvm_cast(left_operand, right_operand.ast_type, f, &err, expr->binop.left->loc);
+							}
+							break;
+						}
+					}
 				}
 			}
-			if (right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
-				bool err;
-				right_operand = ast2llvm_cast(right_operand, left_operand.ast_type, f, &err, expr->binop.right->loc);
-				if (err) {
-					printf_error(expr->loc, "integer constant and type '%s' is not supported binary operation '%s'", left_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
-					return LLVM_TYPED_POISON(0);
-				}
-			}
-
-			// NOTE: here, both operands have type AST_DATATYPE_INTEGRAL
-			// catch mistyped operands
-			if (!ast_datatype_eq(left_operand.ast_type, right_operand.ast_type)){ // TODO: try implicit cast first
-				printf_error(expr->loc, "binary operation '%s' doesn't support differing types '%s' and '%s'", ast_expr_binop_string(expr->binop.op), left_operand.ast_type->name, right_operand.ast_type->name);
+			if (err) {
+				print_error(expr->loc, "inetrnal error");
 				return LLVM_TYPED_POISON(0);
 			}
 
