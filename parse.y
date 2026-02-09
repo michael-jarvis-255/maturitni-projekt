@@ -10,7 +10,7 @@
 	int yylex ();
 %}
 
-%token <expr> TK_INT "integer"
+%token <expr> TK_NUMBER "number"
 %token <str> TK_STRING "string"
 %token <name> TK_NAME "name"
 %token <var_ref> TK_VAR "variable name"
@@ -76,7 +76,7 @@ name:
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0: // TODO: unary oparations
-	TK_INT		{ $$ = $1; }
+	TK_NUMBER	{ $$ = $1; }
 |	lvalue		{ $$ = create_ast_expr_lvalue(@$, $1); }
 |	function_call
 |	'(' exp ')'	{ $$ = $2; }

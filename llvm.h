@@ -21,7 +21,7 @@ typedef enum {
 typedef struct llvm_type_t {
 	llvm_type_enum_t type;
 	union {
-		unsigned int int_bitwidth; // TODO: rename to just 'bitwidth'
+		unsigned int bitwidth;
 		struct {
 			unsigned int member_count;
 			struct llvm_type_t* member_types;
@@ -29,10 +29,11 @@ typedef struct llvm_type_t {
 	};
 } llvm_type_t;
 
-#define LLVM_I1 ((llvm_type_t){.type=LLVM_TYPE_INTEGRAL,.int_bitwidth=1})
+#define LLVM_TYPE_I1 ((llvm_type_t){.type=LLVM_TYPE_INTEGRAL,.bitwidth=1})
 
 typedef enum {
 	LLVM_VALUE_INT_CONST,
+	LLVM_VALUE_DOUBLE_CONST,
 	LLVM_VALUE_REG,
 	LLVM_VALUE_UNDEF,
 	LLVM_VALUE_POISON,
@@ -42,6 +43,7 @@ typedef struct llvm_value_t {
 	llvm_value_enum_t type;
 	union {
 		bignum_t* int_const;
+		double double_const;
 		llvm_reg_t reg;
 	};
 } llvm_value_t;
@@ -113,6 +115,8 @@ typedef enum {
 	LLVM_INST_SINT_TO_FLOAT,
 	LLVM_INST_FLOAT_TO_UINT,
 	LLVM_INST_FLOAT_TO_SINT,
+	LLVM_INST_FPEXT,
+	LLVM_INST_FPTRUNC,
 
 	// other
 	LLVM_INST_ICMP,

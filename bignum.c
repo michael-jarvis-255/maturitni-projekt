@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <math.h>
 
 typedef uint64_t ulong;
 typedef uint32_t uint;
@@ -437,4 +438,12 @@ bool bignum_trunc(bignum_t* a, unsigned int bitwidth, bool is_signed){
 		changed = true;
 	}
 	return changed;
+}
+
+double bignum_to_double(const bignum_t* x){
+	double res = 0;
+	for (unsigned int i=0; i < x->size; i++){
+		res += ldexp((double)x->arr[i], i*32);
+	}
+	return res;
 }

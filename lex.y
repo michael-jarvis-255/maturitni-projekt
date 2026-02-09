@@ -26,10 +26,6 @@
 %x comment
 %x string
 
-DIGIT [0-9]
-ID_START [a-zA-Z_]
-ID_CHAR [0-9a-zA-Z_]
-
 %%
 
 \/\/.*$		update_yylloc(yyleng);
@@ -58,8 +54,9 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 \<\<	update_yylloc(yyleng); return TK_SHL;
 \-\>	update_yylloc(yyleng); return TK_ARROW;
 
-{DIGIT}+				update_yylloc(yyleng); bignum_t* num = create_bignum(); bignum_from_string(num, yytext); yylval.expr = create_ast_expr_const(yylloc, num); return TK_INT;
-{ID_START}{ID_CHAR}*	{ 
+[0-9]+				update_yylloc(yyleng); bignum_t* num = create_bignum(); bignum_from_string(num, yytext); yylval.expr = create_ast_expr_int_const(yylloc, num); return TK_NUMBER;
+([0-9]*\.)?[0-9]+([eE]-?[0-9]+)?	update_yylloc(yyleng); double x; sscanf(yytext, "%lf", &x); yylval.expr = create_ast_expr_double_const(yylloc, x); return TK_NUMBER;
+[a-zA-Z_][0-9a-zA-Z_]*	{ 
 							update_yylloc(yyleng);
 							char* name = malloc(yyleng+1);
 							strncpy(name, yytext, yyleng);

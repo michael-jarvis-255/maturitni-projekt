@@ -52,10 +52,18 @@ __attribute__ ((format (printf, 2, 3))) static void tprintf(print_target_t* t, c
 static void llvm_type_to_target(const llvm_type_t type, print_target_t* t){
 	switch (type.type){
 		case LLVM_TYPE_INTEGRAL:
-			tprintf(t, "i%u", type.int_bitwidth);
+			tprintf(t, "i%u", type.bitwidth);
 			break;
 		case LLVM_TYPE_FLOAT:
-			tprintf(t, "f%u", type.int_bitwidth);
+			switch (type.bitwidth){
+				case 16: tprint(t, "half"); break;
+				case 32: tprint(t, "float"); break;
+				case 64: tprint(t, "double"); break;
+				case 80: tprint(t, "x86_fp80"); break;
+				case 128: tprint(t, "fp128"); break;
+				default:
+					puts("internal error"); exit(1);
+			}
 			break;
 		case LLVM_TYPE_STRUCT:
 			tprint(t, "{ ");
@@ -90,6 +98,9 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 			free(str);
 			break;
 		}
+		case LLVM_VALUE_DOUBLE_CONST:
+			tprintf(t, "%#016lx", *(unsigned long*)&val.double_const);
+			break;
 	}
 }
 
@@ -146,8 +157,10 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 		case LLVM_INST_INT_TO_PTR: tprint(t, "inttoptr "); goto conversion_op;
 		case LLVM_INST_UINT_TO_FLOAT: tprint(t, "uitofp "); goto conversion_op;
 		case LLVM_INST_SINT_TO_FLOAT: tprint(t, "sitofp "); goto conversion_op;
-		case LLVM_INST_FLOAT_TO_UINT: tprint(t, "fptoui "); goto conversion_op;
-		case LLVM_INST_FLOAT_TO_SINT: tprint(t, "fptosi "); goto conversion_op;
+		case LLVM_INST_FLOAT_TO_UINT: tprint(t, "fptoui "); goto conversion_op; // TODO: use saturating intrinsic instead?
+		case LLVM_INST_FLOAT_TO_SINT: tprint(t, "fptosi "); goto conversion_op; // TODO: use saturating intrinsic instead?
+		case LLVM_INST_FPEXT: tprint(t, "fpext "); goto conversion_op;
+		case LLVM_INST_FPTRUNC: tprint(t, "fptrunc "); goto conversion_op;
 		conversion_op:
 			llvm_type_to_target(inst.conversion.from, t);
 			tprint(t, " ");
@@ -246,7 +259,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 		case LLVM_INST_FNEG:
 			tprint(t, "fsub ");
 			llvm_type_to_target(inst.fneg.type, t);
-			tprint(t, " 0, ");
+			tprint(t, " 0.0, ");
 			llvm_value_to_target(inst.fneg.value, t);
 			return;
 	}
@@ -346,6 +359,7 @@ static void free_llvm_value(llvm_value_t value){
 		case LLVM_VALUE_REG:
 		case LLVM_VALUE_POISON:
 		case LLVM_VALUE_UNDEF:
+		case LLVM_VALUE_DOUBLE_CONST:
 			break;
 	}
 }
@@ -406,6 +420,8 @@ static void free_llvm_inst(llvm_inst_t inst){
 		case LLVM_INST_SINT_TO_FLOAT:
 		case LLVM_INST_FLOAT_TO_UINT:
 		case LLVM_INST_FLOAT_TO_SINT:
+		case LLVM_INST_FPEXT:
+		case LLVM_INST_FPTRUNC:
 			free_llvm_type(inst.conversion.from);
 			free_llvm_type(inst.conversion.to);
 			free_llvm_value(inst.conversion.value);

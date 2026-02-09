@@ -5,6 +5,7 @@
 
 typedef enum {
 	LLVM_TVALUE_INT_CONST = LLVM_VALUE_INT_CONST,
+	LLVM_TVALUE_DOUBLE_CONST = LLVM_VALUE_DOUBLE_CONST,
 	LLVM_TVALUE_REG = LLVM_VALUE_REG,
 	LLVM_TVALUE_POISON = LLVM_VALUE_POISON,
 } llvm_typed_value_enum_t;
@@ -14,6 +15,7 @@ typedef struct llvm_typed_value_t {
 	const ast_datatype_t* ast_type; // nullable for POISON (when type cannot be deduced) and INT_CONST (when type isn't specified)
 	union {
 		bignum_t* int_const;
+		double double_const;
 		llvm_reg_t reg;
 	};
 } llvm_typed_value_t;
@@ -27,8 +29,6 @@ create_list_type_impl(llvm_typed_value, false)
 #define LLVM_TYPED_POISON(t) ((llvm_typed_value_t){ .type=LLVM_TVALUE_POISON, .ast_type=t })
 #define LLVM_TYPED_REG(r, t) ((llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .reg=r, .ast_type=t })
 #define POISON_VALUE ((llvm_value_t){ .type=LLVM_VALUE_POISON })
-#define LLVM_TYPE_I1 ((llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=1 })
-#define LLVM_INT_CONST(x) ((llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=x })
 
 static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
 	return (llvm_label_t){ .idx = f->blocks.len - 1 };
@@ -45,6 +45,10 @@ static inline llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 		case LLVM_TVALUE_INT_CONST:
 			v.type = LLVM_VALUE_INT_CONST;
 			v.int_const = tv.int_const;
+			break;
+		case LLVM_TVALUE_DOUBLE_CONST:
+			v.type = LLVM_VALUE_DOUBLE_CONST;
+			v.double_const = tv.double_const;
 			break;
 		case LLVM_TVALUE_REG:
 			v.type = LLVM_VALUE_REG;
@@ -93,9 +97,9 @@ static llvm_reg_t llvm_add_inst(llvm_function_t* f, llvm_inst_t inst){
 static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	switch (t->kind){
 		case AST_DATATYPE_FLOAT:
-			return (llvm_type_t){ .type=LLVM_TYPE_FLOAT };
+			return (llvm_type_t){ .type=LLVM_TYPE_FLOAT, .bitwidth=t->floating.bitwidth };
 		case AST_DATATYPE_INTEGRAL:
-			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .int_bitwidth=t->integral.bitwidth };
+			return (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .bitwidth=t->integral.bitwidth };
 		case AST_DATATYPE_STRUCTURED:
 		{
 			llvm_type_t type = (llvm_type_t){
@@ -240,16 +244,32 @@ static void ast2llvm_alloca_stmt(const ast_stmt_t* stmt, var2reg_map_t* var2reg,
 }
 
 static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
-	if (!val.ast_type) return POISON_VALUE;
-	llvm_reg_t out = llvm_add_inst(f, 
-		(llvm_inst_t){
-			.type = LLVM_INST_ICMP,
-			.icmp.cond = LLVM_ICMP_NE,
-			.icmp.type = ast_type_to_llvm_type(val.ast_type),
-			.icmp.op1 = llvm_untype_value(val),
-			.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_INT_CONST, .int_const = create_bignum() }
-		});
-	return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
+	switch (val.type){
+		case LLVM_TVALUE_INT_CONST: // TODO
+		case LLVM_TVALUE_DOUBLE_CONST: // TODO
+		case LLVM_TVALUE_POISON:
+			return POISON_VALUE;
+		case LLVM_TVALUE_REG:
+			switch (val.ast_type->kind){
+				case AST_DATATYPE_POINTER: // TODO
+				case AST_DATATYPE_STRUCTURED: // TODO
+				case AST_DATATYPE_FLOAT: // TODO
+					return POISON_VALUE;
+				case AST_DATATYPE_INTEGRAL:
+				{	
+					llvm_reg_t out = llvm_add_inst(f, 
+					(llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = LLVM_ICMP_NE,
+						.icmp.type = ast_type_to_llvm_type(val.ast_type),
+						.icmp.op1 = llvm_untype_value(val),
+						.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_INT_CONST, .int_const = create_bignum() }
+					});
+					return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
+				}
+			}
+	}
+	puts("internal error"); exit(1);
 }
 
 // if err == 0, print an error if cannot cast
@@ -266,7 +286,14 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 	if (value.type == LLVM_TVALUE_INT_CONST && src_type == 0){
 		switch (trgt_type->kind){
 			case AST_DATATYPE_POINTER: // TODO
-			case AST_DATATYPE_FLOAT: // TODO
+				goto error;
+			case AST_DATATYPE_FLOAT:
+			{
+				double x = bignum_to_double(value.int_const);
+				free_bignum(value.int_const);
+				value = (llvm_typed_value_t){ .type=LLVM_TVALUE_DOUBLE_CONST, .double_const=x, .ast_type=trgt_type };
+				goto no_cast;
+			}
 			case AST_DATATYPE_STRUCTURED:
 				if (err){
 					*err = true;
@@ -321,6 +348,27 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 		case AST_DATATYPE_FLOAT:
 			switch (trgt_type->kind){
 				case AST_DATATYPE_FLOAT:
+					if (src_type->floating.bitwidth < trgt_type->floating.bitwidth){
+						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+							.type = LLVM_INST_FPEXT,
+							.conversion.from = ast_type_to_llvm_type(src_type),
+							.conversion.to = ast_type_to_llvm_type(trgt_type),	
+							.conversion.value = llvm_untype_value(value)
+						});
+						value = LLVM_TYPED_REG(reg, trgt_type);
+						goto no_cast;
+					}
+					if (src_type->floating.bitwidth > trgt_type->floating.bitwidth){
+						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+							.type = LLVM_INST_FPTRUNC,
+							.conversion.from = ast_type_to_llvm_type(src_type),
+							.conversion.to = ast_type_to_llvm_type(trgt_type),	
+							.conversion.value = llvm_untype_value(value)
+						});
+						value = LLVM_TYPED_REG(reg, trgt_type);
+						warning_string = "floating point truncation";
+						goto implicit_warning;
+					}
 					goto no_cast;
 				case AST_DATATYPE_POINTER:
 				case AST_DATATYPE_STRUCTURED:
@@ -560,8 +608,10 @@ static llvm_typed_value_t ast2llvm_int_const_binop(ast_expr_binop_enum_t op, llv
 
 static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f){
 	switch (expr->type){
-		case AST_EXPR_CONST:
-			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=bignum_copy(expr->constant.value), .ast_type=0 };
+		case AST_EXPR_INT_CONST:
+			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=bignum_copy(expr->int_constant), .ast_type=0 };
+		case AST_EXPR_DOUBLE_CONST:
+			return (llvm_typed_value_t){ .type=LLVM_TVALUE_DOUBLE_CONST, .double_const=expr->double_constant, .ast_type=&context_get(&top_level_context, "f64", (void*)0)->type_ };
 		case AST_EXPR_LVALUE:
 			return ast2llvm_read_lvalue(var2reg, expr->lvalue, expr->loc, f);
 		case AST_EXPR_FUNC_CALL:
@@ -679,7 +729,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				{
 					bignum_t* val = create_bignum();
 					bignum_set_uint(val, 1);
-					bignum_shift_left_uint(val, optype.int_bitwidth);
+					bignum_shift_left_uint(val, optype.bitwidth);
 					bignum_sub_uint(val, 1);
 					inst = (llvm_inst_t){
 						.type = LLVM_INST_XOR,
@@ -843,7 +893,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						out = llvm_add_inst(f,
 							(llvm_inst_t){
 								.type = LLVM_INST_ZEXT,
-								.conversion.from = LLVM_I1,
+								.conversion.from = LLVM_TYPE_I1,
 								.conversion.to = optype,
 								.conversion.value = (llvm_value_t){.type=LLVM_VALUE_REG, .reg=out},
 							});
@@ -897,7 +947,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				out = llvm_add_inst(f,
 					(llvm_inst_t){
 						.type = LLVM_INST_ZEXT,
-						.conversion.from = LLVM_I1,
+						.conversion.from = LLVM_TYPE_I1,
 						.conversion.to = optype,
 						.conversion.value = (llvm_value_t){.type=LLVM_VALUE_REG, .reg=out},
 					});

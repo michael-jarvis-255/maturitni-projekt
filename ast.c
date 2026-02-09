@@ -203,11 +203,18 @@ static inline loc_t loc_from_ast_id(ast_id_t* id){
 	exit(1);
 }
 
-ast_expr_t create_ast_expr_const(loc_t loc, bignum_t* value){
+ast_expr_t create_ast_expr_int_const(loc_t loc, bignum_t* value){
 	return (ast_expr_t){
-		.type = AST_EXPR_CONST,
+		.type = AST_EXPR_INT_CONST,
 		.loc = loc,
-		.constant.value = value
+		.int_constant = value
+	};
+}
+ast_expr_t create_ast_expr_double_const(loc_t loc, double value){
+	return (ast_expr_t){
+		.type = AST_EXPR_DOUBLE_CONST,
+		.loc = loc,
+		.double_constant = value
 	};
 }
 ast_expr_t create_ast_expr_lvalue(loc_t loc, ast_lvalue_t lvalue){
@@ -266,8 +273,10 @@ void free_ast_expr(ast_expr_t* exp){
 }
 void free_ast_expr_v(ast_expr_t exp){
 	switch (exp.type){
-		case AST_EXPR_CONST:
-			free_bignum(exp.constant.value);
+		case AST_EXPR_INT_CONST:
+			free_bignum(exp.int_constant);
+			break;
+		case AST_EXPR_DOUBLE_CONST:
 			break;
 		case AST_EXPR_REF:
 			free_ast_lvalue_v(exp.ref.lvalue);
@@ -309,13 +318,16 @@ static void print_ast_lvalue(ast_lvalue_t lvalue){
 
 void print_ast_expr(const ast_expr_t* exp){
 	switch (exp->type){
-		case AST_EXPR_CONST:
+		case AST_EXPR_INT_CONST:
 		{
-			char* str = bignum_to_string(exp->constant.value);
+			char* str = bignum_to_string(exp->int_constant);
 			printf("%s", str);
 			free(str);
 			return;
 		}
+		case AST_EXPR_DOUBLE_CONST:
+			printf("%E", exp->double_constant);
+			return;
 		case AST_EXPR_LVALUE:
 			print_ast_lvalue(exp->lvalue);
 			return;
