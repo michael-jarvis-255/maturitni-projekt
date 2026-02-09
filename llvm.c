@@ -96,45 +96,31 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 	switch (inst.type){
 		// binary operations
-		case LLVM_INST_ADD:
-			tprint(t, "add ");
-			goto binary_op;
-		case LLVM_INST_SUB:
-			tprint(t, "sub ");
-			goto binary_op;
-		case LLVM_INST_MUL:
-			tprint(t, "mul ");
-			goto binary_op;
-		case LLVM_INST_UDIV:
-			tprint(t, "udiv ");
-			goto binary_op;
-		case LLVM_INST_SDIV:
-			tprint(t, "sdiv ");
-			goto binary_op;
-		case LLVM_INST_UREM:
-			tprint(t, "urem ");
-			goto binary_op;
-		case LLVM_INST_SREM:
-			tprint(t, "srem ");
-			goto binary_op;
-		case LLVM_INST_SHL:
-			tprint(t, "shl ");
-			goto binary_op;
-		case LLVM_INST_LSHR:
-			tprint(t, "lshr ");
-			goto binary_op;
-		case LLVM_INST_ASHR:
-			tprint(t, "ashr ");
-			goto binary_op;
-		case LLVM_INST_AND:
-			tprint(t, "and ");
-			goto binary_op;
-		case LLVM_INST_OR:
-			tprint(t, "or ");
-			goto binary_op;
-		case LLVM_INST_XOR:
-			tprint(t, "xor ");
-			goto binary_op;
+		case LLVM_INST_ADD: tprint(t, "add "); goto binary_op;
+		case LLVM_INST_SUB: tprint(t, "sub "); goto binary_op;
+		case LLVM_INST_MUL: tprint(t, "mul "); goto binary_op;
+		case LLVM_INST_UDIV: tprint(t, "udiv "); goto binary_op;
+		case LLVM_INST_SDIV: tprint(t, "sdiv "); goto binary_op;
+		case LLVM_INST_UREM: tprint(t, "urem "); goto binary_op;
+		case LLVM_INST_SREM: tprint(t, "srem "); goto binary_op;
+		case LLVM_INST_SHL: tprint(t, "shl "); goto binary_op;
+		case LLVM_INST_LSHR: tprint(t, "lshr "); goto binary_op;
+		case LLVM_INST_ASHR: tprint(t, "ashr "); goto binary_op;
+		case LLVM_INST_AND: tprint(t, "and "); goto binary_op;
+		case LLVM_INST_OR: tprint(t, "or "); goto binary_op;
+		case LLVM_INST_XOR: tprint(t, "xor "); goto binary_op;
+		case LLVM_INST_FADD: tprint(t, "fadd "); goto binary_op;
+		case LLVM_INST_FSUB: tprint(t, "fsub "); goto binary_op;
+		case LLVM_INST_FMUL: tprint(t, "fmul "); goto binary_op;
+		case LLVM_INST_FDIV: tprint(t, "fdiv "); goto binary_op;
+		case LLVM_INST_FREM: tprint(t, "frem "); goto binary_op;
+		binary_op:
+			llvm_type_to_target(inst.binop.type, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.binop.first, t);
+			tprint(t, ", ");
+			llvm_value_to_target(inst.binop.second, t);
+			return;
 		
 		// memory access
 		case LLVM_INST_LOAD:
@@ -153,21 +139,15 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			return;
 
 		// conversion operators
-		case LLVM_INST_ZEXT:
-			tprint(t, "zext ");
-			goto conversion_op;
-		case LLVM_INST_SEXT:
-			tprint(t, "sext ");
-			goto conversion_op;
-		case LLVM_INST_TRUNC:
-			tprint(t, "trunc ");
-			goto conversion_op;
-		case LLVM_INST_PTR_TO_INT:
-			tprint(t, "ptrtoint ");
-			goto conversion_op;
-		case LLVM_INST_INT_TO_PTR:
-			tprint(t, "inttoptr ");
-			goto conversion_op;
+		case LLVM_INST_ZEXT: tprint(t, "zext "); goto conversion_op;
+		case LLVM_INST_SEXT: tprint(t, "sext "); goto conversion_op;
+		case LLVM_INST_TRUNC: tprint(t, "trunc "); goto conversion_op;
+		case LLVM_INST_PTR_TO_INT: tprint(t, "ptrtoint "); goto conversion_op;
+		case LLVM_INST_INT_TO_PTR: tprint(t, "inttoptr "); goto conversion_op;
+		case LLVM_INST_UINT_TO_FLOAT: tprint(t, "uitofp "); goto conversion_op;
+		case LLVM_INST_SINT_TO_FLOAT: tprint(t, "sitofp "); goto conversion_op;
+		case LLVM_INST_FLOAT_TO_UINT: tprint(t, "fptoui "); goto conversion_op;
+		case LLVM_INST_FLOAT_TO_SINT: tprint(t, "fptosi "); goto conversion_op;
 		conversion_op:
 			llvm_type_to_target(inst.conversion.from, t);
 			tprint(t, " ");
@@ -196,6 +176,30 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_value_to_target(inst.icmp.op1, t);
 			tprint(t, ", ");
 			llvm_value_to_target(inst.icmp.op2, t);
+			return;
+		case LLVM_INST_FCMP:
+			tprint(t, "fcmp ");
+			switch (inst.fcmp.cond){
+				case LLVM_FCMP_TRUE: tprint(t, "true "); break;
+				case LLVM_FCMP_FALSE: tprint(t, "false "); break;
+				case LLVM_FCMP_OEQ: tprint(t, "oeq "); break;
+				case LLVM_FCMP_UEQ: tprint(t, "ueq "); break;
+				case LLVM_FCMP_ONE: tprint(t, "one "); break;
+				case LLVM_FCMP_UNE: tprint(t, "une "); break;
+				case LLVM_FCMP_OGT: tprint(t, "ogt "); break;
+				case LLVM_FCMP_UGT: tprint(t, "ugt "); break;
+				case LLVM_FCMP_OGE: tprint(t, "oge "); break;
+				case LLVM_FCMP_UGE: tprint(t, "uge "); break;
+				case LLVM_FCMP_OLT: tprint(t, "olt "); break;
+				case LLVM_FCMP_ULT: tprint(t, "ult "); break;
+				case LLVM_FCMP_OLE: tprint(t, "ole "); break;
+				case LLVM_FCMP_ULE: tprint(t, "ule "); break;
+			}
+			llvm_type_to_target(inst.fcmp.type, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.fcmp.op1, t);
+			tprint(t, ", ");
+			llvm_value_to_target(inst.fcmp.op2, t);
 			return;
 		case LLVM_INST_PHI:
 			tprint(t, "phi ");
@@ -239,15 +243,13 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_value_to_target(inst.getelementptr.ptr, t);
 			tprintf(t, ", i32 0, i32 %u", inst.getelementptr.member_idx);
 			return;
+		case LLVM_INST_FNEG:
+			tprint(t, "fsub ");
+			llvm_type_to_target(inst.fneg.type, t);
+			tprint(t, " 0, ");
+			llvm_value_to_target(inst.fneg.value, t);
+			return;
 	}
-
-binary_op:
-	llvm_type_to_target(inst.binop.type, t);
-	tprint(t, " ");
-	llvm_value_to_target(inst.binop.first, t);
-	tprint(t, ", ");
-	llvm_value_to_target(inst.binop.second, t);
-	return;
 }
 
 static void llvm_term_inst_to_target(const llvm_term_inst_t inst, print_target_t* t){
@@ -363,6 +365,11 @@ static void free_llvm_inst(llvm_inst_t inst){
 		case LLVM_INST_AND:
 		case LLVM_INST_OR:
 		case LLVM_INST_XOR:
+		case LLVM_INST_FADD:
+		case LLVM_INST_FSUB:
+		case LLVM_INST_FMUL:
+		case LLVM_INST_FDIV:
+		case LLVM_INST_FREM:
 			free_llvm_type(inst.binop.type);
 			free_llvm_value(inst.binop.first);
 			free_llvm_value(inst.binop.second);
@@ -381,6 +388,11 @@ static void free_llvm_inst(llvm_inst_t inst){
 			free_llvm_value(inst.icmp.op1);
 			free_llvm_value(inst.icmp.op2);
 			break;
+		case LLVM_INST_FCMP:
+			free_llvm_type(inst.fcmp.type);
+			free_llvm_value(inst.fcmp.op1);
+			free_llvm_value(inst.fcmp.op2);
+			break;
 		case LLVM_INST_PHI:
 			free_llvm_type(inst.phi.type);
 			for (unsigned int i=0; i < inst.phi.count; i++) free_llvm_value(inst.phi.values[i]);
@@ -390,6 +402,10 @@ static void free_llvm_inst(llvm_inst_t inst){
 		case LLVM_INST_TRUNC:
 		case LLVM_INST_PTR_TO_INT:
 		case LLVM_INST_INT_TO_PTR:
+		case LLVM_INST_UINT_TO_FLOAT:
+		case LLVM_INST_SINT_TO_FLOAT:
+		case LLVM_INST_FLOAT_TO_UINT:
+		case LLVM_INST_FLOAT_TO_SINT:
 			free_llvm_type(inst.conversion.from);
 			free_llvm_type(inst.conversion.to);
 			free_llvm_value(inst.conversion.value);
@@ -410,6 +426,10 @@ static void free_llvm_inst(llvm_inst_t inst){
 			for (unsigned int i = 0; i < inst.call.args.len; i++)
 				free_llvm_value(inst.call.args.data[i].val);
 			shallow_free_llvm_arg_list(&inst.call.args);
+			break;
+		case LLVM_INST_FNEG:
+			free_llvm_type(inst.fneg.type);
+			free_llvm_value(inst.fneg.value);
 			break;
 	}
 }

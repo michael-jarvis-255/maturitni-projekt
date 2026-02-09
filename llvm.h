@@ -93,6 +93,11 @@ typedef enum {
 	LLVM_INST_AND,
 	LLVM_INST_OR,
 	LLVM_INST_XOR,
+	LLVM_INST_FADD,
+	LLVM_INST_FSUB,
+	LLVM_INST_FMUL,
+	LLVM_INST_FDIV,
+	LLVM_INST_FREM,
 
 	// memory access
 	LLVM_INST_LOAD,
@@ -104,14 +109,20 @@ typedef enum {
 	LLVM_INST_TRUNC,
 	LLVM_INST_PTR_TO_INT,
 	LLVM_INST_INT_TO_PTR,
+	LLVM_INST_UINT_TO_FLOAT,
+	LLVM_INST_SINT_TO_FLOAT,
+	LLVM_INST_FLOAT_TO_UINT,
+	LLVM_INST_FLOAT_TO_SINT,
 
 	// other
 	LLVM_INST_ICMP,
+	LLVM_INST_FCMP,
 	LLVM_INST_PHI,
 	LLVM_INST_CALL,
 	LLVM_INST_ALLOCA,
 	LLVM_INST_EXTRACT_VALUE,
 	LLVM_INST_GET_ELEMENT_PTR,
+	LLVM_INST_FNEG, // note: not a real llvm instruction
 } llvm_inst_enum_t;
 
 typedef enum {
@@ -126,6 +137,23 @@ typedef enum {
 	LLVM_ICMP_SLT,
 	LLVM_ICMP_SLE,
 } llvm_icmp_enum_t;
+
+typedef enum {
+	LLVM_FCMP_TRUE,
+	LLVM_FCMP_FALSE,
+	LLVM_FCMP_OEQ,
+	LLVM_FCMP_UEQ,
+	LLVM_FCMP_ONE,
+	LLVM_FCMP_UNE,
+	LLVM_FCMP_OGT,
+	LLVM_FCMP_UGT,
+	LLVM_FCMP_OGE,
+	LLVM_FCMP_UGE,
+	LLVM_FCMP_OLT,
+	LLVM_FCMP_ULT,
+	LLVM_FCMP_OLE,
+	LLVM_FCMP_ULE,
+} llvm_fcmp_enum_t;
 
 #define LLVM_PHI_MAX 3
 typedef struct llvm_inst_t {
@@ -149,6 +177,11 @@ typedef struct llvm_inst_t {
 			llvm_type_t type;
 			llvm_value_t op1, op2;
 		} icmp;
+		struct {
+			llvm_fcmp_enum_t cond;
+			llvm_type_t type;
+			llvm_value_t op1, op2;
+		} fcmp;
 		struct {
 			llvm_type_t type;
 			unsigned int count;
@@ -177,6 +210,10 @@ typedef struct llvm_inst_t {
 			llvm_value_t ptr;
 			unsigned int member_idx;
 		} getelementptr;
+		struct {
+			llvm_type_t type;
+			llvm_value_t value;
+		} fneg;
 	};
 } llvm_inst_t;
 create_list_type_header(llvm_inst, false);

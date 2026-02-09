@@ -26,7 +26,7 @@ u64 foo(i32 X){
 	ulong q;
 	ulong w = 15;
 	u64* ptr;
-	ulong sum = (u32)1542 + (i16)975168465168448;
+	i64 sum = (i32)1542 + (u16)2688;
 
 	if (X > 13){
 		q = 5;
@@ -44,5 +44,5 @@ u64 foo(i32 X){
 
 u32 main(i32 argc, u8** argv){
 	foo(argc);
-	return 42;
+	return (f32)42;
 }
