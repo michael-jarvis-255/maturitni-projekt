@@ -259,6 +259,9 @@ char* bignum_to_string(const bignum_t* x){
 	return str;
 }
 
+void bignum_negate(bignum_t* a){
+	a->sign = !a->sign;
+}
 void bignum_add(bignum_t* a, const bignum_t* b){
 	if (a->sign == b->sign){
 		bignum_unsigned_add(a, b);

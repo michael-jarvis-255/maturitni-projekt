@@ -686,6 +686,22 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 		{
 			llvm_typed_value_t operand = ast2llvm_emit_expr(expr->unop.operand, var2reg, f);
 			if (operand.type == LLVM_TVALUE_POISON && operand.ast_type == 0) return operand;
+			if (operand.type == LLVM_TVALUE_INT_CONST && operand.ast_type == 0){
+				switch (expr->unop.op){
+					case AST_EXPR_UNOP_DEREF:
+						print_error(expr->loc, "cannot dereference integer constant (cast it to a pointer type first)");
+						return LLVM_TYPED_POISON(0);
+					case AST_EXPR_UNOP_BNOT:
+						printf_error(expr->loc, "cannot use '%s' on integer constant (cast it to a sized integer first)", ast_expr_unop_string(expr->unop.op));
+						return LLVM_TYPED_POISON(0);
+					case AST_EXPR_UNOP_NEG:
+						bignum_negate(operand.int_const);
+						return operand;
+					case AST_EXPR_UNOP_LNOT: // TODO
+						printf_error(expr->loc, "cannot use '%s' on integer constant (unimplemented)", ast_expr_unop_string(expr->unop.op));
+						return LLVM_TYPED_POISON(0);
+				}
+			}
 			switch (operand.ast_type->kind){
 				case AST_DATATYPE_VOID:
 					printf_error(expr->unop.operand->loc, "void type '%s' is not supported for unary operation '%s'", operand.ast_type->name, ast_expr_unop_string(expr->unop.op));
@@ -716,7 +732,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					switch (expr->unop.op){
 						case AST_EXPR_UNOP_NEG:
 						case AST_EXPR_UNOP_BNOT:
-						case AST_EXPR_UNOP_LNOT:
+						case AST_EXPR_UNOP_LNOT: // TODO
 							printf_error(expr->unop.operand->loc, "pointer type '%s' is not supported for unary operation '%s'", operand.ast_type->name, ast_expr_unop_string(expr->unop.op));
 							return LLVM_TYPED_POISON(0);
 						case AST_EXPR_UNOP_DEREF:

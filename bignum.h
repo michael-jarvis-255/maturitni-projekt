@@ -15,6 +15,7 @@ char* bignum_to_string(const bignum_t* x);
 double bignum_to_double(const bignum_t* x);
 
 // all operations modify 'a'
+void bignum_negate(bignum_t* a);
 void bignum_add(bignum_t* a, const bignum_t* b);
 void bignum_sub(bignum_t* a, const bignum_t* b);
 void bignum_mul(bignum_t* a, const bignum_t* b);
