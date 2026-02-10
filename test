@@ -11,6 +11,13 @@ typedef struct {
 	ulong z;
 } vector3_t;
 
+void function(){
+	u64 x = 0;
+	while (x <= 10){
+		x = x + 1;
+	}
+}
+
 u64 myfunc(u64 a, u64 b){
 	vector2_t vec;
 	vec.x = 15;
@@ -27,6 +34,7 @@ u64 foo(i32 X){
 	ulong w = 15;
 	u64* ptr;
 	i64 sum = (i32)1542 + (u16)2688;
+	function();
 
 	if (X > 13){
 		q = 5;

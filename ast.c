@@ -123,6 +123,9 @@ void print_ast_id(const ast_id_t* id, int depth){
 		case AST_ID_TYPE:
 			ntabs(depth); printf("type '%s':\n", id->type_.name);
 			switch (id->type_.kind){
+				case AST_DATATYPE_VOID:
+					ntabs(depth+1); printf("void\n");
+					break;
 				case AST_DATATYPE_INTEGRAL:
 					ntabs(depth+1); printf("integeral\n");
 					ntabs(depth+1); printf("signed: %s\n", id->type_.integral.signed_ ? "signed" : "unsigned");
@@ -566,6 +569,10 @@ ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, c
 	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
 ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name){
+	if (type->kind == AST_DATATYPE_VOID){
+		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
+		return (ast_decl_t){.type=AST_DECL_DUMMY};
+	}
 	ast_id_t* var_id = malloc(sizeof(ast_id_t));
 	var_id->type = AST_ID_VAR;
 	var_id->var.type_ref = type;
@@ -576,6 +583,10 @@ ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name)
 	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
 ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
+	if (type->kind == AST_DATATYPE_VOID){
+		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
+		return (ast_decl_t){.type=AST_DECL_DUMMY};
+	}
 	ast_id_t* var_id = malloc(sizeof(ast_id_t));
 	var_id->type = AST_ID_VAR;
 	var_id->var.type_ref = type;
@@ -594,6 +605,8 @@ static ast_datatype_t ast_datatype_alias(const ast_datatype_t* original, loc_t d
 		.ptr_type = 0
 	};
 	switch (original->kind){
+		case AST_DATATYPE_VOID:
+			break;
 		case AST_DATATYPE_INTEGRAL:
 			type.integral.bitwidth = original->integral.bitwidth;
 			type.integral.signed_ = original->integral.signed_;
@@ -754,6 +767,13 @@ void ast_init_context(FILE* source){
 		.kind = AST_DATATYPE_INTEGRAL,
 		.integral.bitwidth = 1,
 		.integral.signed_ = false,
+		.ptr_type = 0
+	});
+
+	// void
+	ast_context_insert_type("void", (ast_datatype_t){
+		.declare_loc = (loc_t){0},
+		.kind = AST_DATATYPE_VOID,
 		.ptr_type = 0
 	});
 
@@ -941,6 +961,7 @@ void printf_error(loc_t loc, char* msg, ...){
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
 	if (a->kind != b->kind) return false;
 	switch (a->kind){
+		case AST_DATATYPE_VOID: return true;
 		case AST_DATATYPE_INTEGRAL:
 			if (a->integral.bitwidth != b->integral.bitwidth) return false;
 			if (a->integral.signed_ != b->integral.signed_) return false;
@@ -979,6 +1000,7 @@ void free_ast_datatype(ast_datatype_t* type){
 		case AST_DATATYPE_INTEGRAL:
 		case AST_DATATYPE_FLOAT:
 		case AST_DATATYPE_POINTER:
+		case AST_DATATYPE_VOID:
 			break;
 		case AST_DATATYPE_STRUCTURED:
 			for (unsigned int i = 0; i < type->structure.members.len; i++){

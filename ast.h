@@ -22,6 +22,7 @@ typedef enum {
 	AST_DATATYPE_FLOAT,
 	AST_DATATYPE_STRUCTURED,
 	AST_DATATYPE_POINTER,
+	AST_DATATYPE_VOID,
 } ast_datatype_enum_t;
 
 struct ast_datatype_t;

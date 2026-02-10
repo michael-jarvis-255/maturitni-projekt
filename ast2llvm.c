@@ -96,6 +96,8 @@ static llvm_reg_t llvm_add_inst(llvm_function_t* f, llvm_inst_t inst){
 
 static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	switch (t->kind){
+		case AST_DATATYPE_VOID: // TODO
+			puts("<unimplemented>"); exit(1);
 		case AST_DATATYPE_FLOAT:
 			return (llvm_type_t){ .type=LLVM_TYPE_FLOAT, .bitwidth=t->floating.bitwidth };
 		case AST_DATATYPE_INTEGRAL:
@@ -251,6 +253,7 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 			return POISON_VALUE;
 		case LLVM_TVALUE_REG:
 			switch (val.ast_type->kind){
+				case AST_DATATYPE_VOID: // TODO
 				case AST_DATATYPE_POINTER: // TODO
 				case AST_DATATYPE_STRUCTURED: // TODO
 				case AST_DATATYPE_FLOAT: // TODO
@@ -285,6 +288,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 
 	if (value.type == LLVM_TVALUE_INT_CONST && src_type == 0){
 		switch (trgt_type->kind){
+			case AST_DATATYPE_VOID: goto error;
 			case AST_DATATYPE_POINTER: // TODO
 				goto error;
 			case AST_DATATYPE_FLOAT:
@@ -318,8 +322,10 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 		return value;
 
 	switch (src_type->kind){
+		case AST_DATATYPE_VOID: goto error;
 		case AST_DATATYPE_POINTER:
 			switch (trgt_type->kind){
+				case AST_DATATYPE_VOID: goto error;
 				case AST_DATATYPE_POINTER:
 					goto no_cast;
 				case AST_DATATYPE_STRUCTURED:
@@ -347,6 +353,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 			goto error; // case where struct types are the same is already handled
 		case AST_DATATYPE_FLOAT:
 			switch (trgt_type->kind){
+				case AST_DATATYPE_VOID: goto error;
 				case AST_DATATYPE_FLOAT:
 					if (src_type->floating.bitwidth < trgt_type->floating.bitwidth){
 						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
@@ -388,6 +395,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 			puts("internal error"); exit(1);
 		case AST_DATATYPE_INTEGRAL:
 			switch (trgt_type->kind){
+				case AST_DATATYPE_VOID: goto error;
 				case AST_DATATYPE_POINTER:
 				{
 					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
@@ -648,12 +656,22 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return LLVM_TYPED_POISON(expr->func_call.func_ref->return_type_ref);
 			}
 
-			llvm_inst_t inst = (llvm_inst_t){
-				.type=LLVM_INST_CALL,
-				.call.name=strdup(expr->func_call.func_ref->name),
-				.call.rettype=ast_type_to_llvm_type(expr->func_call.func_ref->return_type_ref), // TODO functions returning 'void'
-				.call.args=create_llvm_arg_list()
-			};
+			const ast_datatype_t* rettype = expr->func_call.func_ref->return_type_ref;
+			llvm_inst_t inst;
+			if (rettype->kind == AST_DATATYPE_VOID){
+				inst = (llvm_inst_t){
+					.type=LLVM_INST_VOID_CALL,
+					.call.name=strdup(expr->func_call.func_ref->name),
+					.call.args=create_llvm_arg_list()
+				};
+			}else{
+				inst = (llvm_inst_t){
+					.type=LLVM_INST_CALL,
+					.call.name=strdup(expr->func_call.func_ref->name),
+					.call.rettype=ast_type_to_llvm_type(rettype),
+					.call.args=create_llvm_arg_list()
+				};
+			}
 			for (unsigned int i=0; i<arglist.len; i++){
 				llvm_arg_list_append(&inst.call.args, (llvm_arg_t){
 					.type=ast_type_to_llvm_type(expr->func_call.func_ref->args.data[i]->var.type_ref),
@@ -662,13 +680,16 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			}
 			llvm_reg_t ret = llvm_add_inst(f, inst);
 			shallow_free_llvm_typed_value_list(&arglist);
-			return LLVM_TYPED_REG(ret, expr->func_call.func_ref->return_type_ref);
+			return rettype->kind == AST_DATATYPE_VOID ? LLVM_TYPED_POISON(rettype) : LLVM_TYPED_REG(ret, rettype);
 		}
 		case AST_EXPR_UNOP: // TODO: handle untyped int constants
 		{
 			llvm_typed_value_t operand = ast2llvm_emit_expr(expr->unop.operand, var2reg, f);
 			if (operand.type == LLVM_TVALUE_POISON && operand.ast_type == 0) return operand;
 			switch (operand.ast_type->kind){
+				case AST_DATATYPE_VOID:
+					printf_error(expr->unop.operand->loc, "void type '%s' is not supported for unary operation '%s'", operand.ast_type->name, ast_expr_unop_string(expr->unop.op));
+					return LLVM_TYPED_POISON(0);
 				case AST_DATATYPE_STRUCTURED:
 					printf_error(expr->unop.operand->loc, "struct type '%s' is not supported for unary operation '%s'", operand.ast_type->name, ast_expr_unop_string(expr->unop.op));
 					return LLVM_TYPED_POISON(0);
@@ -781,6 +802,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			bool err;
 			if (left_operand.type == LLVM_TVALUE_INT_CONST && left_operand.ast_type == 0){
 				switch (right_operand.ast_type->kind){
+					case AST_DATATYPE_VOID: goto binop_invalid_types;
 					case AST_DATATYPE_STRUCTURED: goto binop_invalid_types;
 					case AST_DATATYPE_POINTER: goto binop_invalid_types;
 					case AST_DATATYPE_FLOAT:
@@ -789,12 +811,14 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						break;
 				}
 			}else switch (left_operand.ast_type->kind){
+				case AST_DATATYPE_VOID: goto binop_invalid_types;
 				case AST_DATATYPE_STRUCTURED: goto binop_invalid_types; 
 				case AST_DATATYPE_POINTER: goto binop_invalid_types;
 				case AST_DATATYPE_FLOAT:
 					if (right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
 						right_operand = ast2llvm_cast(right_operand, left_operand.ast_type, f, &err, expr->binop.right->loc);
 					} else switch (right_operand.ast_type->kind){
+						case AST_DATATYPE_VOID: goto binop_invalid_types;
 						case AST_DATATYPE_STRUCTURED: goto binop_invalid_types;
 						case AST_DATATYPE_POINTER: goto binop_invalid_types;
 						case AST_DATATYPE_FLOAT:
@@ -813,6 +837,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					if (right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
 						right_operand = ast2llvm_cast(right_operand, left_operand.ast_type, f, &err, expr->binop.right->loc);
 					} else switch (right_operand.ast_type->kind){
+						case AST_DATATYPE_VOID: goto binop_invalid_types;
 						case AST_DATATYPE_STRUCTURED: goto binop_invalid_types;
 						case AST_DATATYPE_POINTER: goto binop_invalid_types;
 						case AST_DATATYPE_FLOAT:
@@ -841,6 +866,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			llvm_inst_t inst;
 			
 			switch (restype->kind){
+				case AST_DATATYPE_VOID:
 				case AST_DATATYPE_STRUCTURED:
 				case AST_DATATYPE_POINTER:
 					print_error(expr->loc, "internal error");
@@ -967,6 +993,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					} else {
 						names[i] = type->name;
 						switch (type->kind){
+							case AST_DATATYPE_VOID: kinds[i] = "void type "; break;
 							case AST_DATATYPE_FLOAT: kinds[i] = "floating point "; break;
 							case AST_DATATYPE_INTEGRAL: kinds[i] = "integer "; break;
 							case AST_DATATYPE_POINTER: kinds[i] = "pointer "; break;
@@ -1074,7 +1101,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 							stmt->assign.lvalue.member_access.len ? "member" : "variable",
 							stmt->assign.lvalue.member_access.len ?
 								stmt->assign.lvalue.type->structure.members.data[stmt->assign.lvalue.member_access.data[stmt->assign.lvalue.member_access.len-1].member_idx].type_ref->name
-								: trgt_type->name,
+								: stmt->assign.lvalue.base_var->name,
 							trgt_type->name
 						);
 					}
@@ -1160,11 +1187,11 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func){
 	f.name = strdup(func.name);
 	f.blocks = create_llvm_basic_block_list();
 
-	if (func.return_type_ref){
+	if (func.return_type_ref->kind == AST_DATATYPE_VOID){
+		f.has_return = false;
+	}else{
 		f.has_return = true;
 		f.rettype = ast_type_to_llvm_type(func.return_type_ref);
-	}else{
-		f.has_return = false;
 	}
 
 	f.arg_count = func.args.len;

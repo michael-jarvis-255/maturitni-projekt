@@ -224,9 +224,13 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 				if (i+1 != inst.phi.count) tprint(t, ",");
 			}
 			return;
-		case LLVM_INST_CALL: // TODO functions returning 'void'
+		case LLVM_INST_VOID_CALL:
+			tprint(t, "call void ");
+			goto call_end;
+		case LLVM_INST_CALL:
 			tprint(t, "call ");
 			llvm_type_to_target(inst.call.rettype, t);
+		call_end:
 			tprintf(t, " @%s(", inst.call.name);
 			for (unsigned int i=0; i < inst.call.args.len; i++){
 				llvm_type_to_target(inst.call.args.data[i].type, t);
@@ -293,7 +297,8 @@ static void llvm_term_inst_to_target(const llvm_term_inst_t inst, print_target_t
 
 static void llvm_block_body_to_target(const llvm_basic_block_t* block, print_target_t* t){
 	for (unsigned int i = 0; i < block->instructions.len; i++){
-		if (block->instructions.data[i].type != LLVM_INST_STORE)
+		if (block->instructions.data[i].type != LLVM_INST_STORE
+		 && block->instructions.data[i].type != LLVM_INST_VOID_CALL)
 			tprintf(t, "    %%%u = ", block->regbase + i);
 		else
 			tprint(t, "    ");
@@ -438,6 +443,9 @@ static void free_llvm_inst(llvm_inst_t inst){
 			free_llvm_value(inst.getelementptr.ptr);
 			break;
 		case LLVM_INST_CALL:
+			free_llvm_type(inst.call.rettype);
+			__attribute__ ((fallthrough));
+		case LLVM_INST_VOID_CALL:
 			free(inst.call.name);
 			for (unsigned int i = 0; i < inst.call.args.len; i++)
 				free_llvm_value(inst.call.args.data[i].val);
