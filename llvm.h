@@ -37,6 +37,7 @@ typedef enum {
 	LLVM_VALUE_REG,
 	LLVM_VALUE_UNDEF,
 	LLVM_VALUE_POISON,
+	LLVM_VALUE_NULL_PTR,
 } llvm_value_enum_t;
 
 typedef struct llvm_value_t {

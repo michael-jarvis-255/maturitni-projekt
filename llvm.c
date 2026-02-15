@@ -82,15 +82,11 @@ static void llvm_type_to_target(const llvm_type_t type, print_target_t* t){
 
 static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 	switch (val.type){
-		case LLVM_VALUE_UNDEF:
-			tprint(t, "undef");
-			break;
-		case LLVM_VALUE_POISON:
-			tprint(t, "poison");
-			break;
-		case LLVM_VALUE_REG:
-			tprintf(t, "%%%u", val.reg.idx);
-			break;
+		case LLVM_VALUE_NULL_PTR: tprint(t, "null"); break;
+		case LLVM_VALUE_UNDEF: tprint(t, "undef"); break;
+		case LLVM_VALUE_POISON: tprint(t, "poison"); break;
+		case LLVM_VALUE_REG: tprintf(t, "%%%u", val.reg.idx); break;
+		case LLVM_VALUE_DOUBLE_CONST: tprintf(t, "%#016lx", *(unsigned long*)&val.double_const); break;
 		case LLVM_VALUE_INT_CONST:
 		{
 			char* str = bignum_to_string(val.int_const);
@@ -98,9 +94,6 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 			free(str);
 			break;
 		}
-		case LLVM_VALUE_DOUBLE_CONST:
-			tprintf(t, "%#016lx", *(unsigned long*)&val.double_const);
-			break;
 	}
 }
 
@@ -365,6 +358,7 @@ static void free_llvm_value(llvm_value_t value){
 		case LLVM_VALUE_POISON:
 		case LLVM_VALUE_UNDEF:
 		case LLVM_VALUE_DOUBLE_CONST:
+		case LLVM_VALUE_NULL_PTR:
 			break;
 	}
 }

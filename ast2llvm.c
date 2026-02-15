@@ -248,16 +248,39 @@ static void ast2llvm_alloca_stmt(const ast_stmt_t* stmt, var2reg_map_t* var2reg,
 static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 	switch (val.type){
 		case LLVM_TVALUE_INT_CONST: // TODO
-		case LLVM_TVALUE_DOUBLE_CONST: // TODO
 		case LLVM_TVALUE_POISON:
 			return POISON_VALUE;
+		case LLVM_TVALUE_DOUBLE_CONST:
+		{	
+			llvm_reg_t out = llvm_add_inst(f, 
+			(llvm_inst_t){
+				.type = LLVM_INST_FCMP,
+				.fcmp.cond = LLVM_FCMP_UNE,
+				.fcmp.type = ast_type_to_llvm_type(val.ast_type),
+				.fcmp.op1 = llvm_untype_value(val),
+				.fcmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_DOUBLE_CONST, .double_const = (double)0.0 }
+			});
+			return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
+		}
 		case LLVM_TVALUE_REG:
 			switch (val.ast_type->kind){
-				case AST_DATATYPE_VOID: // TODO
-				case AST_DATATYPE_POINTER: // TODO
-				case AST_DATATYPE_STRUCTURED: // TODO
+				case AST_DATATYPE_VOID:
+					puts("internal error"); exit(1);
+				case AST_DATATYPE_POINTER:
+				{	
+					llvm_reg_t out = llvm_add_inst(f, 
+					(llvm_inst_t){
+						.type = LLVM_INST_ICMP,
+						.icmp.cond = LLVM_ICMP_NE,
+						.icmp.type = ast_type_to_llvm_type(val.ast_type),
+						.icmp.op1 = llvm_untype_value(val),
+						.icmp.op2 = (llvm_value_t){ .type = LLVM_VALUE_NULL_PTR }
+					});
+					return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
+				}
 				case AST_DATATYPE_FLOAT: // TODO
-					return POISON_VALUE;
+				case AST_DATATYPE_STRUCTURED:
+					return POISON_VALUE; // TODO: error
 				case AST_DATATYPE_INTEGRAL:
 				{	
 					llvm_reg_t out = llvm_add_inst(f, 

@@ -25,6 +25,10 @@ u64 myfunc(u64 a, u64 b){
 
 	ulong* xptr = &vec.x;
 
+	if (xptr){
+		vec.x = vec.x+5;
+	}
+
 	return vec.y * *xptr;
 }
 
