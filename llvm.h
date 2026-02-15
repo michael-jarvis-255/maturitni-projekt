@@ -243,8 +243,8 @@ typedef struct llvm_function_t {
 } llvm_function_t;
 
 
-void llvm_global_to_stream(const ast_variable_t* var, FILE* stream);
-char* llvm_global_to_string(const ast_variable_t* var);
+void llvm_global_to_stream(const ast_global_t* global, FILE* stream);
+char* llvm_global_to_string(const ast_global_t* global);
 
 void llvm_func_to_stream(const llvm_function_t* f, FILE* stream);
 char* llvm_func_to_string(const llvm_function_t* f);

@@ -206,18 +206,6 @@ typedef struct ast_stmt_t {
 	};
 } ast_stmt_t;
 
-typedef enum {
-	AST_DECL_DUMMY,
-	AST_DECL_STMT,
-} ast_decl_enum_t;
-
-typedef struct ast_decl_t {
-	ast_decl_enum_t type;
-	union {
-		ast_stmt_t stmt;
-	};
-} ast_decl_t;
-
 typedef ast_id_t* ast_id_ptr_t;
 create_list_type_header(ast_id_ptr, false);
 
@@ -230,10 +218,16 @@ typedef struct ast_func_t {
 	context_t* context;
 } ast_func_t;
 
+typedef struct ast_global_t {
+	ast_variable_t var;
+	ast_expr_t* init; // TODO: use this
+} ast_global_t;
+
 typedef enum {
 	AST_ID_TYPE,
 	AST_ID_VAR,
 	AST_ID_FUNC,
+	AST_ID_GLOBAL,
 } ast_id_enum_t;
 
 typedef struct ast_id_t {
@@ -242,6 +236,7 @@ typedef struct ast_id_t {
 		ast_datatype_t type_;
 		ast_variable_t var;
 		ast_func_t func;
+		ast_global_t global;
 	};
 } ast_id_t;
 
@@ -283,10 +278,14 @@ void free_ast_stmt_v(ast_stmt_t stmt);
 void free_ast_stmt(ast_stmt_t* stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body);
-ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name);
-ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
-ast_decl_t create_ast_decl_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name);
+void ast_declare_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body);
+void ast_declare_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name);
+void ast_declare_variable(loc_t loc, ast_datatype_t* type, ast_name_t name);
+ast_stmt_t ast_declare_variable_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
+
+void ast_declare_global(loc_t loc, ast_datatype_t* type, ast_name_t name);
+void ast_declare_global_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
+
 
 void ast_init_context(FILE* source);
 void current_context_insert(const char* name, ast_id_t* value);

@@ -37,6 +37,11 @@ void free_ast_id_v(ast_id_t id){
 			free((void*)id.func.name);
 			free(id.func.args.data);
 			break;
+		case AST_ID_GLOBAL:
+			free(id.global.var.name);
+			if (id.global.init) free_ast_expr(id.global.init);
+			break;
+			
 	}
 }
 void free_ast_id(ast_id_t* id){
@@ -159,6 +164,9 @@ void print_ast_id(const ast_id_t* id, int depth){
 			ntabs(depth+1); printf("body:\n");
 			print_ast_stmt(id->func.body, depth+2);
 			break;
+		case AST_ID_GLOBAL:
+			printf("<todo>");
+			break;
 	}
 }
 
@@ -201,6 +209,7 @@ static inline loc_t loc_from_ast_id(ast_id_t* id){
 		case AST_ID_VAR: return id->var.declare_loc;
 		case AST_ID_FUNC: return id->func.declare_loc;
 		case AST_ID_TYPE: return id->type_.declare_loc;
+		case AST_ID_GLOBAL: return id->global.var.declare_loc;
 	}
 	printf("INTERNAL ERROR\n");
 	exit(1);
@@ -555,7 +564,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
-ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body){
+void ast_declare_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body){
 	ast_id_t* func_id = malloc(sizeof(ast_id_t));
 	func_id->type = AST_ID_FUNC;
 	func_id->func.declare_loc = loc;
@@ -565,13 +574,23 @@ ast_decl_t create_ast_decl_function(loc_t loc, ast_datatype_t* returntype_ref, c
 	func_id->func.context = context;
 	func_id->func.body = convert_to_ptr(body);
 	current_context_insert(name, func_id);
-
-	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
-ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name){
+void ast_declare_variable(loc_t loc, ast_datatype_t* type, ast_name_t name){
 	if (type->kind == AST_DATATYPE_VOID){
 		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
-		return (ast_decl_t){.type=AST_DECL_DUMMY};
+		return;
+	}
+	ast_id_t* var_id = malloc(sizeof(ast_id_t));
+	var_id->type = AST_ID_VAR;
+	var_id->var.type_ref = type;
+	var_id->var.declare_loc = loc;
+	var_id->var.name = name.name;
+	current_context_insert(name.name, var_id);
+}
+ast_stmt_t ast_declare_variable_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
+	if (type->kind == AST_DATATYPE_VOID){
+		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
+		return (ast_stmt_t){0}; // TODO: is this safe?
 	}
 	ast_id_t* var_id = malloc(sizeof(ast_id_t));
 	var_id->type = AST_ID_VAR;
@@ -580,21 +599,33 @@ ast_decl_t create_ast_decl_var(loc_t loc, ast_datatype_t* type, ast_name_t name)
 	var_id->var.name = name.name;
 	current_context_insert(name.name, var_id);
 
-	return (ast_decl_t){.type=AST_DECL_DUMMY};
+	return create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var), value);
 }
-ast_decl_t create_ast_decl_var_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
+void ast_declare_global(loc_t loc, ast_datatype_t* type, ast_name_t name){
 	if (type->kind == AST_DATATYPE_VOID){
-		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
-		return (ast_decl_t){.type=AST_DECL_DUMMY};
+		printf_error(loc, "cannot declare global variable '%s' with void type ('%s')", name.name, type->name);
+		return;
 	}
 	ast_id_t* var_id = malloc(sizeof(ast_id_t));
-	var_id->type = AST_ID_VAR;
-	var_id->var.type_ref = type;
-	var_id->var.declare_loc = loc;
-	var_id->var.name = name.name;
+	var_id->type = AST_ID_GLOBAL;
+	var_id->global.var.type_ref = type;
+	var_id->global.var.declare_loc = loc;
+	var_id->global.var.name = name.name;
+	var_id->global.init = 0;
 	current_context_insert(name.name, var_id);
-
-	return (ast_decl_t){.type=AST_DECL_STMT, .stmt=create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var), value)};
+}
+void ast_declare_global_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
+	if (type->kind == AST_DATATYPE_VOID){
+		printf_error(loc, "cannot declare global variable '%s' with void type ('%s')", name.name, type->name);
+		return;
+	}
+	ast_id_t* var_id = malloc(sizeof(ast_id_t));
+	var_id->type = AST_ID_GLOBAL;
+	var_id->global.var.type_ref = type;
+	var_id->global.var.declare_loc = loc;
+	var_id->global.var.name = name.name;
+	var_id->global.init = convert_to_ptr(value);
+	current_context_insert(name.name, var_id);
 }
 
 static ast_datatype_t ast_datatype_alias(const ast_datatype_t* original, loc_t declare_loc, char* new_name){
@@ -632,13 +663,11 @@ static ast_datatype_t ast_datatype_alias(const ast_datatype_t* original, loc_t d
 	return type;
 }
 
-ast_decl_t create_ast_decl_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name){
+void ast_declare_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name){
 	ast_id_t* type_id = malloc(sizeof(ast_id_t));
 	type_id->type = AST_ID_TYPE;
 	type_id->type_ = ast_datatype_alias(type, loc, name.name);
 	current_context_insert(name.name, type_id);
-
-	return (ast_decl_t){.type=AST_DECL_DUMMY};
 }
 
 static void ast_context_insert_type(const char* name, ast_datatype_t type){

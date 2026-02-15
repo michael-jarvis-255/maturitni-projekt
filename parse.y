@@ -45,7 +45,9 @@ main:
 
 declaration_list:
 	%empty
-|	declaration_list declaration
+|	declaration_list function_declaration
+|	declaration_list typedef_declaration
+|	declaration_list global_declaration
 
 %nterm <type_ref> type;
 type:
@@ -153,12 +155,8 @@ block:
 block_head:
 	'{'					{ $$ = create_ast_stmt_block(@$, true); context_stack_push($$.block.context); }
 |	block_head stmt		{ $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); } // TODO: block needs to also update it's loc
-|	block_head declaration
-	{
-		$$ = $1;
-		if ($declaration.type == AST_DECL_STMT)
-			ast_stmt_list_append(&($$.block.stmtlist), $declaration.stmt);
-	}
+|	block_head var_declaration
+|	block_head var_assign_declaration[stmt] { $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); }
 |	block_head ';'
 
 %nterm <stmt> no_context_block;
@@ -169,12 +167,8 @@ no_context_block:
 no_context_block_head:
 	'{'					{ $$ = create_ast_stmt_block(@$, false); }
 |	no_context_block_head stmt		{ $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); } // TODO: block needs to also update it's loc
-|	no_context_block_head declaration
-	{
-		$$ = $1;
-		if ($declaration.type == AST_DECL_STMT)
-			ast_stmt_list_append(&($$.block.stmtlist), $declaration.stmt);
-	}
+|	no_context_block_head var_declaration
+|	no_context_block_head var_assign_declaration[stmt] { $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); }
 |	no_context_block_head ';'
 
 %nterm <stmt> stmt;
@@ -249,13 +243,8 @@ if_ending_for_loop:
 	TK_FOR '(' basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body); }
 
 
-%nterm <decl> declaration;
-declaration:
-	function_declaration
-|	single_var_declaration
-|	typedef_declaration
 
-%nterm <decl> function_declaration;
+%nterm function_declaration;
 function_declaration:
 	type name '(' function_args_definition[args] ')'
 	<context>{
@@ -277,7 +266,7 @@ function_declaration:
 	no_context_block[body]
 	{
 		context_stack_pop($context);
-		$$ = create_ast_decl_function(@$, $type, $name.name, $id_ptr_list, $context, $body);
+		ast_declare_function(@$, $type, $name.name, $id_ptr_list, $context, $body);
 	}
 
 %nterm <argdeflist> function_args_definition;
@@ -287,14 +276,22 @@ function_args_definition:
 |	function_args_definition[args] ',' type name	{ $$ = $1; ast_variable_list_append(&$$, (ast_variable_t){.declare_loc=@name, .type_ref=$type, .name=$name.name}); } // TODO: properly track declare loc
 // TODO: 'int foo(,int x){...}' shouldn't be valid!
 
-%nterm <decl> single_var_declaration;
-single_var_declaration:
-	type name	';'				{ $$ = create_ast_decl_var(@$, $type, $name); }
-|	type name '=' exp[val] ';'	{ $$ = create_ast_decl_var_assign(@$, $type, $name, $val); } // TODO: initialisation of globals
+%nterm var_declaration;
+var_declaration:
+	type name	';'				{ ast_declare_variable(@$, $type, $name); }
 
-%nterm <decl> typedef_declaration;
+%nterm <stmt> var_assign_declaration;
+var_assign_declaration:
+	type name '=' exp[val] ';'	{ $$ = ast_declare_variable_assign(@$, $type, $name, $val); }
+
+%nterm global_declaration;
+global_declaration:
+	type name	';'				{ ast_declare_global(@$, $type, $name); }
+|	type name '=' exp[val] ';'	{ ast_declare_global_assign(@$, $type, $name, $val); }
+
+%nterm typedef_declaration;
 typedef_declaration:
-	TK_TYPEDEF type name ';'	{ $$ = create_ast_decl_typedef(@$, $type, $name); }
+	TK_TYPEDEF type name ';'	{ ast_declare_typedef(@$, $type, $name); }
 
 %%
 

@@ -73,9 +73,10 @@ int main(int argc, char** argv){
 				free_llvm_function(func);
 				break;
 			}
-			case AST_ID_VAR:
-				llvm_global_to_stream(&id->var, outfile);
+			case AST_ID_GLOBAL:
+				llvm_global_to_stream(&id->global, outfile);
 				break;
+			case AST_ID_VAR:
 			case AST_ID_TYPE:
 				break;
 		}

@@ -3,7 +3,6 @@ typedef union YYSTYPE {
 	char* str;
 	ast_expr_t expr;
 	ast_stmt_t stmt;
-	ast_decl_t decl;
 	ast_variable_list_t argdeflist;
 	ast_name_t name;
 	ast_datatype_t* type_ref;

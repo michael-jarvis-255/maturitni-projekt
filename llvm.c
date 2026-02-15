@@ -490,18 +490,18 @@ void free_llvm_function(llvm_function_t func){
 	free(func.args);
 }
 
-static void llvm_global_to_target(const ast_variable_t* var, print_target_t* t){
-	tprintf(t, "@%s = external global ", var->name);
-	llvm_type_to_target(ast_type_to_llvm_type(var->type_ref), t);
+static void llvm_global_to_target(const ast_global_t* global, print_target_t* t){
+	tprintf(t, "@%s = external global ", global->var.name);
+	llvm_type_to_target(ast_type_to_llvm_type(global->var.type_ref), t);
 	tprint(t, "\n");
 }
 
-void llvm_global_to_stream(const ast_variable_t* var, FILE* stream){
-	llvm_global_to_target(var, &(print_target_t){.target=PRINT_TARGET_STREAM, .stream=stream});
+void llvm_global_to_stream(const ast_global_t* global, FILE* stream){
+	llvm_global_to_target(global, &(print_target_t){.target=PRINT_TARGET_STREAM, .stream=stream});
 }
-char* llvm_global_to_string(const ast_variable_t* var){
+char* llvm_global_to_string(const ast_global_t* global){
 	print_target_t t = {.target=PRINT_TARGET_STRING, .string=create_char_list()};
-	llvm_global_to_target(var, &t);
+	llvm_global_to_target(global, &t);
 	char_list_append(&t.string, '\0');
 	return t.string.data;
 }
