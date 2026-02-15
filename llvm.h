@@ -38,6 +38,7 @@ typedef enum {
 	LLVM_VALUE_UNDEF,
 	LLVM_VALUE_POISON,
 	LLVM_VALUE_NULL_PTR,
+	LLVM_VALUE_GLOBAL,
 } llvm_value_enum_t;
 
 typedef struct llvm_value_t {
@@ -46,6 +47,7 @@ typedef struct llvm_value_t {
 		bignum_t* int_const;
 		double double_const;
 		llvm_reg_t reg;
+		char* global_name;
 	};
 } llvm_value_t;
 
@@ -241,6 +243,8 @@ typedef struct llvm_function_t {
 } llvm_function_t;
 
 
+void llvm_global_to_stream(const ast_variable_t* var, FILE* stream);
+char* llvm_global_to_string(const ast_variable_t* var);
 
 void llvm_func_to_stream(const llvm_function_t* f, FILE* stream);
 char* llvm_func_to_string(const llvm_function_t* f);

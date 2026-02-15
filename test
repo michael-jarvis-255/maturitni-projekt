@@ -11,6 +11,8 @@ typedef struct {
 	ulong z;
 } vector3_t;
 
+i32 global = 32;
+
 void function(){
 	u64 x = 0;
 	while (x <= 10){
@@ -33,7 +35,7 @@ u64 myfunc(u64 a, u64 b){
 }
 
 u64 foo(i32 X){
-	i32 y = X + 45;
+	i32 y = X + 45 + global;
 	ulong q;
 	ulong w = 15;
 	u64* ptr;

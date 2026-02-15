@@ -1,5 +1,6 @@
 #include "llvm.h"
 #include "string.h"
+#include "ast2llvm.h"
 #include <stdarg.h>
 
 typedef char char_t;
@@ -87,6 +88,7 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 		case LLVM_VALUE_POISON: tprint(t, "poison"); break;
 		case LLVM_VALUE_REG: tprintf(t, "%%%u", val.reg.idx); break;
 		case LLVM_VALUE_DOUBLE_CONST: tprintf(t, "%#016lx", *(unsigned long*)&val.double_const); break;
+		case LLVM_VALUE_GLOBAL: tprintf(t, "@%s", val.global_name); break;
 		case LLVM_VALUE_INT_CONST:
 		{
 			char* str = bignum_to_string(val.int_const);
@@ -354,6 +356,9 @@ static void free_llvm_value(llvm_value_t value){
 		case LLVM_VALUE_INT_CONST:
 			free_bignum(value.int_const);
 			break;
+		case LLVM_VALUE_GLOBAL:
+			free(value.global_name);
+			break;
 		case LLVM_VALUE_REG:
 		case LLVM_VALUE_POISON:
 		case LLVM_VALUE_UNDEF:
@@ -483,4 +488,20 @@ void free_llvm_function(llvm_function_t func){
 	}
 	shallow_free_llvm_basic_block_list(&func.blocks);
 	free(func.args);
+}
+
+static void llvm_global_to_target(const ast_variable_t* var, print_target_t* t){
+	tprintf(t, "@%s = external global ", var->name);
+	llvm_type_to_target(ast_type_to_llvm_type(var->type_ref), t);
+	tprint(t, "\n");
+}
+
+void llvm_global_to_stream(const ast_variable_t* var, FILE* stream){
+	llvm_global_to_target(var, &(print_target_t){.target=PRINT_TARGET_STREAM, .stream=stream});
+}
+char* llvm_global_to_string(const ast_variable_t* var){
+	print_target_t t = {.target=PRINT_TARGET_STRING, .string=create_char_list()};
+	llvm_global_to_target(var, &t);
+	char_list_append(&t.string, '\0');
+	return t.string.data;
 }

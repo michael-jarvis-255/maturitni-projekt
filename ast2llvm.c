@@ -30,16 +30,16 @@ create_list_type_impl(llvm_typed_value, false)
 #define LLVM_TYPED_REG(r, t) ((llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .reg=r, .ast_type=t })
 #define POISON_VALUE ((llvm_value_t){ .type=LLVM_VALUE_POISON })
 
-static inline llvm_label_t llvm_function_last_label(const llvm_function_t* f){
+static llvm_label_t llvm_function_last_label(const llvm_function_t* f){
 	return (llvm_label_t){ .idx = f->blocks.len - 1 };
 }
-static inline llvm_basic_block_t* llvm_function_last_block(llvm_function_t* f){
+static llvm_basic_block_t* llvm_function_last_block(llvm_function_t* f){
 	return &f->blocks.data[f->blocks.len - 1];
 }
-static inline llvm_reg_t llvm_block_last_reg(const llvm_basic_block_t* b){
+static llvm_reg_t llvm_block_last_reg(const llvm_basic_block_t* b){
 	return (llvm_reg_t){ .idx = b->regbase + b->instructions.len - 1};
 }
-static inline llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
+static llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 	llvm_value_t v;
 	switch (tv.type){
 		case LLVM_TVALUE_INT_CONST:
@@ -94,7 +94,7 @@ static llvm_reg_t llvm_add_inst(llvm_function_t* f, llvm_inst_t inst){
 	return llvm_block_last_reg(block);
 }
 
-static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
+llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	switch (t->kind){
 		case AST_DATATYPE_VOID: // TODO
 			puts("<unimplemented>"); exit(1);
@@ -121,30 +121,24 @@ static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	exit(1);
 }
 
-static inline llvm_typed_value_t llvm_var2reg_get_typed_value(const var2reg_map_t* var2reg, const ast_variable_t* var, loc_t loc, llvm_function_t* f){
-	llvm_reg_t ptr = var2reg_map_get(var2reg, var, LLVM_INVALID_REG);
-	if (LLVM_REG_EQ(ptr, LLVM_INVALID_REG)){
-		printf_error(loc, "use of undefined variable '%s'", var->name); // TODO: this can only happens for global vars after the alloca change 
-		return LLVM_TYPED_POISON(var->type_ref);
-	}
-	llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
-		.type = LLVM_INST_LOAD,
-		.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=ptr },
-		.load.type = ast_type_to_llvm_type(var->type_ref)
-	});
-	return LLVM_TYPED_REG(reg, var->type_ref);
-}
-
-static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, loc_t loc, llvm_function_t* f){
+static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f){
 	llvm_reg_t reg = var2reg_map_get(var2reg, lvalue.base_var, LLVM_INVALID_REG);
+	llvm_value_t base_ptr;
 	if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
-		printf_error(loc, "use of global variable '%s' is unimplemented", lvalue.base_var->name); // TODO: implement it
-		return LLVM_TYPED_POISON(lvalue.type);
+		base_ptr = (llvm_value_t){
+			.type = LLVM_VALUE_GLOBAL,
+			.global_name = strdup(lvalue.base_var->name),
+		};
+	}else{
+		base_ptr = (llvm_value_t){
+			.type = LLVM_VALUE_REG,
+			.reg = reg
+		};
 	}
 	const ast_datatype_t* type = lvalue.base_var->type_ref;
 	reg = llvm_add_inst(f, (llvm_inst_t){
 		.type = LLVM_INST_LOAD,
-		.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
+		.load.ptr = base_ptr,
 		.load.type = ast_type_to_llvm_type(type)
 	});
 
@@ -644,7 +638,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 		case AST_EXPR_DOUBLE_CONST:
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_DOUBLE_CONST, .double_const=expr->double_constant, .ast_type=&context_get(&top_level_context, "f64", (void*)0)->type_ };
 		case AST_EXPR_LVALUE:
-			return ast2llvm_read_lvalue(var2reg, expr->lvalue, expr->loc, f);
+			return ast2llvm_read_lvalue(var2reg, expr->lvalue, f);
 		case AST_EXPR_FUNC_CALL:
 		{
 			llvm_typed_value_list_t arglist = create_llvm_typed_value_list();
@@ -1259,8 +1253,17 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func){
 	}
 	
 	ast2llvm_alloca_stmt(func.body, &var2reg, &f);
-
 	ast2llvm_emit_stmt(func.body, &var2reg, &f, func);
 	var2reg_map_free(&var2reg);
+
+	if (f.has_return){
+		f.blocks.data[f.blocks.len-1].term_inst = (llvm_term_inst_t){
+			.type = LLVM_TERM_INST_RET,
+			.ret.type = ast_type_to_llvm_type(func.return_type_ref),
+			.ret.value = (llvm_value_t){ .type=LLVM_VALUE_UNDEF }
+		};
+	}else{
+		f.blocks.data[f.blocks.len-1].term_inst = (llvm_term_inst_t){ .type = LLVM_TERM_INST_RET_VOID };
+	}
 	return f;
 }

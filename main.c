@@ -23,7 +23,7 @@ char* process_file(const char* cmd, char* infile, const char* suffix){
 
 	int res = system(buf);
 	close(fd);
-	unlink(infile);
+	//unlink(infile);
 	free(infile);
 	
 	if (res){
@@ -65,11 +65,20 @@ int main(int argc, char** argv){
 	FILE* outfile = fdopen(mkstemps(fp, 3), "w");
 	for (context_iterator_t iter = context_iter(&top_level_context); iter.current; iter = context_iter_next(iter)){
 		ast_id_t* id = iter.current->value;
-		if (id->type != AST_ID_FUNC) continue;
-
-		llvm_function_t func = ast2llvm_emit_func(id->func);		
-		llvm_func_to_stream(&func, outfile);
-		free_llvm_function(func);
+		switch (id->type){
+			case AST_ID_FUNC:
+			{
+				llvm_function_t func = ast2llvm_emit_func(id->func);		
+				llvm_func_to_stream(&func, outfile);
+				free_llvm_function(func);
+				break;
+			}
+			case AST_ID_VAR:
+				llvm_global_to_stream(&id->var, outfile);
+				break;
+			case AST_ID_TYPE:
+				break;
+		}
 	}
 	fclose(outfile);
 	fclose(code);
@@ -83,7 +92,9 @@ int main(int argc, char** argv){
 
 	// use llvm to compile to object
 	fp = process_file("llvm-as", fp, ".bc");
+	printf("%s\n", fp);
 	fp = process_file("opt -O3", fp, ".bc");
+	printf("%s\n", fp);
 	fp = process_file("llc -O3 -filetype=obj", fp, ".o");
 	fp = process_file("ld -lc -L /lib/x86_64-linux-gnu -dynamic-linker /lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/crt1.o", fp, ".o");
 	printf("generated %s\n", fp);

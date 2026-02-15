@@ -290,7 +290,7 @@ function_args_definition:
 %nterm <decl> single_var_declaration;
 single_var_declaration:
 	type name	';'				{ $$ = create_ast_decl_var(@$, $type, $name); }
-|	type name '=' exp[val] ';'	{ $$ = create_ast_decl_var_assign(@$, $type, $name, $val); }
+|	type name '=' exp[val] ';'	{ $$ = create_ast_decl_var_assign(@$, $type, $name, $val); } // TODO: initialisation of globals
 
 %nterm <decl> typedef_declaration;
 typedef_declaration:
