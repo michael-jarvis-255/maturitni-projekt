@@ -23,11 +23,10 @@ char* process_file(const char* cmd, char* infile, const char* suffix){
 
 	int res = system(buf);
 	close(fd);
-	//unlink(infile);
+	unlink(infile);
 	free(infile);
 	
 	if (res){
-		//printf("error: command '%s' failed with code %i\n", buf, res);
 		exit(1);
 	}
 
@@ -93,9 +92,7 @@ int main(int argc, char** argv){
 
 	// use llvm to compile to object
 	fp = process_file("llvm-as", fp, ".bc");
-	printf("%s\n", fp);
 	fp = process_file("opt -O3", fp, ".bc");
-	printf("%s\n", fp);
 	fp = process_file("llc -O3 -filetype=obj", fp, ".o");
 	fp = process_file("ld -lc -L /lib/x86_64-linux-gnu -dynamic-linker /lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/crt1.o", fp, ".o");
 	printf("generated %s\n", fp);

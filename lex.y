@@ -74,6 +74,10 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 									yylval.type_ref = &id->type_;
 									free(name);
 									return TK_TYPE;
+								case AST_ID_GLOBAL:
+									yylval.var_ref = &id->global.var;
+									free(name);
+									return TK_VAR;
 								case AST_ID_VAR:
 									yylval.var_ref = &id->var;
 									free(name);
