@@ -79,6 +79,13 @@ void bignum_set_uint(bignum_t* bignum, uint value){
 	bignum->sign = false;
 }
 
+bool bignum_is_nonzero(const bignum_t* x){
+	for (unsigned int i = 0; i < x->size; i++){
+		if (x->arr[i]) return true;
+	}
+	return false;
+}
+
 static inline void bignum_move_and_free(bignum_t* dst, bignum_t* src){
 	free(dst->arr);
 	*dst = *src;

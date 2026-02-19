@@ -13,6 +13,7 @@ void bignum_set_uint(bignum_t* bignum, uint32_t value);
 void bignum_from_string(bignum_t* dst, const char* string); // string must contain only characters 0-9, and a terminating null character
 char* bignum_to_string(const bignum_t* x);
 double bignum_to_double(const bignum_t* x);
+bool bignum_is_nonzero(const bignum_t* x);
 
 // all operations modify 'a'
 void bignum_negate(bignum_t* a);
