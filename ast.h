@@ -301,16 +301,8 @@ void print_ast_context(const context_t* context, int depth);
 
 void print_ast();
 
-const char* ast_expr_binop_string(ast_expr_binop_enum_t op);
-const char* ast_expr_unop_string(ast_expr_unop_enum_t op);
-
-void print_info(loc_t loc, char* msg);
-void print_warning(loc_t loc, char* msg);
-void print_error(loc_t loc, char* msg);
-
-void printf_info(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
-void printf_warning(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
-void printf_error(loc_t loc, char* msg, ...) 	__attribute__ ((format (printf, 2, 3)));
+const char* ast_expr_binop_string(ast_expr_binop_enum_t);
+const char* ast_expr_unop_string(ast_expr_unop_enum_t);
 
 extern bool received_error;
 extern context_t top_level_context;

@@ -4,6 +4,7 @@
 	#include "yystype.h"
 	#include "yyltype.h"
 	#include "ast.h"
+	#include "message.h"
 	void yyerror(char const* err){
 		fprintf(stderr, "%s\n", err);
 	}
@@ -77,7 +78,7 @@ name:
 |	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
-exp0: // TODO: unary oparations
+exp0:
 	TK_NUMBER	{ $$ = $1; }
 |	lvalue		{ $$ = create_ast_expr_lvalue(@$, $1); }
 |	function_call

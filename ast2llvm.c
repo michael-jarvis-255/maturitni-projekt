@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "ast2llvm.h"
 #include "set.h"
+#include "message.h"
 
 typedef enum {
 	LLVM_TVALUE_INT_CONST = LLVM_VALUE_INT_CONST,
