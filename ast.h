@@ -265,7 +265,6 @@ ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue);
 ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, const ast_datatype_t* type);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
-void print_ast_expr(const ast_expr_t* exp);
 
 ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context);
 ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr);
@@ -277,7 +276,6 @@ ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body);
 ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, context_t* ctx);
 void free_ast_stmt_v(ast_stmt_t stmt);
 void free_ast_stmt(ast_stmt_t* stmt);
-void print_ast_stmt(const ast_stmt_t* stmt, int depth);
 
 void ast_declare_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body);
 void ast_declare_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name);
@@ -297,12 +295,6 @@ void context_stack_pop(context_t* context);
 void free_context_v(context_t* context);
 void free_context(context_t* context);
 void ast_cleanup_context();
-void print_ast_context(const context_t* context, int depth);
-
-void print_ast();
-
-const char* ast_expr_binop_string(ast_expr_binop_enum_t);
-const char* ast_expr_unop_string(ast_expr_unop_enum_t);
 
 extern bool received_error;
 extern context_t top_level_context;
