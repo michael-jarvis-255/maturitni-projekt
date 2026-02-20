@@ -236,13 +236,23 @@ if_ending_while_stmt:
 
 %nterm <stmt> non_if_for_loop;
 non_if_for_loop:
-	TK_FOR '(' basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body); }
+	for_header[ctx] basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); } // TODO: variables inside block can shadow 'init'
+|	for_header[ctx] var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); }
 
 %nterm <stmt> if_ending_for_loop;
 if_ending_for_loop:
-	TK_FOR '(' basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body); }
+	for_header[ctx] basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); }
+|	for_header[ctx] var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); }
 
 
+%nterm <context> for_header;
+for_header:
+	TK_FOR '('
+		{
+			context_t ctx = create_context();
+			$$ = convert_to_ptr(ctx);
+			context_stack_push($$);
+		}
 
 %nterm function_declaration;
 function_declaration:

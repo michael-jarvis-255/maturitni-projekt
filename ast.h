@@ -198,6 +198,7 @@ typedef struct ast_stmt_t {
 			struct ast_stmt_t* body;
 		} while_;
 		struct {
+			context_t* context;
 			ast_expr_t cond;
 			struct ast_stmt_t* init;
 			struct ast_stmt_t* step;
@@ -273,7 +274,7 @@ ast_stmt_t create_ast_stmt_if(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue);
 ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
 ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr);
 ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body);
-ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body);
+ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, context_t* ctx);
 void free_ast_stmt_v(ast_stmt_t stmt);
 void free_ast_stmt(ast_stmt_t* stmt);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);

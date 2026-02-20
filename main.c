@@ -214,7 +214,9 @@ int main(int argc, const char** argv){
 	// link with C runtime and dynamic linker
 	if (!options.output_path){
 		puts("no output path specified");
-		return 0;
+		unlink(obj_fp);
+		free(obj_fp);
+		return 1;
 	}
 	system_concat(4, "ld -lc -L /lib/x86_64-linux-gnu -dynamic-linker /lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/crt1.o", obj_fp, "-o", options.output_path);
 	unlink(obj_fp);

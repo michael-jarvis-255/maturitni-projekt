@@ -443,10 +443,12 @@ ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body){
 		.while_.body = convert_to_ptr(body)
 	};
 }
-ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body){
+ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, context_t* ctx){
+	context_stack_pop(ctx);
 	return (ast_stmt_t){
 		.type = AST_STMT_FOR,
 		.loc = loc,
+		.for_.context = ctx,
 		.for_.cond = cond,
 		.for_.init = convert_to_ptr(init),
 		.for_.step = convert_to_ptr(step),
@@ -492,6 +494,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			free_ast_stmt(stmt.while_.body);
 			break;
 		case AST_STMT_FOR:
+			free_context(stmt.for_.context);
 			free_ast_expr_v(stmt.for_.cond);
 			free_ast_stmt(stmt.for_.init);
 			free_ast_stmt(stmt.for_.step);

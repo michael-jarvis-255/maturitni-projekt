@@ -233,6 +233,7 @@ static void ast2llvm_alloca_stmt(const ast_stmt_t* stmt, var2reg_map_t* var2reg,
 				ast2llvm_alloca_stmt(&stmt->block.stmtlist.data[i], var2reg, f);
 			break;
 		case AST_STMT_FOR:
+			ast2llvm_alloca_context(stmt->for_.context, var2reg, f);
 			ast2llvm_alloca_stmt(stmt->for_.step, var2reg, f);
 			ast2llvm_alloca_stmt(stmt->for_.init, var2reg, f);
 			ast2llvm_alloca_stmt(stmt->for_.body, var2reg, f);
@@ -1057,7 +1058,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 	exit(1);
 }
 
-static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, ast_func_t ast_func){
+static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_func_t ast_func){
 	switch (stmt->type){
 		case AST_STMT_IF:
 		{
@@ -1194,25 +1195,42 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_add_block(f); // add a dead block to consume any extra instructions
 			return;
 		}
-		case AST_STMT_FOR:		printf("<unimplemented (for)>\n"); exit(1); // TODO
+		case AST_STMT_FOR:
+		{
+			ast2llvm_emit_stmt(stmt->for_.init, var2reg, f, ast_func);
+			llvm_label_t base_label = llvm_function_last_label(f);
+			
+			llvm_label_t cond_start = llvm_add_block(f);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f), f);
+			llvm_label_t cond_end = llvm_function_last_label(f);
+
+			llvm_label_t body_start = llvm_add_block(f);
+			ast2llvm_emit_stmt(stmt->for_.body, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->for_.step, var2reg, f, ast_func);
+			llvm_label_t body_end = llvm_function_last_label(f);
+
+			llvm_label_t next = llvm_add_block(f);
+			llvm_get_block(f, base_label)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			llvm_get_block(f, cond_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
+			llvm_get_block(f, body_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			return;
+		}
 		case AST_STMT_WHILE:
 		{
 			llvm_label_t base_label = llvm_function_last_label(f);
 			
-			llvm_add_block(f);
-			llvm_label_t cond_start = llvm_function_last_label(f);
+			llvm_label_t cond_start = llvm_add_block(f);
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f), f);
 			llvm_label_t cond_end = llvm_function_last_label(f);
 			
-			llvm_add_block(f);
-			llvm_label_t body_start = llvm_function_last_label(f);
+			llvm_label_t body_start = llvm_add_block(f);
 			ast2llvm_emit_stmt(stmt->while_.body, var2reg, f, ast_func);
 			llvm_label_t body_end = llvm_function_last_label(f);
 
 			llvm_label_t next = llvm_add_block(f);
-			f->blocks.data[base_label.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
-			f->blocks.data[cond_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
-			f->blocks.data[body_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			llvm_get_block(f, base_label)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			llvm_get_block(f, cond_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
+			llvm_get_block(f, body_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
 			return;
 		}
 	}
