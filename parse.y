@@ -5,7 +5,8 @@
 	#include "yyltype.h"
 	#include "ast.h"
 	#include "message.h"
-	void yyerror(char const* err){
+	#include "parse/main.h"
+	void yyerror(__attribute__((unused)) scope_t** _, char const* err){
 		fprintf(stderr, "%s\n", err);
 	}
 	int yylex ();
@@ -38,6 +39,7 @@
 %token TK_ARROW "->"
 
 %define parse.error custom
+%param {scope_t** current_scope}
 
 %%
 
@@ -58,7 +60,7 @@ type:
 
 %nterm <type_ref> anonymous_struct;
 anonymous_struct:
-	anonymous_struct_head '}'	{ $$ = ast_anon_struct_finalise($1); }
+	anonymous_struct_head '}'	{ $$ = ast_anon_struct_finalise(*current_scope, $1); }
 
 %nterm <type_ref> anonymous_struct_head;
 anonymous_struct_head:
@@ -68,8 +70,8 @@ anonymous_struct_head:
 %nterm <lvalue> lvalue;
 lvalue:
 	TK_VAR	{ $$ = create_ast_lvalue($1); }
-|	lvalue '.' name	{ $$ = ast_lvalue_extend($1, false, $name); }
-|	lvalue TK_ARROW name	{ $$ = ast_lvalue_extend($1, true, $name); }
+|	lvalue '.' name	{ $$ = $1; ast_lvalue_extend(&$$, false, $name); }
+|	lvalue TK_ARROW name	{ $$ = $1; ast_lvalue_extend(&$$, true, $name); }
 
 %nterm <name> name;
 name:
@@ -150,27 +152,19 @@ function_call_head:
 
 %nterm <stmt> block;
 block:
-	block_head '}'		{ $$ = $1; context_stack_pop($$.block.context); }
+	'{' begin_local_scope block_body end_local_scope[scope] '}'		{ $$ = create_ast_stmt_block(@$, $block_body, $scope); }
 
-%nterm <stmt> block_head;
-block_head:
-	'{'					{ $$ = create_ast_stmt_block(@$, true); context_stack_push($$.block.context); }
-|	block_head stmt		{ $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); } // TODO: block needs to also update it's loc
-|	block_head var_declaration
-|	block_head var_assign_declaration[stmt] { $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); }
-|	block_head ';'
+%nterm <stmt> scopeless_block;
+scopeless_block:
+	'{' block_body '}'		{ $$ = create_ast_stmt_block(@$, $block_body, 0); }
 
-%nterm <stmt> no_context_block;
-no_context_block:
-	no_context_block_head '}'
-
-%nterm <stmt> no_context_block_head;
-no_context_block_head:
-	'{'					{ $$ = create_ast_stmt_block(@$, false); }
-|	no_context_block_head stmt		{ $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); } // TODO: block needs to also update it's loc
-|	no_context_block_head var_declaration
-|	no_context_block_head var_assign_declaration[stmt] { $$ = $1; ast_stmt_list_append(&($$.block.stmtlist), $stmt); }
-|	no_context_block_head ';'
+%nterm <stmt_list> block_body;
+block_body:
+	%empty	{ $$ = create_ast_stmt_list(); }
+|	block_body stmt	{ $$ = $1; ast_stmt_list_append(&$$, $stmt); }
+|	block_body var_assign_declaration[stmt] { $$ = $1; ast_stmt_list_append(&$$, $stmt); }
+|	block_body var_declaration
+|	block_body ';'
 
 %nterm <stmt> stmt;
 stmt:
@@ -236,82 +230,66 @@ if_ending_while_stmt:
 	TK_WHILE '(' exp[cond] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_while(@$, $cond, $body); }
 
 %nterm <stmt> non_if_for_loop;
-non_if_for_loop:
-	for_header[ctx] basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); } // TODO: variables inside block can shadow 'init'
-|	for_header[ctx] var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); }
+non_if_for_loop: // TODO: variables inside block can shadow 'init'
+	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
+|	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
 
 %nterm <stmt> if_ending_for_loop;
 if_ending_for_loop:
-	for_header[ctx] basic_stmt[init] ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); }
-|	for_header[ctx] var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $ctx); }
-
-
-%nterm <context> for_header;
-for_header:
-	TK_FOR '('
-		{
-			context_t ctx = create_context();
-			$$ = convert_to_ptr(ctx);
-			context_stack_push($$);
-		}
+	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
+|	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
 
 %nterm function_declaration;
-function_declaration:
-	type name '(' function_args_definition[args] ')'
-	<context>{
-		context_t ctx = create_context();
-		$$ = convert_to_ptr(ctx);
-		context_stack_push($$);
-	}[context]
-	<id_ptr_list>{
-		$$ = create_ast_id_ptr_list();
-		for (unsigned int i=0; i<$args.len; i++){
-			ast_variable_t v = $args.data[i];
-			ast_id_t id = (ast_id_t){.type=AST_ID_VAR, .var=v};
-			ast_id_t* idp = convert_to_ptr(id);
-			current_context_insert(v.name, idp);
-			ast_id_ptr_list_append(&$$, idp);
-		}
-		shallow_free_ast_variable_list(&$args);
-	}[id_ptr_list]
-	no_context_block[body]
-	{
-		context_stack_pop($context);
-		ast_declare_function(@$, $type, $name.name, $id_ptr_list, $context, $body);
-	}
+function_declaration: // TODO: use block_body instead of scopeless_block ?
+	type name '(' begin_local_scope function_args[args] ')' scopeless_block[body] end_local_scope[scope]	{ parse_function_decl(@$, *current_scope, $type, $name.name, $args, $scope, $body); }
 
-%nterm <argdeflist> function_args_definition;
-function_args_definition:
-	%empty		{ $$ = create_ast_variable_list(); }
-|	type name	{ $$ = create_ast_variable_list(); ast_variable_list_append(&$$, (ast_variable_t){.declare_loc=@$, .type_ref=$type, .name=$name.name}); }
-|	function_args_definition[args] ',' type name	{ $$ = $1; ast_variable_list_append(&$$, (ast_variable_t){.declare_loc=@name, .type_ref=$type, .name=$name.name}); } // TODO: properly track declare loc
-// TODO: 'int foo(,int x){...}' shouldn't be valid!
+%nterm <var_ptr_list> function_args function_args_non_emtpy;
+function_args:
+	%empty		{ $$ = create_ast_variable_ptr_list(); }
+|	function_args_non_emtpy
+function_args_non_emtpy:
+	type name
+		{
+			$$ = create_ast_variable_ptr_list();
+			ast_id_t* var_id = parse_variable_decl(@$, *current_scope, $type, $name);
+			if (var_id) ast_variable_ptr_list_append(&$$, &var_id->var);
+		}
+|	function_args_non_emtpy[args] ',' type name
+		{
+			$$ = $1;
+			ast_id_t* var_id = parse_variable_decl(@$, *current_scope, $type, $name);
+			if (var_id) ast_variable_ptr_list_append(&$$, &var_id->var);
+		}
+
 
 %nterm var_declaration;
 var_declaration:
-	type name	';'				{ ast_declare_variable(@$, $type, $name); }
+	type name	';'				{ parse_variable_decl(@$, *current_scope, $type, $name); }
 
 %nterm <stmt> var_assign_declaration;
 var_assign_declaration:
-	type name '=' exp[val] ';'	{ $$ = ast_declare_variable_assign(@$, $type, $name, $val); }
+	type name '=' exp[val] ';'	{ $$ = parse_variable_assign_decl(@$, *current_scope, $type, $name, $val); }
 
 %nterm global_declaration;
 global_declaration:
-	type name	';'				{ ast_declare_global(@$, $type, $name); }
-|	type name '=' exp[val] ';'	{ ast_declare_global_assign(@$, $type, $name, $val); }
+	type name	';'				{ parse_global_decl(@$, *current_scope, $type, $name); }
+|	type name '=' exp[val] ';'	{ parse_global_assign_decl(@$, *current_scope, $type, $name, $val); }
 
 %nterm typedef_declaration;
 typedef_declaration:
-	TK_TYPEDEF type name ';'	{ ast_declare_typedef(@$, $type, $name); }
+	TK_TYPEDEF type name ';'	{ parse_typedef_decl(@$, *current_scope, $type, $name); }
+
+%nterm begin_local_scope;
+begin_local_scope:
+	%empty	{ push_new_scope(current_scope); }
+
+%nterm <scope> end_local_scope;
+end_local_scope:
+	%empty	{ $$ = pop_scope(current_scope); }
 
 %%
 
-#define COLOUR_INFO "\033[36m"
-#define COLOUR_WARNING "\033[33m"
-#define COLOUR_ERROR "\033[31m"
-#define STYLE_BOLD "\033[1m"
-#define STYLE_RESET "\033[0m"
-static int yyreport_syntax_error(const yypcontext_t* ctx){
+static int yyreport_syntax_error(const yypcontext_t* ctx, __attribute__((unused)) scope_t** _){
 	unsigned int buflen = 0;
 	char buf[1024];
 	buf[0] = 0;

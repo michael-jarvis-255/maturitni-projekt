@@ -4,26 +4,15 @@
 #include "list.h"
 #include "hashmap.h"
 #include "bignum.h"
+#include "ast/scope.h"
+#include "message.h"
 #include <stdbool.h>
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
-
-typedef const char* str;
-struct ast_id_t;
-typedef struct ast_id_t ast_id_t;
-create_hashmap_type_header(str, ast_id_t*, context);
 
 typedef struct ast_name_t {
 	loc_t loc;
 	char* name;
 } ast_name_t;
-
-typedef enum {
-	AST_DATATYPE_INTEGRAL,
-	AST_DATATYPE_FLOAT,
-	AST_DATATYPE_STRUCTURED,
-	AST_DATATYPE_POINTER,
-	AST_DATATYPE_VOID,
-} ast_datatype_enum_t;
 
 struct ast_datatype_t;
 
@@ -32,8 +21,15 @@ typedef struct ast_variable_t {
 	char* name;
 	struct ast_datatype_t* type_ref;
 } ast_variable_t;
-
 create_list_type_header(ast_variable, false);
+
+typedef enum {
+	AST_DATATYPE_INTEGRAL,
+	AST_DATATYPE_FLOAT,
+	AST_DATATYPE_STRUCTURED,
+	AST_DATATYPE_POINTER,
+	AST_DATATYPE_VOID,
+} ast_datatype_enum_t;
 
 typedef struct ast_datatype_t {
 	loc_t declare_loc;
@@ -184,7 +180,7 @@ typedef struct ast_stmt_t {
 		ast_expr_t expr;
 		struct {
 			ast_stmt_list_t stmtlist;
-			context_t* context;
+			scope_t* local_scope;
 		} block;
 		struct {
 			ast_lvalue_t lvalue;
@@ -198,7 +194,7 @@ typedef struct ast_stmt_t {
 			struct ast_stmt_t* body;
 		} while_;
 		struct {
-			context_t* context;
+			scope_t* local_scope;
 			ast_expr_t cond;
 			struct ast_stmt_t* init;
 			struct ast_stmt_t* step;
@@ -207,16 +203,16 @@ typedef struct ast_stmt_t {
 	};
 } ast_stmt_t;
 
-typedef ast_id_t* ast_id_ptr_t;
-create_list_type_header(ast_id_ptr, false);
+typedef ast_variable_t* ast_variable_ptr_t;
+create_list_type_header(ast_variable_ptr, false);
 
 typedef struct ast_func_t {
 	loc_t declare_loc;
 	ast_datatype_t* return_type_ref;
 	const char* name;
-	ast_id_ptr_list_t args; // TODO: would be nicer to use ast_variable_ptr_list_t, maybe refactor argdeflist from yystype.h too?
+	ast_variable_ptr_list_t args;
 	ast_stmt_t* body;
-	context_t* context;
+	scope_t* local_scope;
 } ast_func_t;
 
 typedef struct ast_global_t {
@@ -241,20 +237,20 @@ typedef struct ast_id_t {
 	};
 } ast_id_t;
 
-typedef context_t* context_ptr_t;
-create_list_type_header(context_ptr, true);
-typedef context_ptr_list_t context_stack_t;
+typedef struct ast_t {
+	source_lines_t source_lines;
+	scope_t* global_scope;
+} ast_t;
 
+// identifiers
 void free_ast_id_v(ast_id_t id);
 void free_ast_id(ast_id_t* id);
 
-ast_datatype_t* create_ast_anon_struct_head(loc_t loc);
-void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name);
-ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct);
-
+// lvalues
 ast_lvalue_t create_ast_lvalue(ast_variable_t* var);
-ast_lvalue_t ast_lvalue_extend(ast_lvalue_t lvalue, bool deref, ast_name_t member_name);
+void ast_lvalue_extend(ast_lvalue_t* lvalue, bool deref, ast_name_t member_name);
 
+// expressions
 ast_expr_t create_ast_expr_int_const(loc_t loc, bignum_t* value);
 ast_expr_t create_ast_expr_double_const(loc_t loc, double value);
 ast_expr_t create_ast_expr_lvalue(loc_t loc, ast_lvalue_t lvalue);
@@ -266,41 +262,31 @@ ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, const ast_datatype_t
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
 
-ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context);
+// statements
+ast_stmt_t create_ast_stmt_block(loc_t loc, ast_stmt_list_t stmt_list, scope_t* local_scope);
 ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr);
 ast_stmt_t create_ast_stmt_assign(loc_t loc, ast_lvalue_t lvalue, ast_expr_t value);
 ast_stmt_t create_ast_stmt_if(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue);
 ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue, ast_stmt_t iffalse);
 ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr);
 ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body);
-ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, context_t* ctx);
+ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, scope_t* local_scope);
 void free_ast_stmt_v(ast_stmt_t stmt);
 void free_ast_stmt(ast_stmt_t* stmt);
 
-void ast_declare_function(loc_t loc, ast_datatype_t* returntype, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body);
-void ast_declare_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name);
-void ast_declare_variable(loc_t loc, ast_datatype_t* type, ast_name_t name);
-ast_stmt_t ast_declare_variable_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
-
-void ast_declare_global(loc_t loc, ast_datatype_t* type, ast_name_t name);
-void ast_declare_global_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
-
-
-void ast_init_context(FILE* source);
-void current_context_insert(const char* name, ast_id_t* value);
-ast_id_t* context_stack_get(const char* name);
-context_t create_context();
-void context_stack_push(context_t* context);
-void context_stack_pop(context_t* context);
-void free_context_v(context_t* context);
-void free_context(context_t* context);
-void ast_cleanup_context();
-
+// TODO: move elsewhere
 extern bool received_error;
-extern context_t top_level_context;
 
+// datatypes
+ast_datatype_t* create_ast_anon_struct_head(loc_t loc);
+void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name);
+ast_datatype_t* ast_anon_struct_finalise(scope_t* current_scope, ast_datatype_t* strct);
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b);
 ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base);
+ast_datatype_t ast_datatype_duplicate(const ast_datatype_t* original, loc_t declare_loc, char* new_name);
 void free_ast_datatype(ast_datatype_t* type);
+
+// ast
+void free_ast_v(ast_t ast);
 
 #endif

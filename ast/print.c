@@ -90,10 +90,10 @@ void print_ast_id(const ast_id_t* id, int depth){
 			ntabs(depth+1); printf("return type: '%s'\n", id->func.return_type_ref->name);
 			ntabs(depth+1); printf("arguments:\n");
 			for (unsigned int i=0; i<id->func.args.len; i++){
-				ntabs(depth+2); printf("'%s' of type '%s'\n", id->func.args.data[i]->var.name, id->func.args.data[i]->var.type_ref->name);
+				ntabs(depth+2); printf("'%s' of type '%s'\n", id->func.args.data[i]->name, id->func.args.data[i]->type_ref->name);
 			}
 			ntabs(depth+1); printf("context:\n");
-			print_ast_context(id->func.context, depth+2);
+			print_ast_scope(id->func.local_scope, depth+2);
 			ntabs(depth+1); printf("body:\n");
 			print_ast_stmt(id->func.body, depth+2);
 			break;
@@ -220,12 +220,12 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 	}
 }
 
-void print_ast_context(const context_t* ctx, int depth){
-	for (context_iterator_t iter = context_iter(ctx); iter.current; iter = context_iter_next(iter)){
+void print_ast_scope(const scope_t* scope, int depth){
+	for (scope_iterator_t iter = scope_iter(scope); iter.current; iter = scope_iter_next(iter)){
 		print_ast_id(iter.current->value, depth);
 	}
 }
 
-void print_ast(){
-	print_ast_context(&top_level_context, 0);
+void print_ast(const ast_t ast){
+	print_ast_scope(ast.global_scope, 0);
 }

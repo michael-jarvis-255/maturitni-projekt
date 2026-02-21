@@ -2,6 +2,8 @@
 	#include "yystype.h"
 	#include "ast.h"
 	#include "parse.tab.h"
+	#include "ast/scope.h"
+	#define YY_DECL int yylex( current_scope ) scope_t** current_scope;
 
 	static void update_yylloc(unsigned int yyleng){
 		yylloc.first_line = yylloc.last_line;
@@ -23,6 +25,7 @@
 %option nounput
 %option noinput
 %option noyywrap
+%option nostdinit
 %x comment
 %x string
 
@@ -62,7 +65,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 							strncpy(name, yytext, yyleng);
 							name[yyleng] = 0;
 
-							ast_id_t* id = context_stack_get(name);
+							ast_id_t* id = scope_get(*current_scope, name);
 							if (id == 0){
 								yylval.name.name = name;
 								yylval.name.loc = yylloc;

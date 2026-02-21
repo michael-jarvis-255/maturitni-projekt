@@ -65,8 +65,8 @@ static llvm_value_t llvm_untype_value(const llvm_typed_value_t tv){
 	}
 	return v;
 }
-static ast_datatype_t* find_ast_type(const char* name){
-	return &context_get(&top_level_context, name, (void*)0)->type_;
+static ast_datatype_t* find_ast_type(const scope_t* global_scope, const char* name){ // TODO: maybe built-in types can be stored globally somewhere?
+	return &scope_get(global_scope, name)->type_;
 }
 
 static unsigned long ast_variable_ptr_hash(ast_variable_ptr p){
@@ -206,8 +206,8 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 	return LLVM_TYPED_REG(reg, get_ast_pointer_type(type));
 }
 
-static void ast2llvm_alloca_context(const context_t* ctx, var2reg_map_t* var2reg, llvm_function_t* f){
-	for (context_iterator_t iter = context_iter(ctx); iter.current; iter = context_iter_next(iter)){
+static void ast2llvm_alloca_scope(const scope_t* scope, var2reg_map_t* var2reg, llvm_function_t* f){
+	for (scope_iterator_t iter = scope_iter(scope); iter.current; iter = scope_iter_next(iter)){
 		ast_id_t* id = iter.current->value;
 		if (id->type != AST_ID_VAR) continue;
 		ast_variable_t* var = &id->var;
@@ -229,13 +229,13 @@ static void ast2llvm_alloca_stmt(const ast_stmt_t* stmt, var2reg_map_t* var2reg,
 			ast2llvm_alloca_stmt(stmt->if_else.iffalse, var2reg, f);
 			break;
 		case AST_STMT_BLOCK:
-			if (stmt->block.context)
-				ast2llvm_alloca_context(stmt->block.context, var2reg, f);
+			if (stmt->block.local_scope)
+				ast2llvm_alloca_scope(stmt->block.local_scope, var2reg, f);
 			for (unsigned int i=0; i < stmt->block.stmtlist.len; i++)
 				ast2llvm_alloca_stmt(&stmt->block.stmtlist.data[i], var2reg, f);
 			break;
 		case AST_STMT_FOR:
-			ast2llvm_alloca_context(stmt->for_.context, var2reg, f);
+			ast2llvm_alloca_scope(stmt->for_.local_scope, var2reg, f);
 			ast2llvm_alloca_stmt(stmt->for_.step, var2reg, f);
 			ast2llvm_alloca_stmt(stmt->for_.init, var2reg, f);
 			ast2llvm_alloca_stmt(stmt->for_.body, var2reg, f);
@@ -472,7 +472,7 @@ no_cast:
 	return value;
 }
 
-static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
+static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, const ast_t ast){
 	switch (val.type){
 		case LLVM_TVALUE_INT_CONST:
 			bignum_set_uint(val.int_const, bignum_is_nonzero(val.int_const));
@@ -519,7 +519,7 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 						.fcmp.op2 = llvm_untype_value(ast2llvm_cast(
 								(llvm_typed_value_t){
 									.type = LLVM_TVALUE_DOUBLE_CONST,
-									.ast_type = find_ast_type("f64"),
+									.ast_type = find_ast_type(ast.global_scope, "f64"),
 									.double_const = (double)0.0
 								},
 								val.ast_type, f, &err, (loc_t){0}))
@@ -546,21 +546,21 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f){
 	puts("internal error"); exit(1);
 }
 
-static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f);
-static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f){
+static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, ast_t ast);
+static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_t ast){
 	// NOTE: expr must be AST_EXPR_BINOP of type AST_EXPR_BINOP_LAND or AST_EXPR_BINOP_LOR
-	llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f);
+	llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f, ast);
 	llvm_value_t left;
 	if (left_operand.type == LLVM_TVALUE_REG && left_operand.ast_type->kind == AST_DATATYPE_STRUCTURED){
 		printf_error(expr->binop.left->loc, "struct type '%s' is not supported for binary operation '%s'", left_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
 		left = POISON_VALUE;
 	}else{
-		left = llvm_cast_to_i1(left_operand, f);
+		left = llvm_cast_to_i1(left_operand, f, ast);
 	}
 	
 	llvm_label_t base_label = llvm_function_last_label(f);
 	llvm_label_t long_start_label = llvm_add_block(f);
-	llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+	llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f, ast);
 	llvm_value_t right;
 
 	// catch structured types and floats
@@ -568,7 +568,7 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 		printf_error(expr->binop.right->loc, "struct type '%s' is not supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
 		right = POISON_VALUE;
 	}else{
-		right = llvm_cast_to_i1(right_operand, f);
+		right = llvm_cast_to_i1(right_operand, f, ast);
 	}
 	
 	llvm_label_t long_end_label = llvm_function_last_label(f);
@@ -589,7 +589,7 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 		.phi.labels = {base_label, long_end_label},
 		.phi.values = {left, right}
 	});
-	return LLVM_TYPED_REG(out, find_ast_type("bool"));
+	return LLVM_TYPED_REG(out, find_ast_type(ast.global_scope, "bool"));
 }
 
 static llvm_typed_value_t ast2llvm_int_const_binop(ast_expr_binop_enum_t op, llvm_typed_value_t left_operand, llvm_typed_value_t right_operand){
@@ -637,19 +637,19 @@ static llvm_typed_value_t ast2llvm_int_const_binop(ast_expr_binop_enum_t op, llv
 }
 
 
-static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f){
+static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_t ast){
 	switch (expr->type){
 		case AST_EXPR_INT_CONST:
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_INT_CONST, .int_const=bignum_copy(expr->int_constant), .ast_type=0 };
 		case AST_EXPR_DOUBLE_CONST:
-			return (llvm_typed_value_t){ .type=LLVM_TVALUE_DOUBLE_CONST, .double_const=expr->double_constant, .ast_type=find_ast_type("f64") };
+			return (llvm_typed_value_t){ .type=LLVM_TVALUE_DOUBLE_CONST, .double_const=expr->double_constant, .ast_type=find_ast_type(ast.global_scope, "f64") };
 		case AST_EXPR_LVALUE:
 			return ast2llvm_read_lvalue(var2reg, expr->lvalue, f);
 		case AST_EXPR_FUNC_CALL:
 		{
 			llvm_typed_value_list_t arglist = create_llvm_typed_value_list();
 			for (unsigned int i=0; i < expr->func_call.arglist.len; i++){
-				llvm_typed_value_t arg = ast2llvm_emit_expr(&expr->func_call.arglist.data[i], var2reg, f);
+				llvm_typed_value_t arg = ast2llvm_emit_expr(&expr->func_call.arglist.data[i], var2reg, f, ast);
 				llvm_typed_value_list_append(&arglist, arg);
 			}
 
@@ -666,8 +666,8 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return LLVM_TYPED_POISON(expr->func_call.func_ref->return_type_ref);
 			}
 			for (unsigned int i=0; i < arglist.len; i++){
-				const ast_datatype_t* expected_argtype = expr->func_call.func_ref->args.data[i]->var.type_ref;
-				const ast_datatype_t* given_argtype = expr->func_call.func_ref->args.data[i]->var.type_ref;
+				const ast_datatype_t* expected_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
+				const ast_datatype_t* given_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
 				if (!given_argtype) continue;
 				
 				if (ast_datatype_eq(expected_argtype, given_argtype)) 
@@ -697,7 +697,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			}
 			for (unsigned int i=0; i<arglist.len; i++){
 				llvm_arg_list_append(&inst.call.args, (llvm_arg_t){
-					.type=ast_type_to_llvm_type(expr->func_call.func_ref->args.data[i]->var.type_ref),
+					.type=ast_type_to_llvm_type(expr->func_call.func_ref->args.data[i]->type_ref),
 					.val=llvm_untype_value(arglist.data[i])
 				});
 			}
@@ -707,7 +707,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 		}
 		case AST_EXPR_UNOP:
 		{
-			llvm_typed_value_t operand = ast2llvm_emit_expr(expr->unop.operand, var2reg, f);
+			llvm_typed_value_t operand = ast2llvm_emit_expr(expr->unop.operand, var2reg, f, ast);
 			if (operand.type == LLVM_TVALUE_POISON && operand.ast_type == 0) return operand;
 			if (operand.type == LLVM_TVALUE_INT_CONST && operand.ast_type == 0){
 				switch (expr->unop.op){
@@ -750,14 +750,14 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						{
 							bignum_t* num = create_bignum();
 							bignum_set_uint(num, 0);
-							llvm_value_t res = llvm_cast_to_i1(operand, f);
+							llvm_value_t res = llvm_cast_to_i1(operand, f, ast);
 							return LLVM_TYPED_REG(llvm_add_inst(f, (llvm_inst_t){
 								.type = LLVM_INST_ICMP,
 								.icmp.cond = LLVM_ICMP_EQ,
 								.icmp.type = LLVM_TYPE_I1,
 								.icmp.op1 = res,
 								.icmp.op2 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=num }
-							}), find_ast_type("bool"));
+							}), find_ast_type(ast.global_scope, "bool"));
 						}
 					}
 					puts("internal error"); exit(1);
@@ -769,14 +769,14 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						{
 							bignum_t* num = create_bignum();
 							bignum_set_uint(num, 0);
-							llvm_value_t res = llvm_cast_to_i1(operand, f);
+							llvm_value_t res = llvm_cast_to_i1(operand, f, ast);
 							return LLVM_TYPED_REG(llvm_add_inst(f, (llvm_inst_t){
 								.type = LLVM_INST_ICMP,
 								.icmp.cond = LLVM_ICMP_EQ,
 								.icmp.type = LLVM_TYPE_I1,
 								.icmp.op1 = res,
 								.icmp.op2 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=num }
-							}), find_ast_type("bool"));
+							}), find_ast_type(ast.global_scope, "bool"));
 						}
 						case AST_EXPR_UNOP_DEREF:
 						{
@@ -821,7 +821,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 								.icmp.cond = LLVM_ICMP_EQ,
 								.icmp.op1 = (llvm_value_t){ .type=LLVM_VALUE_INT_CONST, .int_const=create_bignum() },
 								.icmp.op2 = llvm_untype_value(operand)
-							}), find_ast_type("bool"));
+							}), find_ast_type(ast.global_scope, "bool"));
 						case AST_EXPR_UNOP_DEREF:
 							printf_error(expr->loc, "cannot dereference non-pointer value of type '%s'", operand.ast_type->name);
 							return LLVM_TYPED_POISON(0);
@@ -835,10 +835,10 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 		{
 			// short-circuiting && and ||
 			if (expr->binop.op == AST_EXPR_BINOP_LAND || expr->binop.op == AST_EXPR_BINOP_LOR){
-				return ast2llvm_emit_short_circuiting_expr(expr, var2reg, f);
+				return ast2llvm_emit_short_circuiting_expr(expr, var2reg, f, ast);
 			}
-			llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f);
-			llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f);
+			llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f, ast);
+			llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f, ast);
 			const ast_datatype_t* const left_type_original = left_operand.ast_type;
 			const ast_datatype_t* const right_type_original = right_operand.ast_type;
 
@@ -958,7 +958,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							inst.icmp.type = optype;
 							inst.icmp.op1 = llvm_untype_value(left_operand);
 							inst.icmp.op2 = llvm_untype_value(right_operand);
-							restype = find_ast_type("bool");
+							restype = find_ast_type(ast.global_scope, "bool");
 							break;
 						
 						case AST_EXPR_BINOP_LAND:
@@ -1002,7 +1002,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							inst.fcmp.type = optype;
 							inst.fcmp.op1 = llvm_untype_value(left_operand);
 							inst.fcmp.op2 = llvm_untype_value(right_operand);
-							restype = find_ast_type("bool");
+							restype = find_ast_type(ast.global_scope, "bool");
 							break;
 							
 						case AST_EXPR_BINOP_SHL: goto binop_invalid_types;
@@ -1052,7 +1052,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			return ast2llvm_get_lvalue_pointer(var2reg, expr->ref.lvalue, f);
 		case AST_EXPR_CAST:
 		{
-			llvm_typed_value_t val = ast2llvm_emit_expr(expr->cast.expr, var2reg, f);
+			llvm_typed_value_t val = ast2llvm_emit_expr(expr->cast.expr, var2reg, f, ast);
 			return ast2llvm_cast(val, expr->cast.type_ref, f, 0, expr->loc);
 		}
 	}
@@ -1060,16 +1060,16 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 	exit(1);
 }
 
-static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_func_t ast_func){
+static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_func_t ast_func, const ast_t ast){
 	switch (stmt->type){
 		case AST_STMT_IF:
 		{
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_.cond, var2reg, f), f);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_.cond, var2reg, f, ast), f, ast);
 			llvm_label_t base_label = llvm_function_last_label(f);
 
 			llvm_add_block(f);
 			llvm_label_t iftrue_start = llvm_function_last_label(f);
-			ast2llvm_emit_stmt(stmt->if_.iftrue, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->if_.iftrue, var2reg, f, ast_func, ast);
 			llvm_label_t iftrue_end = llvm_function_last_label(f);			
 
 			llvm_label_t next_label = llvm_add_block(f);
@@ -1080,17 +1080,17 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		}
 		case AST_STMT_IF_ELSE:
 		{
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_else.cond, var2reg, f), f);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_else.cond, var2reg, f, ast), f, ast);
 			llvm_label_t base_label = llvm_function_last_label(f);
 
 			llvm_add_block(f);
 			llvm_label_t iftrue_start = llvm_function_last_label(f);
-			ast2llvm_emit_stmt(stmt->if_else.iftrue, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->if_else.iftrue, var2reg, f, ast_func, ast);
 			llvm_label_t iftrue_end = llvm_function_last_label(f);
 
 			llvm_add_block(f);
 			llvm_label_t iffalse_start = llvm_function_last_label(f);
-			ast2llvm_emit_stmt(stmt->if_else.iffalse, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->if_else.iffalse, var2reg, f, ast_func, ast);
 			llvm_label_t iffalse_end = llvm_function_last_label(f);
 
 			llvm_label_t next_label = llvm_add_block(f);
@@ -1101,16 +1101,16 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			return;
 		}
 		case AST_STMT_EXPR:
-			ast2llvm_emit_expr(&stmt->expr, var2reg, f);
+			ast2llvm_emit_expr(&stmt->expr, var2reg, f, ast);
 			return;
 		case AST_STMT_BLOCK:
 			for (unsigned int i=0; i < stmt->block.stmtlist.len; i++){
-				ast2llvm_emit_stmt(&stmt->block.stmtlist.data[i], var2reg, f, ast_func);
+				ast2llvm_emit_stmt(&stmt->block.stmtlist.data[i], var2reg, f, ast_func, ast);
 			}
 			return;
 		case AST_STMT_ASSIGN:
 			{
-				llvm_typed_value_t val = ast2llvm_emit_expr(&stmt->assign.val, var2reg, f);
+				llvm_typed_value_t val = ast2llvm_emit_expr(&stmt->assign.val, var2reg, f, ast);
 				const ast_datatype_t* trgt_type = stmt->assign.lvalue.type;
 
 				if (val.type == LLVM_TVALUE_POISON && val.ast_type == 0)
@@ -1171,7 +1171,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 				return;
 			}
 			
-			llvm_typed_value_t val = ast2llvm_emit_expr(stmt->return_.val, var2reg, f);
+			llvm_typed_value_t val = ast2llvm_emit_expr(stmt->return_.val, var2reg, f, ast);
 			if (val.type == LLVM_TVALUE_POISON && val.ast_type == 0) return;
 			if (val.type == LLVM_TVALUE_INT_CONST && val.ast_type == 0){
 				bool err;
@@ -1199,16 +1199,16 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		}
 		case AST_STMT_FOR:
 		{
-			ast2llvm_emit_stmt(stmt->for_.init, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->for_.init, var2reg, f, ast_func, ast);
 			llvm_label_t base_label = llvm_function_last_label(f);
 			
 			llvm_label_t cond_start = llvm_add_block(f);
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f), f);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f, ast), f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
 
 			llvm_label_t body_start = llvm_add_block(f);
-			ast2llvm_emit_stmt(stmt->for_.body, var2reg, f, ast_func);
-			ast2llvm_emit_stmt(stmt->for_.step, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->for_.body, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->for_.step, var2reg, f, ast_func, ast);
 			llvm_label_t body_end = llvm_function_last_label(f);
 
 			llvm_label_t next = llvm_add_block(f);
@@ -1222,11 +1222,11 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_label_t base_label = llvm_function_last_label(f);
 			
 			llvm_label_t cond_start = llvm_add_block(f);
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f), f);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f, ast), f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
 			
 			llvm_label_t body_start = llvm_add_block(f);
-			ast2llvm_emit_stmt(stmt->while_.body, var2reg, f, ast_func);
+			ast2llvm_emit_stmt(stmt->while_.body, var2reg, f, ast_func, ast);
 			llvm_label_t body_end = llvm_function_last_label(f);
 
 			llvm_label_t next = llvm_add_block(f);
@@ -1238,7 +1238,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 	}
 }
 
-llvm_function_t ast2llvm_emit_func(ast_func_t func){
+llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 	llvm_function_t f;
 	f.name = strdup(func.name);
 	f.blocks = create_llvm_basic_block_list();
@@ -1253,7 +1253,7 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func){
 	f.arg_count = func.args.len;
 	f.args = malloc(f.arg_count*sizeof(llvm_type_t));
 	for (unsigned int i=0; i < func.args.len; i++){
-		f.args[i] = ast_type_to_llvm_type(func.args.data[i]->var.type_ref);
+		f.args[i] = ast_type_to_llvm_type(func.args.data[i]->type_ref);
 	}
 
 	llvm_basic_block_list_append(&f.blocks, (llvm_basic_block_t){
@@ -1264,9 +1264,9 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func){
 
 	var2reg_map_t var2reg = create_var2reg_map();
 	
-	ast2llvm_alloca_context(func.context, &var2reg, &f);
+	ast2llvm_alloca_scope(func.local_scope, &var2reg, &f);
 	for (unsigned int i=0; i < func.args.len; i++){
-		ast_variable_t* var = &func.args.data[i]->var;
+		ast_variable_t* var = func.args.data[i];
 		llvm_add_inst(&f, (llvm_inst_t){
 			.type = LLVM_INST_STORE,
 			.store.type = ast_type_to_llvm_type(var->type_ref),
@@ -1276,7 +1276,7 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func){
 	}
 	
 	ast2llvm_alloca_stmt(func.body, &var2reg, &f);
-	ast2llvm_emit_stmt(func.body, &var2reg, &f, func);
+	ast2llvm_emit_stmt(func.body, &var2reg, &f, func, ast);
 	var2reg_map_free(&var2reg);
 
 	if (f.has_return){

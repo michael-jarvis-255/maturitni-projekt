@@ -2,6 +2,7 @@
 #define _LIST_H_
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #define _MACRO_IF_0(body)
 #define _MACRO_IF_1(body) body

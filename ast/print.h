@@ -9,7 +9,7 @@ void print_ast_lvalue(ast_lvalue_t lvalue);
 void print_ast_id(const ast_id_t* id, int depth);
 void print_ast_expr(const ast_expr_t* exp);
 void print_ast_stmt(const ast_stmt_t* stmt, int depth);
-void print_ast_context(const context_t* context, int depth);
-void print_ast();
+void print_ast_scope(const scope_t* scope, int depth);
+void print_ast(const ast_t ast);
 
 #endif

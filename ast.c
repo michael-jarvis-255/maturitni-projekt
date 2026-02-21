@@ -1,26 +1,18 @@
 #include "ast.h"
+#include "message.h"
+#include "parse/main.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdarg.h>
-#include "hash.h"
-#include "message.h"
 
-static void free_context_ptr_v(context_ptr_t map){
-	free_context_v(map);
-}
 create_list_type_impl(ast_variable, false)
+create_list_type_impl(ast_variable_ptr, false)
 create_list_type_impl(ast_stmt, true)
-create_list_type_impl(context_ptr, true)
 create_list_type_impl(ast_expr, true)
-create_list_type_impl(ast_id_ptr, false)
 create_list_type_impl(ast_lvalue_member_access, false)
-create_hashmap_type_impl(str, ast_id_t*, context)
 
-context_t top_level_context;
 bool received_error;
-static context_stack_t context_stack;
-char** source_lines;
 
 void free_ast_id_v(ast_id_t id){
 	switch (id.type){
@@ -32,7 +24,7 @@ void free_ast_id_v(ast_id_t id){
 			break;
 		case AST_ID_FUNC:
 			free_ast_stmt(id.func.body);
-			free_context(id.func.context);
+			//free_scope(id.func.local_scope); TODO
 			free((void*)id.func.name);
 			free(id.func.args.data);
 			break;
@@ -65,7 +57,7 @@ void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_
 	};
 	ast_variable_list_append(&strct->structure.members, elem);
 }
-ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct){
+ast_datatype_t* ast_anon_struct_finalise(scope_t* current_scope, ast_datatype_t* strct){
 	ast_id_t* type_id = malloc(sizeof(ast_id_t));
 	type_id->type = AST_ID_TYPE;
 	type_id->type_ = *strct;
@@ -73,8 +65,7 @@ ast_datatype_t* ast_anon_struct_finalise(ast_datatype_t* strct){
 	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the context
 	// we are placing it into the context so that it can be free()'d
 	// TODO: find a more elegant solution
-	context_t* ctx = context_stack.data[context_stack.len-1];
-	context_insert(ctx, type_id->type_.name, type_id);
+	scope_force_insert(current_scope, type_id->type_.name, type_id);
 
 	free(strct);
 	return &type_id->type_;
@@ -88,47 +79,36 @@ ast_lvalue_t create_ast_lvalue(ast_variable_t* var){
 	};
 }
 
-ast_lvalue_t ast_lvalue_extend(ast_lvalue_t lvalue, bool deref, ast_name_t member_name){
+void ast_lvalue_extend(ast_lvalue_t* lvalue, bool deref, ast_name_t member_name){
 	if (deref){
-		if (lvalue.type->kind != AST_DATATYPE_POINTER){
-			printf_error(lvalue.loc, "invalid type access with '->' (type '%s' is not a pointer)", lvalue.type->name);
+		if (lvalue->type->kind != AST_DATATYPE_POINTER){
+			printf_error(lvalue->loc, "invalid type access with '->' (type '%s' is not a pointer)", lvalue->type->name);
 			free(member_name.name);
-			return lvalue; // TODO: return some kind of error value
+			return; // TODO: return some kind of error value
 		}
-		lvalue.type = lvalue.type->pointer.base;
+		lvalue->type = lvalue->type->pointer.base;
 	}
-	if (lvalue.type->kind != AST_DATATYPE_STRUCTURED){
-		printf_error(lvalue.loc, "invalid type access with '.' (type '%s' is not a struct)", lvalue.type->name);
+	if (lvalue->type->kind != AST_DATATYPE_STRUCTURED){
+		printf_error(lvalue->loc, "invalid type access with '.' (type '%s' is not a struct)", lvalue->type->name); // TODO: wrong when deref == true
 		free(member_name.name);
-		return lvalue; // TODO: return some kind of error value
+		return; // TODO: return some kind of error value
 	}
-	for (unsigned int i=0; i < lvalue.type->structure.members.len; i++){
-		const ast_variable_t* member = &lvalue.type->structure.members.data[i];
+	for (unsigned int i=0; i < lvalue->type->structure.members.len; i++){
+		const ast_variable_t* member = &lvalue->type->structure.members.data[i];
 		if (strcmp(member->name, member_name.name) == 0){
-			lvalue.type = member->type_ref;
-			ast_lvalue_member_access_list_append(&lvalue.member_access, (ast_lvalue_member_access_t){.deref = deref, .member_idx = i});
+			lvalue->type = member->type_ref;
+			ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){.deref = deref, .member_idx = i});
 			free(member_name.name);
-			return lvalue;
+			return;
 		}
 	}
-	printf_error(lvalue.loc, "struct type '%s' does not contain member '%s'", lvalue.type->name, member_name.name);
+	printf_error(lvalue->loc, "struct type '%s' does not contain member '%s'", lvalue->type->name, member_name.name);
 	free(member_name.name);
-	return lvalue; // TODO: return some kind of error value
+	return; // TODO: return some kind of error value
 }
 
 void free_ast_lvalue_v(ast_lvalue_t lvalue){
 	shallow_free_ast_lvalue_member_access_list(&lvalue.member_access);
-}
-
-static inline loc_t loc_from_ast_id(ast_id_t* id){
-	switch (id->type){
-		case AST_ID_VAR: return id->var.declare_loc;
-		case AST_ID_FUNC: return id->func.declare_loc;
-		case AST_ID_TYPE: return id->type_.declare_loc;
-		case AST_ID_GLOBAL: return id->global.var.declare_loc;
-	}
-	printf("INTERNAL ERROR\n");
-	exit(1);
 }
 
 ast_expr_t create_ast_expr_int_const(loc_t loc, bignum_t* value){
@@ -228,17 +208,12 @@ void free_ast_expr_v(ast_expr_t exp){
 	}
 }
 
-ast_stmt_t create_ast_stmt_block(loc_t loc, bool with_context){
-	context_t* ctxp = 0;
-	if (with_context){
-		context_t ctx = create_context();
-		ctxp = convert_to_ptr(ctx);
-	}
+ast_stmt_t create_ast_stmt_block(loc_t loc, ast_stmt_list_t stmt_list, scope_t* local_scope){
 	return (ast_stmt_t){
 		.type = AST_STMT_BLOCK,
 		.loc = loc,
-		.block.stmtlist = create_ast_stmt_list(),
-		.block.context = ctxp
+		.block.stmtlist = stmt_list,
+		.block.local_scope = local_scope
 	};
 }
 ast_stmt_t create_ast_stmt_expr(loc_t loc, ast_expr_t expr){
@@ -289,12 +264,11 @@ ast_stmt_t create_ast_stmt_while(loc_t loc, ast_expr_t cond, ast_stmt_t body){
 		.while_.body = convert_to_ptr(body)
 	};
 }
-ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, context_t* ctx){
-	context_stack_pop(ctx);
+ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_stmt_t step, ast_stmt_t body, scope_t* local_scope){
 	return (ast_stmt_t){
 		.type = AST_STMT_FOR,
 		.loc = loc,
-		.for_.context = ctx,
+		.for_.local_scope = local_scope,
 		.for_.cond = cond,
 		.for_.init = convert_to_ptr(init),
 		.for_.step = convert_to_ptr(step),
@@ -322,8 +296,8 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			break;
 		case AST_STMT_BLOCK:
 			deep_free_ast_stmt_list(&stmt.block.stmtlist);
-			if (stmt.block.context)
-				free_context(stmt.block.context);
+			if (stmt.block.local_scope) {}
+				//free_scope(stmt.block.local_scope); // TODO:
 			break;
 		case AST_STMT_ASSIGN:
 			free_ast_lvalue_v(stmt.assign.lvalue);
@@ -340,7 +314,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			free_ast_stmt(stmt.while_.body);
 			break;
 		case AST_STMT_FOR:
-			free_context(stmt.for_.context);
+			//free_scope(stmt.for_.local_scope);
 			free_ast_expr_v(stmt.for_.cond);
 			free_ast_stmt(stmt.for_.init);
 			free_ast_stmt(stmt.for_.step);
@@ -349,71 +323,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 	}
 }
 
-void ast_declare_function(loc_t loc, ast_datatype_t* returntype_ref, const char* name, ast_id_ptr_list_t args, context_t* context, ast_stmt_t body){
-	ast_id_t* func_id = malloc(sizeof(ast_id_t));
-	func_id->type = AST_ID_FUNC;
-	func_id->func.declare_loc = loc;
-	func_id->func.return_type_ref = returntype_ref;
-	func_id->func.name = name;
-	func_id->func.args = args;
-	func_id->func.context = context;
-	func_id->func.body = convert_to_ptr(body);
-	current_context_insert(name, func_id);
-}
-void ast_declare_variable(loc_t loc, ast_datatype_t* type, ast_name_t name){
-	if (type->kind == AST_DATATYPE_VOID){
-		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
-		return;
-	}
-	ast_id_t* var_id = malloc(sizeof(ast_id_t));
-	var_id->type = AST_ID_VAR;
-	var_id->var.type_ref = type;
-	var_id->var.declare_loc = loc;
-	var_id->var.name = name.name;
-	current_context_insert(name.name, var_id);
-}
-ast_stmt_t ast_declare_variable_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
-	if (type->kind == AST_DATATYPE_VOID){
-		printf_error(loc, "cannot declare variable '%s' with void type ('%s')", name.name, type->name);
-		return (ast_stmt_t){0}; // TODO: is this safe?
-	}
-	ast_id_t* var_id = malloc(sizeof(ast_id_t));
-	var_id->type = AST_ID_VAR;
-	var_id->var.type_ref = type;
-	var_id->var.declare_loc = loc;
-	var_id->var.name = name.name;
-	current_context_insert(name.name, var_id);
-
-	return create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var), value);
-}
-void ast_declare_global(loc_t loc, ast_datatype_t* type, ast_name_t name){
-	if (type->kind == AST_DATATYPE_VOID){
-		printf_error(loc, "cannot declare global variable '%s' with void type ('%s')", name.name, type->name);
-		return;
-	}
-	ast_id_t* var_id = malloc(sizeof(ast_id_t));
-	var_id->type = AST_ID_GLOBAL;
-	var_id->global.var.type_ref = type;
-	var_id->global.var.declare_loc = loc;
-	var_id->global.var.name = name.name;
-	var_id->global.init = 0;
-	current_context_insert(name.name, var_id);
-}
-void ast_declare_global_assign(loc_t loc, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
-	if (type->kind == AST_DATATYPE_VOID){
-		printf_error(loc, "cannot declare global variable '%s' with void type ('%s')", name.name, type->name);
-		return;
-	}
-	ast_id_t* var_id = malloc(sizeof(ast_id_t));
-	var_id->type = AST_ID_GLOBAL;
-	var_id->global.var.type_ref = type;
-	var_id->global.var.declare_loc = loc;
-	var_id->global.var.name = name.name;
-	var_id->global.init = convert_to_ptr(value);
-	current_context_insert(name.name, var_id);
-}
-
-static ast_datatype_t ast_datatype_alias(const ast_datatype_t* original, loc_t declare_loc, char* new_name){
+ast_datatype_t ast_datatype_duplicate(const ast_datatype_t* original, loc_t declare_loc, char* new_name){
 	ast_datatype_t type = (ast_datatype_t){
 		.declare_loc = declare_loc,
 		.name = new_name,
@@ -446,220 +356,6 @@ static ast_datatype_t ast_datatype_alias(const ast_datatype_t* original, loc_t d
 			break;
 	}
 	return type;
-}
-
-void ast_declare_typedef(loc_t loc, const ast_datatype_t* type, ast_name_t name){
-	ast_id_t* type_id = malloc(sizeof(ast_id_t));
-	type_id->type = AST_ID_TYPE;
-	type_id->type_ = ast_datatype_alias(type, loc, name.name);
-	current_context_insert(name.name, type_id);
-}
-
-static void ast_context_insert_type(const char* name, ast_datatype_t type){
-	ast_id_t* id = malloc(sizeof(ast_id_t));
-	id->type = AST_ID_TYPE;
-	id->type_ = type;
-	id->type_.name = strdup(name);
-	current_context_insert(name, id);
-}
-
-static void rtrim(char* str){
-	char* end = str + strlen(str) - 1;
-	while ((end >= str) && isspace(*end)){
-		end--;
-	}
-	if (end < str){
-		str[0] = 0;
-		return;
-	}
-	end[1] = 0;
-}
-
-static void get_source_lines_from_file(FILE* source){
-	if (fseek(source, 0, SEEK_END)){
-		printf("Failed to seek file.\n");
-		exit(1);
-	}
-	unsigned long sz = ftell(source);
-	char* text = malloc(sz);
-
-	if (fseek(source, 0, SEEK_SET)){
-		printf("Failed to seek file.\n");
-		exit(1);
-	}
-	fread(text, 1, sz, source);
-
-	unsigned int line_count = 2;
-	for (unsigned int i=0; i<sz; i++){
-		if (text[i] == '\n') line_count++;
-	}
-	source_lines = malloc(sizeof(char*)*line_count);
-
-	unsigned int line_start = 0;
-	unsigned int line_idx = 0;
-	for (unsigned int i=0; i<sz; i++){
-		if (text[i] != '\n') continue;
-		source_lines[line_idx] = strndup(&text[line_start], i-line_start);
-		rtrim(source_lines[line_idx]);
-		line_start = i+1;
-		line_idx++;
-	}
-	source_lines[line_idx] = strndup(&text[line_start], sz-line_start);
-	rtrim(source_lines[line_idx]);
-	source_lines[line_count-1] = 0;
-	free(text);
-}
-
-void ast_init_context(FILE* source){
-	received_error = false;
-	get_source_lines_from_file(source);
-	context_stack = create_context_ptr_list();
-	top_level_context = create_context();
-	context_ptr_list_append(&context_stack, &top_level_context);
-
-	// integer types
-	ast_context_insert_type("i64", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 64,
-		.integral.signed_ = true,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("u64", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 64,
-		.integral.signed_ = false,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("i32", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 32,
-		.integral.signed_ = true,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("u32", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 32,
-		.integral.signed_ = false,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("i16", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 16,
-		.integral.signed_ = true,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("u16", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 16,
-		.integral.signed_ = false,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("i8", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 8,
-		.integral.signed_ = true,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("u8", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 8,
-		.integral.signed_ = false,
-		.ptr_type = 0
-	});
-
-	// boolean
-	ast_context_insert_type("bool", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_INTEGRAL,
-		.integral.bitwidth = 1,
-		.integral.signed_ = false,
-		.ptr_type = 0
-	});
-
-	// void
-	ast_context_insert_type("void", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_VOID,
-		.ptr_type = 0
-	});
-
-	// floating point types
-	ast_context_insert_type("f64", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_FLOAT,
-		.floating.bitwidth = 64,
-		.ptr_type = 0
-	});
-	ast_context_insert_type("f32", (ast_datatype_t){
-		.declare_loc = (loc_t){0},
-		.kind = AST_DATATYPE_FLOAT,
-		.floating.bitwidth = 32,
-		.ptr_type = 0
-	});
-}
-void current_context_insert(const char* name, ast_id_t* value){
-	context_t* ctx = context_stack.data[context_stack.len-1];
-	ast_id_t* exists = context_get(ctx, name, 0);
-	if (exists){
-		printf_error(loc_from_ast_id(value), "name '%s' is already defined", name);
-		if (!loc_eq(loc_from_ast_id(exists), (loc_t){0})){ // if not built-in type
-			print_info(loc_from_ast_id(exists), "declared here");
-		}
-		free_ast_id(value);
-		return;
-	}
-	context_insert(ctx, name, value);
-}
-ast_id_t* context_stack_get(const char* name){
-	for (int i = context_stack.len-1; i>=0; i--){
-		context_t* ctx = context_stack.data[i];
-		ast_id_t* val = context_get(ctx, name, 0);
-		if (val) return val;
-	}
-	return 0;
-}
-void context_stack_push(context_t* context){
-	context_ptr_list_append(&context_stack, context);
-}
-void context_stack_pop(context_t* context){
-	if (context_stack.data[context_stack.len-1] != context){
-		printf("INTERNAL ERROR: attempting to end context which isn't the active level.\n");
-		return;
-	}
-	context_ptr_list_pop(&context_stack);
-}
-
-void free_context_v(context_t* context){
-	context_entry_t* entry = context_to_linked_list(context);
-	while (entry){
-		free_ast_id(entry->value);
-		context_entry_t* next = entry->next;
-		free(entry);
-		entry = next;
-	}
-}
-void free_context(context_t* context){
-	free_context_v(context);
-	free(context);
-}
-void ast_cleanup_context(){
-	char** l = source_lines;
-	while (*l){
-		free(*l);
-		l++;
-	}
-	free(source_lines);
-	source_lines = 0;
-
-	deep_free_context_ptr_list(&context_stack);
 }
 
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
@@ -717,4 +413,16 @@ void free_ast_datatype(ast_datatype_t* type){
 		free_ast_datatype(type->ptr_type);
 		free(type->ptr_type);
 	}
+}
+
+// TODO: move elsewhere ?
+static void free_scope_deep(scope_t* scope){
+	for (scope_iterator_t iter = scope_iter(scope); iter.current; iter = scope_iter_next(iter)){
+		free_ast_id(iter.current->value);
+	}
+	free_scope(scope);
+}
+
+void free_ast_v(ast_t ast){
+	free_scope_deep(ast.global_scope);
 }

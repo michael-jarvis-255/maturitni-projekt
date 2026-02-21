@@ -3,12 +3,11 @@
 #include "build/parse.tab.h"
 #include "ast.h"
 #include "ast2llvm.h"
+#include "parse/main.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
-
-extern FILE *yyin;
 
 typedef enum {
 	OPT_0,
@@ -133,13 +132,7 @@ int main(int argc, const char** argv){
 	}
 
 	// parse into ast
-	ast_init_context(infile);
-	if (fseek(infile, 0, SEEK_SET)){
-		printf("Failed to seek file.\n");
-		return 1;
-	}
-	yyin = infile;
-	yyparse();
+	ast_t ast = parse_file(infile);
 
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");
@@ -149,12 +142,12 @@ int main(int argc, const char** argv){
 	// emit to llvm ir
 	char* ir1_fp = create_tmp_path(".ll");
 	FILE* ir1_file = fopen(ir1_fp, "w");
-	for (context_iterator_t iter = context_iter(&top_level_context); iter.current; iter = context_iter_next(iter)){
+	for (scope_iterator_t iter = scope_iter(ast.global_scope); iter.current; iter = scope_iter_next(iter)){
 		ast_id_t* id = iter.current->value;
 		switch (id->type){
 			case AST_ID_FUNC:
 			{
-				llvm_function_t func = ast2llvm_emit_func(id->func);		
+				llvm_function_t func = ast2llvm_emit_func(id->func, ast);		
 				llvm_func_to_stream(&func, ir1_file);
 				free_llvm_function(func);
 				break;
@@ -169,7 +162,7 @@ int main(int argc, const char** argv){
 	}
 	fclose(ir1_file);
 	fclose(infile);
-	ast_cleanup_context();
+	free_ast_v(ast);
 	
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");

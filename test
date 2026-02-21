@@ -61,6 +61,6 @@ u64 foo(i32 X){
 }
 
 u32 main(i32 argc, u8** argv){
-	foo(argc);
-	return (f32)42.3;
+	//foo(argc);
+	return argc + 15;
 }
