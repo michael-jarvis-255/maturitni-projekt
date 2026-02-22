@@ -18,6 +18,7 @@ source_lines_t create_source_lines(const char* source){
 	for (const char* end = source; *end; end++){
 		if (*end != '\n') continue;
 		source_lines.lines[i] = strndup(source, end-source);
+		source = end+1;
 		i++;
 	}
 	return source_lines;

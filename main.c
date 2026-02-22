@@ -4,6 +4,7 @@
 #include "ast.h"
 #include "ast2llvm.h"
 #include "parse/main.h"
+#include "ast/print.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdarg.h>

@@ -14,6 +14,7 @@ create_list_type_impl(ast_lvalue_member_access, false)
 
 bool received_error;
 
+static void free_scope_deep(scope_t* scope);
 void free_ast_id_v(ast_id_t id){
 	switch (id.type){
 		case AST_ID_TYPE:
@@ -24,7 +25,7 @@ void free_ast_id_v(ast_id_t id){
 			break;
 		case AST_ID_FUNC:
 			free_ast_stmt(id.func.body);
-			//free_scope(id.func.local_scope); TODO
+			free_scope_deep(id.func.local_scope);
 			free((void*)id.func.name);
 			free(id.func.args.data);
 			break;
@@ -62,8 +63,8 @@ ast_datatype_t* ast_anon_struct_finalise(scope_t* current_scope, ast_datatype_t*
 	type_id->type = AST_ID_TYPE;
 	type_id->type_ = *strct;
 
-	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the context
-	// we are placing it into the context so that it can be free()'d
+	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the scope
+	// we are placing it into the scope so that it can be free()'d
 	// TODO: find a more elegant solution
 	scope_force_insert(current_scope, type_id->type_.name, type_id);
 
@@ -296,8 +297,8 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			break;
 		case AST_STMT_BLOCK:
 			deep_free_ast_stmt_list(&stmt.block.stmtlist);
-			if (stmt.block.local_scope) {}
-				//free_scope(stmt.block.local_scope); // TODO:
+			if (stmt.block.local_scope)
+				free_scope_deep(stmt.block.local_scope);
 			break;
 		case AST_STMT_ASSIGN:
 			free_ast_lvalue_v(stmt.assign.lvalue);
@@ -314,7 +315,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			free_ast_stmt(stmt.while_.body);
 			break;
 		case AST_STMT_FOR:
-			//free_scope(stmt.for_.local_scope);
+			free_scope_deep(stmt.for_.local_scope);
 			free_ast_expr_v(stmt.for_.cond);
 			free_ast_stmt(stmt.for_.init);
 			free_ast_stmt(stmt.for_.step);

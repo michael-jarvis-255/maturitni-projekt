@@ -11,7 +11,7 @@ typedef struct {
 	ulong z;
 } vector3_t;
 
-i32 global = 32;
+i32 global;
 
 void function(){
 	u64 x = 0;
@@ -61,6 +61,6 @@ u64 foo(i32 X){
 }
 
 u32 main(i32 argc, u8** argv){
-	//foo(argc);
-	return argc + 15;
+	foo(argc);
+	return (u32)argc + 15;
 }

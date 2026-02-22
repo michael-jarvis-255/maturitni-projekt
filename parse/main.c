@@ -48,7 +48,7 @@ ast_t parse_string(const char* source){
 	scope_t* global_scope = create_scope(0);
 	scope_t* current_scope = global_scope;
 
-	// fill context with built-in types
+	// fill global scope with built-in types
 	ast_scope_insert_type(global_scope, "i64", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=64, .integral.signed_=true,  .ptr_type=0});
 	ast_scope_insert_type(global_scope, "i32", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=32, .integral.signed_=true,  .ptr_type=0});
 	ast_scope_insert_type(global_scope, "i16", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=16, .integral.signed_=true,  .ptr_type=0});

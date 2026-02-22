@@ -77,13 +77,12 @@ void print_ast_id(const ast_id_t* id, int depth){
 					ntabs(depth+1); printf("pointer to type '%s'\n", id->type_.pointer.base->name);
 					break;
 				case AST_DATATYPE_STRUCTURED:
-					ntabs(depth+1); printf("<structured type, unimplemented>"); // TODO
+					ntabs(depth+1); printf("<structured type, todo>\n"); // TODO
 					break;
 			}
 			break;
 		case AST_ID_VAR:
-			ntabs(depth); printf("variable '%s':\n", id->var.name);
-			ntabs(depth+1); printf("type: '%s'\n", id->var.type_ref->name);
+			ntabs(depth); printf("variable '%s': type: '%s'\n", id->var.name, id->var.type_ref->name);
 			break;
 		case AST_ID_FUNC:
 			ntabs(depth); printf("function '%s':\n", id->func.name);
@@ -92,13 +91,13 @@ void print_ast_id(const ast_id_t* id, int depth){
 			for (unsigned int i=0; i<id->func.args.len; i++){
 				ntabs(depth+2); printf("'%s' of type '%s'\n", id->func.args.data[i]->name, id->func.args.data[i]->type_ref->name);
 			}
-			ntabs(depth+1); printf("context:\n");
+			ntabs(depth+1); printf("scope:\n");
 			print_ast_scope(id->func.local_scope, depth+2);
 			ntabs(depth+1); printf("body:\n");
 			print_ast_stmt(id->func.body, depth+2);
 			break;
 		case AST_ID_GLOBAL:
-			printf("<todo>");
+			printf("<todo global var>\n"); // TODO
 			break;
 	}
 }
@@ -176,7 +175,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			break;
 		case AST_STMT_EXPR:
 			ntabs(depth); print_ast_expr(&stmt->expr);
-			printf(";");
+			printf(";\n");
 			break;
 		case AST_STMT_BLOCK:
 			for (unsigned int i=0; i < stmt->block.stmtlist.len; i++){
@@ -207,7 +206,7 @@ void print_ast_stmt(const ast_stmt_t* stmt, int depth){
 			print_ast_stmt(stmt->while_.body, depth+1);
 			ntabs(depth); printf("}\n");
 			break;
-		case AST_STMT_FOR:
+		case AST_STMT_FOR: // TODO: print scope?
 			ntabs(depth); printf("for (\n");
 			print_ast_stmt(stmt->for_.init, depth+1);
 			ntabs(depth); print_ast_expr(&stmt->while_.cond);
