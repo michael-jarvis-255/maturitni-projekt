@@ -10,6 +10,8 @@
 		fprintf(stderr, "%s\n", err);
 	}
 	int yylex ();
+
+	static unsigned int err_recovery_scope_depth = 0;
 %}
 
 %token <expr> TK_NUMBER "number"
@@ -40,6 +42,20 @@
 
 %define parse.error custom
 %param {scope_t** current_scope}
+
+%destructor { free($$); } <str>
+%destructor { free_ast_expr_v($$); } <expr>
+%destructor { free_ast_stmt_v($$); } <stmt>
+%destructor { free($$.name); } <name>
+%destructor { /* emtpy */ } <type_ref>
+%destructor { /* emtpy */ } <var_ref>
+%destructor { free_ast_lvalue_v($$); } <lvalue>
+%destructor { /* emtpy */ } <func_ref>
+%destructor { free_scope($$); err_recovery_scope_depth++; } <scope>
+%destructor { if (err_recovery_scope_depth) err_recovery_scope_depth--; else free_scope(pop_scope(current_scope)); } <scope_start>
+%destructor { deep_free_ast_variable_list(&$$); } <var_list>
+%destructor { shallow_free_ast_variable_ptr_list(&$$); } <var_ptr_list>
+%destructor { deep_free_ast_stmt_list(&$$); } <stmt_list>
 
 %%
 
@@ -152,7 +168,7 @@ function_call_head:
 
 %nterm <stmt> block;
 block:
-	'{' begin_local_scope block_body end_local_scope[scope] '}'		{ $$ = create_ast_stmt_block(@$, $block_body, $scope); }
+	'{' begin_local_scope block_body end_local_scope[scope] '}'		{ $$ = create_ast_stmt_block(@$, $block_body, $scope); (void)$begin_local_scope; }
 
 %nterm <stmt> scopeless_block;
 scopeless_block:
@@ -231,17 +247,17 @@ if_ending_while_stmt:
 
 %nterm <stmt> non_if_for_loop;
 non_if_for_loop: // TODO: variables inside block can shadow 'init'
-	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
-|	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
+	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
+|	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 
 %nterm <stmt> if_ending_for_loop;
 if_ending_for_loop:
-	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
-|	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); }
+	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
+|	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 
 %nterm function_declaration;
 function_declaration: // TODO: use block_body instead of scopeless_block ?
-	type name '(' begin_local_scope function_args[args] ')' scopeless_block[body] end_local_scope[scope]	{ parse_function_decl(@$, *current_scope, $type, $name.name, $args, $scope, $body); }
+	type name '(' begin_local_scope function_args[args] ')' scopeless_block[body] end_local_scope[scope]	{ parse_function_decl(@$, *current_scope, $type, $name.name, $args, $scope, $body); (void)$begin_local_scope; }
 
 %nterm <var_ptr_list> function_args function_args_non_emtpy;
 function_args:
@@ -279,9 +295,9 @@ global_declaration:
 typedef_declaration:
 	TK_TYPEDEF type name ';'	{ parse_typedef_decl(@$, *current_scope, $type, $name); }
 
-%nterm begin_local_scope;
+%nterm <scope_start> begin_local_scope;
 begin_local_scope:
-	%empty	{ push_new_scope(current_scope); }
+	%empty	{ push_new_scope(current_scope); $$=0; }
 
 %nterm <scope> end_local_scope;
 end_local_scope:

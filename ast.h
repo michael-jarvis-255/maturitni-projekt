@@ -21,7 +21,7 @@ typedef struct ast_variable_t {
 	char* name;
 	struct ast_datatype_t* type_ref;
 } ast_variable_t;
-create_list_type_header(ast_variable, false);
+create_list_type_header(ast_variable, true);
 
 typedef enum {
 	AST_DATATYPE_INTEGRAL,
@@ -243,12 +243,15 @@ typedef struct ast_t {
 } ast_t;
 
 // identifiers
+void free_ast_variable_v(ast_variable_t var);
+void free_ast_variable(ast_variable_t* var);
 void free_ast_id_v(ast_id_t id);
 void free_ast_id(ast_id_t* id);
 
 // lvalues
 ast_lvalue_t create_ast_lvalue(ast_variable_t* var);
 void ast_lvalue_extend(ast_lvalue_t* lvalue, bool deref, ast_name_t member_name);
+void free_ast_lvalue_v(ast_lvalue_t lvalue);
 
 // expressions
 ast_expr_t create_ast_expr_int_const(loc_t loc, bignum_t* value);

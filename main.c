@@ -137,6 +137,7 @@ int main(int argc, const char** argv){
 
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");
+		free_ast_v(ast);
 		return 1;
 	}
 

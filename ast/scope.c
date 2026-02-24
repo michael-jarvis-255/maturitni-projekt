@@ -61,6 +61,9 @@ void scope_force_insert(scope_t* scope, const char* name, ast_id_t* value){
 }
 
 void free_scope(scope_t* scope){
+	for (str2id_hashmap_iterator_t iter = str2id_hashmap_iter(&scope->hashmap); iter.current; iter = str2id_hashmap_iter_next(iter)){
+		free_ast_id(iter.current->value);
+	}
 	str2id_hashmap_free(&scope->hashmap);
 	free(scope);
 }

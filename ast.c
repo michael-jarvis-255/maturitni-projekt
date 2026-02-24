@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include <stdarg.h>
 
-create_list_type_impl(ast_variable, false)
+create_list_type_impl(ast_variable, true)
 create_list_type_impl(ast_variable_ptr, false)
 create_list_type_impl(ast_stmt, true)
 create_list_type_impl(ast_expr, true)
@@ -14,18 +14,25 @@ create_list_type_impl(ast_lvalue_member_access, false)
 
 bool received_error;
 
-static void free_scope_deep(scope_t* scope);
+void free_ast_variable_v(ast_variable_t var){
+	free(var.name);
+}
+void free_ast_variable(ast_variable_t* var){
+	free_ast_variable_v(*var);
+	free(var);
+}
+
 void free_ast_id_v(ast_id_t id){
 	switch (id.type){
 		case AST_ID_TYPE:
 			free_ast_datatype(&id.type_);
 			break;
 		case AST_ID_VAR:
-			free((void*)id.var.name);
+			free_ast_variable_v(id.var);
 			break;
 		case AST_ID_FUNC:
 			free_ast_stmt(id.func.body);
-			free_scope_deep(id.func.local_scope);
+			free_scope(id.func.local_scope);
 			free((void*)id.func.name);
 			free(id.func.args.data);
 			break;
@@ -267,7 +274,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 		case AST_STMT_BLOCK:
 			deep_free_ast_stmt_list(&stmt.block.stmtlist);
 			if (stmt.block.local_scope)
-				free_scope_deep(stmt.block.local_scope);
+				free_scope(stmt.block.local_scope);
 			break;
 		case AST_STMT_ASSIGN:
 			free_ast_lvalue_v(stmt.assign.lvalue);
@@ -284,7 +291,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 			free_ast_stmt(stmt.while_.body);
 			break;
 		case AST_STMT_FOR:
-			free_scope_deep(stmt.for_.local_scope);
+			free_scope(stmt.for_.local_scope);
 			free_ast_expr_v(stmt.for_.cond);
 			free_ast_stmt(stmt.for_.init);
 			free_ast_stmt(stmt.for_.step);
@@ -388,14 +395,6 @@ void free_ast_datatype(ast_datatype_t* type){
 	}
 }
 
-// TODO: move elsewhere ?
-static void free_scope_deep(scope_t* scope){
-	for (scope_iterator_t iter = scope_iter(scope); iter.current; iter = scope_iter_next(iter)){
-		free_ast_id(iter.current->value);
-	}
-	free_scope(scope);
-}
-
 void free_ast_v(ast_t ast){
-	free_scope_deep(ast.global_scope);
+	free_scope(ast.global_scope);
 }
