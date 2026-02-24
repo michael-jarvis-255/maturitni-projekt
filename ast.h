@@ -278,9 +278,6 @@ void free_ast_stmt(ast_stmt_t* stmt);
 extern bool received_error;
 
 // datatypes
-ast_datatype_t* create_ast_anon_struct_head(loc_t loc);
-void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name);
-ast_datatype_t* ast_anon_struct_finalise(scope_t* current_scope, ast_datatype_t* strct);
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b);
 ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base);
 ast_datatype_t ast_datatype_duplicate(const ast_datatype_t* original, loc_t declare_loc, char* new_name);

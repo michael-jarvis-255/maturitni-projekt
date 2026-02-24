@@ -10,6 +10,7 @@ typedef union YYSTYPE {
 	ast_lvalue_t lvalue;
 	ast_func_t* func_ref;
 	scope_t* scope;
+	ast_variable_list_t var_list;
 	ast_variable_ptr_list_t var_ptr_list;
 	ast_stmt_list_t stmt_list;
 } YYSTYPE;

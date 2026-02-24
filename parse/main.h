@@ -17,5 +17,6 @@ ast_id_t* parse_variable_decl(loc_t loc, scope_t* current_scope, ast_datatype_t*
 ast_stmt_t parse_variable_assign_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
 void parse_global_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name);
 void parse_global_assign_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value);
+ast_datatype_t* parse_anonymous_struct(loc_t loc, scope_t* current_scope, ast_variable_list_t members);
 
 #endif

@@ -60,12 +60,12 @@ type:
 
 %nterm <type_ref> anonymous_struct;
 anonymous_struct:
-	anonymous_struct_head '}'	{ $$ = ast_anon_struct_finalise(*current_scope, $1); }
+	TK_STRUCT '{' anonymous_struct_body[members] '}'	{ $$ = parse_anonymous_struct(@$, *current_scope, $members); }
 
-%nterm <type_ref> anonymous_struct_head;
-anonymous_struct_head:
-	TK_STRUCT '{'	{ $$ = create_ast_anon_struct_head(@$); }
-|	anonymous_struct_head type name ';'		{ $$ = $1; ast_anon_struct_head_append($$, @name, $type, $name); } // TODO: loc should be @type + @name, not just @name
+%nterm <var_list> anonymous_struct_body;
+anonymous_struct_body:
+	%empty	 { $$ = create_ast_variable_list(); }
+|	anonymous_struct_body[list] type name ';'	{ $$ = $list; ast_variable_list_append(&$$, (ast_variable_t){ .declare_loc=loc_add(@type, @name), .name=$name.name, .type_ref=$type }); }
 
 %nterm <lvalue> lvalue;
 lvalue:

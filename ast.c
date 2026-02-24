@@ -41,37 +41,6 @@ void free_ast_id(ast_id_t* id){
 	free(id);
 }
 
-ast_datatype_t* create_ast_anon_struct_head(loc_t loc){
-	ast_datatype_t strct = (ast_datatype_t){
-		.kind = AST_DATATYPE_STRUCTURED,
-		.declare_loc = loc, // TODO: track more than just the 'struct {' header
-		.name = strdup("<anonymous struct>"),
-		.structure.members = create_ast_variable_list()
-	};
-	return convert_to_ptr(strct);
-}
-void ast_anon_struct_head_append(ast_datatype_t* strct, loc_t loc, ast_datatype_t* elem_type, ast_name_t elem_name){
-	ast_variable_t elem = (ast_variable_t){
-		.declare_loc = loc,
-		.name = elem_name.name,
-		.type_ref = elem_type
-	};
-	ast_variable_list_append(&strct->structure.members, elem);
-}
-ast_datatype_t* ast_anon_struct_finalise(scope_t* current_scope, ast_datatype_t* strct){
-	ast_id_t* type_id = malloc(sizeof(ast_id_t));
-	type_id->type = AST_ID_TYPE;
-	type_id->type_ = *strct;
-
-	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the scope
-	// we are placing it into the scope so that it can be free()'d
-	// TODO: find a more elegant solution
-	scope_force_insert(current_scope, type_id->type_.name, type_id);
-
-	free(strct);
-	return &type_id->type_;
-}
-
 ast_lvalue_t create_ast_lvalue(ast_variable_t* var){
 	return (ast_lvalue_t){
 		.base_var = var,
@@ -342,16 +311,19 @@ ast_datatype_t ast_datatype_duplicate(const ast_datatype_t* original, loc_t decl
 			type.floating.bitwidth = original->floating.bitwidth;
 			break;
 		case AST_DATATYPE_STRUCTURED:
-			type.structure.members = create_ast_variable_list();
+		{
+			ast_variable_list_t members = create_ast_variable_list();
 			for (unsigned int i=0; i < original->structure.members.len; i++){
 				ast_variable_t* member = &original->structure.members.data[i];
-				ast_variable_list_append(&type.structure.members, (ast_variable_t){
+				ast_variable_list_append(&members, (ast_variable_t){
 					.declare_loc = member->declare_loc,
 					.name = strdup(member->name),
 					.type_ref = member->type_ref
 				});
 			}
+			type.structure.members = members;
 			break;
+		}
 		case AST_DATATYPE_POINTER:
 			type.pointer.base = original->pointer.base;
 			break;
@@ -371,7 +343,7 @@ bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
 			if (a->floating.bitwidth != b->floating.bitwidth) return false;
 			break;
 		case AST_DATATYPE_STRUCTURED:
-			return a == b;
+			return a == b; // TODO: compare members?
 		case AST_DATATYPE_POINTER:
 			return ast_datatype_eq(a->pointer.base, b->pointer.base);
 	}

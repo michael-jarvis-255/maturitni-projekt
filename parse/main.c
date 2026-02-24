@@ -140,3 +140,15 @@ void parse_global_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, 
 void parse_global_assign_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
 	parse_global_decl(loc, current_scope, type, name);
 }
+
+ast_datatype_t* parse_anonymous_struct(loc_t loc, scope_t* current_scope, ast_variable_list_t members){
+	ast_id_t* id = malloc(sizeof(ast_id_t));
+	id->type = AST_ID_TYPE;
+	id->type_ = (ast_datatype_t){ .declare_loc=loc, .name=strdup("<anonymous struct>"), .kind=AST_DATATYPE_STRUCTURED, .structure.members=members, .ptr_type=0};
+
+	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the scope
+	// we are placing it into the scope so that it can be free()'d
+	// TODO: find a more elegant solution
+	scope_force_insert(current_scope, "<anonymous struct>", id);
+	return &id->type_;
+}
