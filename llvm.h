@@ -242,13 +242,26 @@ typedef struct llvm_function_t {
 	llvm_type_t* args;
 } llvm_function_t;
 
+typedef struct llvm_global_def_t {
+	char* name;
+	llvm_type_t type;
+	llvm_value_t init_val;
+} llvm_global_def_t;
 
-void llvm_global_to_stream(const ast_global_t* global, FILE* stream);
-char* llvm_global_to_string(const ast_global_t* global);
+typedef struct llvm_program_t {
+	char* source_path;
+	unsigned int function_count;
+	unsigned int global_count;
+	llvm_function_t* functions;
+	llvm_global_def_t* globals;
+} llvm_program_t;
 
-void llvm_func_to_stream(const llvm_function_t* f, FILE* stream);
-char* llvm_func_to_string(const llvm_function_t* f);
+
+void llvm_program_to_stream(const llvm_program_t program, FILE* stream);
+char* llvm_program_to_string(const llvm_program_t program);
 
 void free_llvm_function(const llvm_function_t func);
+void free_llvm_global_def(llvm_global_def_t global);
+void free_llvm_program(llvm_program_t program);
 
 #endif

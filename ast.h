@@ -238,6 +238,7 @@ typedef struct ast_id_t {
 } ast_id_t;
 
 typedef struct ast_t {
+	char* source_path;
 	source_lines_t source_lines;
 	scope_t* global_scope;
 } ast_t;

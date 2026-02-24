@@ -481,6 +481,31 @@ static void free_llvm_basic_block(llvm_basic_block_t block){
 	free_llvm_term_inst(block.term_inst);
 }
 
+static void llvm_global_to_target(llvm_global_def_t global, print_target_t* t){
+	tprintf(t, "@%s = external global ", global.name);
+	llvm_type_to_target(global.type, t);
+	tprint(t, "\n");
+	// TODO: emit init value
+}
+
+static void llvm_program_to_target(const llvm_program_t program, print_target_t* t){
+	tprintf(t, "source_filename = \"%s\"\n\n", program.source_path);
+	for (unsigned int i=0; i<program.global_count; i++) llvm_global_to_target(program.globals[i], t);
+	for (unsigned int i=0; i<program.function_count; i++) llvm_func_to_target(&program.functions[i], t);
+}
+
+void llvm_program_to_stream(const llvm_program_t program, FILE* stream){
+	llvm_program_to_target(program, &(print_target_t){.target=PRINT_TARGET_STREAM, .stream=stream});
+}
+
+char* llvm_program_to_string(const llvm_program_t program){
+	print_target_t t = {.target=PRINT_TARGET_STRING, .string=create_char_list()};
+	llvm_program_to_target(program, &t);
+	char_list_append(&t.string, '\0');
+	return t.string.data;
+}
+
+
 void free_llvm_function(llvm_function_t func){
 	free(func.name);
 	for (unsigned int i = 0; i < func.blocks.len; i++){
@@ -490,18 +515,16 @@ void free_llvm_function(llvm_function_t func){
 	free(func.args);
 }
 
-static void llvm_global_to_target(const ast_global_t* global, print_target_t* t){
-	tprintf(t, "@%s = external global ", global->var.name);
-	llvm_type_to_target(ast_type_to_llvm_type(global->var.type_ref), t);
-	tprint(t, "\n");
+void free_llvm_global_def(llvm_global_def_t global){
+	free(global.name);
+	free_llvm_type(global.type);
+	free_llvm_value(global.init_val);
 }
 
-void llvm_global_to_stream(const ast_global_t* global, FILE* stream){
-	llvm_global_to_target(global, &(print_target_t){.target=PRINT_TARGET_STREAM, .stream=stream});
-}
-char* llvm_global_to_string(const ast_global_t* global){
-	print_target_t t = {.target=PRINT_TARGET_STRING, .string=create_char_list()};
-	llvm_global_to_target(global, &t);
-	char_list_append(&t.string, '\0');
-	return t.string.data;
+void free_llvm_program(llvm_program_t program){
+	free(program.source_path);
+	for (unsigned int i=0; i<program.function_count; i++) free_llvm_function(program.functions[i]);
+	for (unsigned int i=0; i<program.global_count; i++) free_llvm_global_def(program.globals[i]);
+	free(program.functions);
+	free(program.globals);
 }

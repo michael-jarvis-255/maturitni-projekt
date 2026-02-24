@@ -397,4 +397,5 @@ void free_ast_datatype(ast_datatype_t* type){
 
 void free_ast_v(ast_t ast){
 	free_scope(ast.global_scope);
+	free(ast.source_path);
 }

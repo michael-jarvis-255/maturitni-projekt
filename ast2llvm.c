@@ -102,7 +102,7 @@ static llvm_reg_t llvm_add_inst(llvm_function_t* f, llvm_inst_t inst){
 	return llvm_block_last_reg(block);
 }
 
-llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
+static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	switch (t->kind){
 		case AST_DATATYPE_FLOAT:
 			return (llvm_type_t){ .type=LLVM_TYPE_FLOAT, .bitwidth=t->floating.bitwidth };
@@ -1238,7 +1238,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 	}
 }
 
-llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
+static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 	llvm_function_t f;
 	f.name = strdup(func.name);
 	f.blocks = create_llvm_basic_block_list();
@@ -1289,4 +1289,48 @@ llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 		f.blocks.data[f.blocks.len-1].term_inst = (llvm_term_inst_t){ .type = LLVM_TERM_INST_RET_VOID };
 	}
 	return f;
+}
+
+static llvm_global_def_t ast2llvm_emit_global(ast_global_t global){
+	return (llvm_global_def_t){
+		.name = strdup(global.var.name),
+		.type = ast_type_to_llvm_type(global.var.type_ref),
+		.init_val = POISON_VALUE // TODO
+	};
+}
+
+llvm_program_t ast2llvm(ast_t ast){
+	llvm_program_t llvm;
+	llvm.source_path = strdup(ast.source_path);
+	llvm.function_count = 0;
+	llvm.global_count = 0;
+
+	for (scope_iterator_t iter = scope_iter(ast.global_scope); iter.current; iter = scope_iter_next(iter))
+		switch (iter.current->value->type){
+			case AST_ID_FUNC: llvm.function_count++; break;
+			case AST_ID_GLOBAL: llvm.global_count++; break;
+			case AST_ID_VAR: break;
+			case AST_ID_TYPE: break;
+		}
+
+	llvm.functions = malloc(sizeof(llvm_function_t)*llvm.function_count);
+	llvm.globals = malloc(sizeof(llvm_global_def_t)*llvm.global_count);
+
+	unsigned int functions_emitted = 0;
+	unsigned int globals_emitted = 0;
+	for (scope_iterator_t iter = scope_iter(ast.global_scope); iter.current; iter = scope_iter_next(iter))
+		switch (iter.current->value->type){
+			case AST_ID_FUNC:
+				llvm.functions[functions_emitted] = ast2llvm_emit_func(iter.current->value->func, ast);
+				functions_emitted++;
+				break;
+			case AST_ID_GLOBAL:
+				llvm.globals[globals_emitted] = ast2llvm_emit_global(iter.current->value->global);
+				globals_emitted++;
+				break;
+			case AST_ID_VAR: break;
+			case AST_ID_TYPE: break;
+		}
+
+	return llvm;
 }

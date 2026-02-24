@@ -133,7 +133,8 @@ int main(int argc, const char** argv){
 	}
 
 	// parse into ast
-	ast_t ast = parse_file(infile);
+	ast_t ast = parse_file(infile, options.input_path);
+	fclose(infile);
 
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");
@@ -141,30 +142,16 @@ int main(int argc, const char** argv){
 		return 1;
 	}
 
-	// emit to llvm ir
+	// convert to llvm
+	llvm_program_t llvm = ast2llvm(ast);
+	free_ast_v(ast);
+
+	// emit llvm to file
 	char* ir1_fp = create_tmp_path(".ll");
 	FILE* ir1_file = fopen(ir1_fp, "w");
-	for (scope_iterator_t iter = scope_iter(ast.global_scope); iter.current; iter = scope_iter_next(iter)){
-		ast_id_t* id = iter.current->value;
-		switch (id->type){
-			case AST_ID_FUNC:
-			{
-				llvm_function_t func = ast2llvm_emit_func(id->func, ast);		
-				llvm_func_to_stream(&func, ir1_file);
-				free_llvm_function(func);
-				break;
-			}
-			case AST_ID_GLOBAL:
-				llvm_global_to_stream(&id->global, ir1_file);
-				break;
-			case AST_ID_VAR:
-			case AST_ID_TYPE:
-				break;
-		}
-	}
+	llvm_program_to_stream(llvm, ir1_file);
+	free_llvm_program(llvm);
 	fclose(ir1_file);
-	fclose(infile);
-	free_ast_v(ast);
 	
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");

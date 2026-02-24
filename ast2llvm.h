@@ -1,4 +1,3 @@
 #include "llvm.h"
 
-llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast);
-llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* ast_type);
+llvm_program_t ast2llvm(ast_t ast);

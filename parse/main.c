@@ -14,7 +14,7 @@ static void ast_scope_insert_type(scope_t* scope, const char* name, ast_datatype
 	scope_insert(scope, name, id);
 }
 
-ast_t parse_file(FILE* source_file){ // TODO: support for stdin
+ast_t parse_file(FILE* source_file, const char* source_path){ // TODO: support for stdin
 	if (fseek(source_file, 0, SEEK_END)){
 		printf("Failed to seek file.\n"); // TODO: better error message
 		exit(1);
@@ -38,12 +38,12 @@ ast_t parse_file(FILE* source_file){ // TODO: support for stdin
 	}
 	source[sz] = 0;
 
-	ast_t ast = parse_string(source);
+	ast_t ast = parse_string(source, source_path);
 	free(source);
 	return ast;
 }
 
-ast_t parse_string(const char* source){
+ast_t parse_string(const char* source, const char* source_path){
 	source_lines_t source_lines = create_source_lines(source);
 	scope_t* global_scope = create_scope(0);
 	scope_t* current_scope = global_scope;
@@ -65,7 +65,7 @@ ast_t parse_string(const char* source){
 	yy_scan_string(source); // TODO: use scan_bytes instead? or yy_scan_buffer?
 	global_source_lines = source_lines;
 	yyparse(&current_scope);
-	return (ast_t){ .source_lines=source_lines, .global_scope=global_scope };
+	return (ast_t){ .source_path=strdup(source_path), .source_lines=source_lines, .global_scope=global_scope };
 }
 
 void push_new_scope(scope_t** current_scope){

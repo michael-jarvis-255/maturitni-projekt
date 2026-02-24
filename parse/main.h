@@ -4,8 +4,8 @@
 #include "../ast.h"
 #include "../message.h"
 
-ast_t parse_file(FILE* source);
-ast_t parse_string(const char* source);
+ast_t parse_file(FILE* source, const char* source_path);
+ast_t parse_string(const char* source, const char* source_path);
 
 void push_new_scope(scope_t** current_scope);
 scope_t* pop_scope(scope_t** current_scope);
