@@ -48,40 +48,38 @@ void free_ast_id(ast_id_t* id){
 	free(id);
 }
 
-ast_lvalue_t create_ast_lvalue(ast_variable_t* var){
+ast_lvalue_t create_ast_lvalue(ast_variable_t* var, loc_t loc){
 	return (ast_lvalue_t){
 		.base_var = var,
+		.loc = loc,
 		.type = var->type_ref,
 		.member_access = create_ast_lvalue_member_access_list()
 	};
 }
 
-void ast_lvalue_extend(ast_lvalue_t* lvalue, bool deref, ast_name_t member_name){
+bool ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, bool deref, ast_name_t member_name){
+	lvalue->loc = loc;
 	if (deref){
 		if (lvalue->type->kind != AST_DATATYPE_POINTER){
 			printf_error(lvalue->loc, "invalid type access with '->' (type '%s' is not a pointer)", lvalue->type->name);
-			free(member_name.name);
-			return; // TODO: return some kind of error value
+			return true;
 		}
 		lvalue->type = lvalue->type->pointer.base;
 	}
 	if (lvalue->type->kind != AST_DATATYPE_STRUCTURED){
-		printf_error(lvalue->loc, "invalid type access with '.' (type '%s' is not a struct)", lvalue->type->name); // TODO: wrong when deref == true
-		free(member_name.name);
-		return; // TODO: return some kind of error value
+		printf_error(lvalue->loc, "invalid type access with '%s' (type '%s' is not a struct)", deref ? "->" : ".", lvalue->type->name);
+		return true;
 	}
 	for (unsigned int i=0; i < lvalue->type->structure.members.len; i++){
 		const ast_variable_t* member = &lvalue->type->structure.members.data[i];
 		if (strcmp(member->name, member_name.name) == 0){
 			lvalue->type = member->type_ref;
 			ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){.deref = deref, .member_idx = i});
-			free(member_name.name);
-			return;
+			return false;
 		}
 	}
 	printf_error(lvalue->loc, "struct type '%s' does not contain member '%s'", lvalue->type->name, member_name.name);
-	free(member_name.name);
-	return; // TODO: return some kind of error value
+	return true;
 }
 
 void free_ast_lvalue_v(ast_lvalue_t lvalue){

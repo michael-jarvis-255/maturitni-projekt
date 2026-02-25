@@ -156,6 +156,7 @@ int main(int argc, const char** argv){
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");
 		unlink(ir1_fp);
+		free(ir1_fp);
 		return 1;
 	}
 

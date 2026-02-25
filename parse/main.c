@@ -117,10 +117,10 @@ ast_id_t* parse_variable_decl(loc_t loc, scope_t* current_scope, ast_datatype_t*
 	return var_id;
 }
 
-ast_stmt_t parse_variable_assign_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
+ast_stmt_t parse_variable_assign_decl(loc_t loc, loc_t name_loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
 	ast_id_t* var_id = parse_variable_decl(loc, current_scope, type, name);
 	if (!var_id) return (ast_stmt_t){0}; // TODO: is this safe?
-	return create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var), value);
+	return create_ast_stmt_assign(loc, create_ast_lvalue(&var_id->var, name_loc), value);
 }
 
 void parse_global_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name){

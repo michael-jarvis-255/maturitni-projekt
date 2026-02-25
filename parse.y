@@ -50,6 +50,7 @@
 %destructor { /* emtpy */ } <type_ref>
 %destructor { /* emtpy */ } <var_ref>
 %destructor { free_ast_lvalue_v($$); } <lvalue>
+%destructor { free_ast_lvalue_v($$.lvalue); } <incomplete_lvalue>
 %destructor { /* emtpy */ } <func_ref>
 %destructor { free_scope($$); err_recovery_scope_depth++; } <scope>
 %destructor { if (err_recovery_scope_depth) err_recovery_scope_depth--; else free_scope(pop_scope(current_scope)); } <scope_start>
@@ -85,9 +86,13 @@ anonymous_struct_body:
 
 %nterm <lvalue> lvalue;
 lvalue:
-	TK_VAR	{ $$ = create_ast_lvalue($1); }
-|	lvalue '.' name	{ $$ = $1; ast_lvalue_extend(&$$, false, $name); }
-|	lvalue TK_ARROW name	{ $$ = $1; ast_lvalue_extend(&$$, true, $name); }
+	incomplete_lvalue { $$ = $1.lvalue; }
+
+%nterm <incomplete_lvalue> incomplete_lvalue;
+incomplete_lvalue:
+	TK_VAR	{ $$.lvalue = create_ast_lvalue($1, @$); $$.err = false; }
+|	incomplete_lvalue '.' name	{ $$ = $1; if (!$$.err) ($$.err = ast_lvalue_extend(&($$.lvalue), @$, false, $name)); free($name.name); }
+|	incomplete_lvalue TK_ARROW name	{ $$ = $1; if (!$$.err) ($$.err = ast_lvalue_extend(&($$.lvalue), @$, false, $name)); free($name.name); }
 
 %nterm <name> name;
 name:
@@ -284,7 +289,7 @@ var_declaration:
 
 %nterm <stmt> var_assign_declaration;
 var_assign_declaration:
-	type name '=' exp[val] ';'	{ $$ = parse_variable_assign_decl(@$, *current_scope, $type, $name, $val); }
+	type name '=' exp[val] ';'	{ $$ = parse_variable_assign_decl(@$, @name, *current_scope, $type, $name, $val); }
 
 %nterm global_declaration;
 global_declaration:

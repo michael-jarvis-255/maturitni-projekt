@@ -62,7 +62,7 @@ typedef struct ast_lvalue_member_access_t {
 create_list_type_header(ast_lvalue_member_access, false);
 
 typedef struct {
-	loc_t loc; // TODO
+	loc_t loc;
 	ast_variable_t* base_var;
 	ast_datatype_t* type; // the type after all member accesses
 	ast_lvalue_member_access_list_t member_access;
@@ -250,8 +250,8 @@ void free_ast_id_v(ast_id_t id);
 void free_ast_id(ast_id_t* id);
 
 // lvalues
-ast_lvalue_t create_ast_lvalue(ast_variable_t* var);
-void ast_lvalue_extend(ast_lvalue_t* lvalue, bool deref, ast_name_t member_name);
+ast_lvalue_t create_ast_lvalue(ast_variable_t* var, loc_t loc);
+bool ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, bool deref, ast_name_t member_name);
 void free_ast_lvalue_v(ast_lvalue_t lvalue);
 
 // expressions

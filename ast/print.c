@@ -77,7 +77,11 @@ void print_ast_id(const ast_id_t* id, int depth){
 					ntabs(depth+1); printf("pointer to type '%s'\n", id->type_.pointer.base->name);
 					break;
 				case AST_DATATYPE_STRUCTURED:
-					ntabs(depth+1); printf("<structured type, todo>\n"); // TODO
+					ntabs(depth+1); printf("struct {\n");
+					for (unsigned int i=0; i < id->type_.structure.members.len; i++){
+						ntabs(depth+2); printf("%s %s;\n", id->type_.structure.members.data[i].type_ref->name, id->type_.structure.members.data[i].name);
+					}
+					ntabs(depth+1); printf("}\n");
 					break;
 			}
 			break;
@@ -97,7 +101,7 @@ void print_ast_id(const ast_id_t* id, int depth){
 			print_ast_stmt(id->func.body, depth+2);
 			break;
 		case AST_ID_GLOBAL:
-			printf("<todo global var>\n"); // TODO
+			ntabs(depth); printf("global '%s': type: '%s'\n", id->global.var.name, id->global.var.type_ref->name); // TODO: print initial value
 			break;
 	}
 }

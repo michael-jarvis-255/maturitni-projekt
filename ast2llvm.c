@@ -28,6 +28,13 @@ create_hashmap_type_header(ast_variable_ptr, llvm_reg_t, var2reg_map);
 create_list_type_header(llvm_typed_value, false);
 create_list_type_impl(llvm_typed_value, false)
 
+typedef struct loop_labels_t {
+	bool can_break, can_continue;
+	llvm_label_t break_label, continue_label;
+} loop_labels_t;
+#define create_empty_loop_labels() ((loop_labels_t){ .can_break=false, .can_continue=false })
+#define create_loop_labels(br_label, cont_label) ((loop_labels_t){ .can_break=true, .can_continue=true, .break_label=br_label, .continue_label=cont_label })
+
 #define LLVM_TYPED_POISON(t) ((llvm_typed_value_t){ .type=LLVM_TVALUE_POISON, .ast_type=t })
 #define LLVM_TYPED_REG(r, t) ((llvm_typed_value_t){ .type=LLVM_TVALUE_REG, .reg=r, .ast_type=t })
 #define POISON_VALUE ((llvm_value_t){ .type=LLVM_VALUE_POISON })
@@ -1060,7 +1067,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 	exit(1);
 }
 
-static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_func_t ast_func, const ast_t ast){
+static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_func_t ast_func, const ast_t ast, const loop_labels_t loop_labels){
 	switch (stmt->type){
 		case AST_STMT_IF:
 		{
@@ -1069,7 +1076,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 
 			llvm_add_block(f);
 			llvm_label_t iftrue_start = llvm_function_last_label(f);
-			ast2llvm_emit_stmt(stmt->if_.iftrue, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->if_.iftrue, var2reg, f, ast_func, ast, loop_labels);
 			llvm_label_t iftrue_end = llvm_function_last_label(f);			
 
 			llvm_label_t next_label = llvm_add_block(f);
@@ -1085,12 +1092,12 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 
 			llvm_add_block(f);
 			llvm_label_t iftrue_start = llvm_function_last_label(f);
-			ast2llvm_emit_stmt(stmt->if_else.iftrue, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->if_else.iftrue, var2reg, f, ast_func, ast, loop_labels);
 			llvm_label_t iftrue_end = llvm_function_last_label(f);
 
 			llvm_add_block(f);
 			llvm_label_t iffalse_start = llvm_function_last_label(f);
-			ast2llvm_emit_stmt(stmt->if_else.iffalse, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->if_else.iffalse, var2reg, f, ast_func, ast, loop_labels);
 			llvm_label_t iffalse_end = llvm_function_last_label(f);
 
 			llvm_label_t next_label = llvm_add_block(f);
@@ -1105,7 +1112,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			return;
 		case AST_STMT_BLOCK:
 			for (unsigned int i=0; i < stmt->block.stmtlist.len; i++){
-				ast2llvm_emit_stmt(&stmt->block.stmtlist.data[i], var2reg, f, ast_func, ast);
+				ast2llvm_emit_stmt(&stmt->block.stmtlist.data[i], var2reg, f, ast_func, ast, loop_labels);
 			}
 			return;
 		case AST_STMT_ASSIGN:
@@ -1157,8 +1164,28 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 				});
 				return;
 			}
-		case AST_STMT_BREAK:	printf("<unimplemented (break)>\n"); exit(1); // TODO
-		case AST_STMT_CONTINUE:	printf("<unimplemented (continue)>\n"); exit(1); // TODO
+		case AST_STMT_BREAK:
+			if (!loop_labels.can_break) {
+				printf_error(stmt->loc, "cannot 'break' here");
+				return;
+			}
+			llvm_function_last_block(f)->term_inst = (llvm_term_inst_t){
+				.type = LLVM_TERM_INST_JMP,
+				.jmp.target = loop_labels.break_label
+			};
+			llvm_add_block(f); // add a dead block to consume any extra instructions
+			return;
+		case AST_STMT_CONTINUE:
+			if (!loop_labels.can_continue) {
+				printf_error(stmt->loc, "cannot 'continue' here");
+				return;
+			}
+			llvm_function_last_block(f)->term_inst = (llvm_term_inst_t){
+				.type = LLVM_TERM_INST_JMP,
+				.jmp.target = loop_labels.continue_label
+			};
+			llvm_add_block(f); // add a dead block to consume any extra instructions
+			return;
 		case AST_STMT_RETURN:
 		{
 			if (!f->has_return){
@@ -1199,40 +1226,48 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		}
 		case AST_STMT_FOR:
 		{
-			ast2llvm_emit_stmt(stmt->for_.init, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->for_.init, var2reg, f, ast_func, ast, create_empty_loop_labels());
 			llvm_label_t base_label = llvm_function_last_label(f);
-			
+			llvm_label_t break_target = llvm_add_block(f);
+
 			llvm_label_t cond_start = llvm_add_block(f);
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f, ast), f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
+			
+			llvm_label_t step_start = llvm_add_block(f);
+			ast2llvm_emit_stmt(stmt->for_.step, var2reg, f, ast_func, ast, loop_labels);
+			llvm_label_t step_end = llvm_function_last_label(f);
 
 			llvm_label_t body_start = llvm_add_block(f);
-			ast2llvm_emit_stmt(stmt->for_.body, var2reg, f, ast_func, ast);
-			ast2llvm_emit_stmt(stmt->for_.step, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->for_.body, var2reg, f, ast_func, ast, create_loop_labels(break_target, step_start));
 			llvm_label_t body_end = llvm_function_last_label(f);
 
 			llvm_label_t next = llvm_add_block(f);
 			llvm_get_block(f, base_label)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
 			llvm_get_block(f, cond_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
-			llvm_get_block(f, body_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			llvm_get_block(f, body_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=step_start };
+			llvm_get_block(f, break_target)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next };
+			llvm_get_block(f, step_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=body_start };
 			return;
 		}
 		case AST_STMT_WHILE:
 		{
 			llvm_label_t base_label = llvm_function_last_label(f);
+			llvm_label_t break_target = llvm_add_block(f);
 			
 			llvm_label_t cond_start = llvm_add_block(f);
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f, ast), f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
-			
+
 			llvm_label_t body_start = llvm_add_block(f);
-			ast2llvm_emit_stmt(stmt->while_.body, var2reg, f, ast_func, ast);
+			ast2llvm_emit_stmt(stmt->while_.body, var2reg, f, ast_func, ast, create_loop_labels(break_target, cond_start));
 			llvm_label_t body_end = llvm_function_last_label(f);
 
 			llvm_label_t next = llvm_add_block(f);
 			llvm_get_block(f, base_label)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
 			llvm_get_block(f, cond_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
 			llvm_get_block(f, body_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
+			llvm_get_block(f, break_target)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next };
 			return;
 		}
 	}
@@ -1276,7 +1311,7 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 	}
 	
 	ast2llvm_alloca_stmt(func.body, &var2reg, &f);
-	ast2llvm_emit_stmt(func.body, &var2reg, &f, func, ast);
+	ast2llvm_emit_stmt(func.body, &var2reg, &f, func, ast, create_empty_loop_labels());
 	var2reg_map_free(&var2reg);
 
 	if (f.has_return){
