@@ -35,7 +35,7 @@ T##_entry_t* T##_to_linked_list(T##_t* map);	\
 T##_iterator_t T##_iter(const T##_t* map);	\
 T##_iterator_t T##_iter_next(T##_iterator_t iter);	\
 T##_t T##_copy(T##_t* map);	\
-void T##_free(T##_t* map) // TODO: should be free_##T
+void free_##T(T##_t* map)
 
 #define create_hashmap_type_impl(Tk, Tv, T)	\
 T##_t create_##T(){	\
@@ -189,7 +189,7 @@ T##_t T##_copy(T##_t* map){	\
 	}	\
 	return copy;	\
 }	\
-void T##_free(T##_t* map){	\
+void free_##T(T##_t* map){	\
 	T##_entry_t* prev = 0;	\
 	for (T##_iterator_t iter = T##_iter(map); iter.current; iter = T##_iter_next(iter)){	\
 		if (prev) free(prev);	\

@@ -1,7 +1,7 @@
+#include "main.h"
 #include "scope.h"
-#include "../hash.h"
+#include "../lib/hash.h"
 #include "../message.h"
-#include "../ast.h"
 #include <stdlib.h>
 
 create_hashmap_type_impl(str, ast_id_t*, str2id_hashmap)
@@ -64,7 +64,7 @@ void free_scope(scope_t* scope){
 	for (str2id_hashmap_iterator_t iter = str2id_hashmap_iter(&scope->hashmap); iter.current; iter = str2id_hashmap_iter_next(iter)){
 		free_ast_id(iter.current->value);
 	}
-	str2id_hashmap_free(&scope->hashmap);
+	free_str2id_hashmap(&scope->hashmap);
 	free(scope);
 }
 

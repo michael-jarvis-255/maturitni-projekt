@@ -1,7 +1,7 @@
 #ifndef _PARSE_MAIN_H_
 #define _PARSE_MAIN_H_
 #include <stdio.h>
-#include "../ast.h"
+#include "../ast/main.h"
 #include "../message.h"
 
 ast_t parse_file(FILE* source, const char* source_path);

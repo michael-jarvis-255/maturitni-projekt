@@ -1,6 +1,6 @@
 #ifndef _AST_PRINT_H_
 #define _AST_PRINT_H_
-#include "../ast.h"
+#include "../ast/main.h"
 
 const char* ast_expr_binop_string(ast_expr_binop_enum_t);
 const char* ast_expr_unop_string(ast_expr_unop_enum_t);

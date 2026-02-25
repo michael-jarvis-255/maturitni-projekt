@@ -1,11 +1,11 @@
 %{
 	#include <stdio.h>
 	#include <string.h>
-	#include "yystype.h"
-	#include "yyltype.h"
-	#include "ast.h"
-	#include "message.h"
+	#include "parse/yystype.h"
+	#include "parse/yyltype.h"
 	#include "parse/main.h"
+	#include "ast/main.h"
+	#include "message.h"
 	void yyerror(__attribute__((unused)) scope_t** _, char const* err){
 		fprintf(stderr, "%s\n", err);
 	}

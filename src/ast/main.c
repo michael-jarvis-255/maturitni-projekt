@@ -1,6 +1,6 @@
-#include "ast.h"
-#include "message.h"
-#include "parse/main.h"
+#include "../ast/main.h"
+#include "../message.h"
+#include "../parse/main.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <ctype.h>

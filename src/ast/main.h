@@ -1,11 +1,11 @@
 #ifndef _AST_H_
 #define _AST_H_
-#include "yyltype.h"
-#include "list.h"
-#include "hashmap.h"
-#include "bignum.h"
-#include "ast/scope.h"
-#include "message.h"
+#include "../parse/yyltype.h"
+#include "../lib/list.h"
+#include "../lib/hashmap.h"
+#include "../lib/bignum.h"
+#include "../message.h"
+#include "scope.h"
 #include <stdbool.h>
 #define convert_to_ptr(x) memcpy(malloc(sizeof(x)), &x, sizeof(x))
 

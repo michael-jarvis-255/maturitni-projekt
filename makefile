@@ -4,15 +4,17 @@ ifneq ($(OS),Windows_NT)
 	GCCFLAGS += -fsanitize=address,undefined
 endif
 
-a.out: build/lex.y.c build/parse.tab.c ast.c ast2llvm.c llvm.c bignum.c message.c ast/print.c parse/main.c ast/scope.c main.c
-	gcc $^ -o $@ -I . $(GCCFLAGS)
+a.out: build/src/lex.y.c build/src/parse.tab.c src/ast/main.c src/ast2llvm.c src/llvm.c src/lib/bignum.c src/message.c src/ast/print.c src/parse/main.c src/ast/scope.c src/main.c
+	gcc $^ -o $@ -I build/h/ -I src/ $(GCCFLAGS)
 
-build/parse.tab.c build/parse.tab.h: parse.y ast.h yystype.h
-	@mkdir build -p
-	bison -Wcounterexamples --header=build/parse.tab.h --output=build/parse.tab.c parse.y
+build/src/parse.tab.c build/h/parse.tab.h: src/parse/parse.y src/parse/yystype.h src/parse/yyltype.h src/ast/main.h src/message.h src/parse/main.h
+	@mkdir build/src -p
+	@mkdir build/h -p
+	bison -Wcounterexamples --header=build/h/parse.tab.h --output=build/src/parse.tab.c src/parse/parse.y
 
-build/lex.y.c: lex.y build/parse.tab.h yystype.h
-	flex -o $@ lex.y
+build/src/lex.y.c: src/parse/lex.y build/h/parse.tab.h src/parse/yystype.h
+	@mkdir build/src -p
+	flex -o $@ src/parse/lex.y
 
 cloc:
 	cloc --exclude-dir=build .

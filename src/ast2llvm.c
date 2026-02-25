@@ -1,7 +1,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include "ast2llvm.h"
-#include "set.h"
+#include "lib/set.h"
 #include "message.h"
 #include "ast/print.h"
 
@@ -1312,7 +1312,7 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 	
 	ast2llvm_alloca_stmt(func.body, &var2reg, &f);
 	ast2llvm_emit_stmt(func.body, &var2reg, &f, func, ast, create_empty_loop_labels());
-	var2reg_map_free(&var2reg);
+	free_var2reg_map(&var2reg);
 
 	if (f.has_return){
 		f.blocks.data[f.blocks.len-1].term_inst = (llvm_term_inst_t){

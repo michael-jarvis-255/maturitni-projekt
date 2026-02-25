@@ -1,7 +1,7 @@
 #include "main.h"
+#include "yystype.h"
 #include "../message.h"
-#include "../yystype.h"
-#include "../build/parse.tab.h"
+#include "parse.tab.h"
 #include <string.h>
 
 void yy_scan_string(const char *str); // TODO: include from header?

@@ -1,9 +1,9 @@
 #ifndef _LLVM_H_
 #define _LLVM_H_
 
-#include "list.h"
-#include "hashmap.h"
-#include "ast.h"
+#include "lib/list.h"
+#include "lib/hashmap.h"
+#include "ast/main.h"
 
 // using structs for strong typing
 typedef struct{ unsigned int idx; } llvm_reg_t;

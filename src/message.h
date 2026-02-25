@@ -1,6 +1,6 @@
 #ifndef _MESSAGE_H_
 #define _MESSAGE_H_
-#include "yyltype.h"
+#include "parse/yyltype.h"
 
 #define COLOUR_INFO "\033[36m"
 #define COLOUR_WARNING "\033[33m"

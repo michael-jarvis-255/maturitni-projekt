@@ -1,6 +1,6 @@
 %{
-	#include "yystype.h"
-	#include "ast.h"
+	#include "parse/yystype.h"
+	#include "ast/main.h"
 	#include "parse.tab.h"
 	#include "ast/scope.h"
 	#define YY_DECL int yylex( current_scope ) scope_t** current_scope;

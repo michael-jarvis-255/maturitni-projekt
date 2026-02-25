@@ -1,6 +1,6 @@
 #ifndef _SCOPE_H_
 #define _SCOPE_H_
-#include "../hashmap.h"
+#include "../lib/hashmap.h"
 
 struct ast_id_t; typedef struct ast_id_t ast_id_t;
 struct scope_t; typedef struct scope_t scope_t;

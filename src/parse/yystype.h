@@ -1,4 +1,4 @@
-#include "ast.h"
+#include "ast/main.h"
 typedef union YYSTYPE {
 	char* str;
 	ast_expr_t expr;
