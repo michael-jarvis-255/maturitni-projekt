@@ -5,6 +5,8 @@
 #include "message.h"
 #include "ast/print.h"
 
+#define ptr_bits 64
+
 typedef enum {
 	LLVM_TVALUE_INT_CONST = LLVM_VALUE_INT_CONST,
 	LLVM_TVALUE_DOUBLE_CONST = LLVM_VALUE_DOUBLE_CONST,
@@ -132,8 +134,7 @@ static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 		case AST_DATATYPE_VOID:
 			break;
 	}
-	puts("INTERNAL ERROR");
-	exit(1);
+	INTERNAL_ERROR();
 }
 
 static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f){
@@ -273,8 +274,23 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 	if (value.type == LLVM_TVALUE_INT_CONST && src_type == 0){
 		switch (trgt_type->kind){
 			case AST_DATATYPE_VOID: goto error;
-			case AST_DATATYPE_POINTER: // TODO
-				goto error;
+			case AST_DATATYPE_POINTER:
+			{
+				bool changed = bignum_trunc(value.int_const, ptr_bits, false);
+				if (changed){
+					char* str = bignum_to_string(value.int_const);
+					printf_warning(loc, "casting integer constant to pointer type '%s' changes value to '%s'", trgt_type->name, str);
+					free(str);
+				}
+				llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+					.type = LLVM_INST_INT_TO_PTR,
+					.conversion.from = (llvm_type_t){ .type=LLVM_TYPE_INTEGRAL, .bitwidth=ptr_bits },
+					.conversion.to = ast_type_to_llvm_type(trgt_type),
+					.conversion.value = llvm_untype_value(value)
+				});
+				value = LLVM_TYPED_REG(reg, trgt_type);
+				goto no_cast;
+			}
 			case AST_DATATYPE_FLOAT:
 			{
 				double x = bignum_to_double(value.int_const);
@@ -325,7 +341,10 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
 
-					// TODO: warn if cast truncates
+					if (trgt_type->integral.bitwidth < ptr_bits){
+						warning_string = "cast truncates value";
+						goto implicit_warning;
+					}
 					if (trgt_type->integral.signed_){
 						warning_string = "casting ptr to signed integer";
 						goto implicit_warning;
@@ -376,7 +395,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 					goto no_cast;
 				}
 			}
-			puts("internal error"); exit(1);
+			INTERNAL_ERROR();
 		case AST_DATATYPE_INTEGRAL:
 			switch (trgt_type->kind){
 				case AST_DATATYPE_VOID: goto error;
@@ -390,7 +409,10 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
 
-					// TODO: warn if cast truncates
+					if (src_type->integral.bitwidth < ptr_bits){
+						warning_string = "cast truncates value";
+						goto implicit_warning;
+					}
 					goto no_cast;
 				}
 				case AST_DATATYPE_STRUCTURED:
@@ -501,7 +523,7 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 		case LLVM_TVALUE_REG:
 			switch (val.ast_type->kind){
 				case AST_DATATYPE_VOID:
-					puts("internal error"); exit(1);
+					INTERNAL_ERROR();
 				case AST_DATATYPE_POINTER:
 				{	
 					llvm_reg_t out = llvm_add_inst(f, 
@@ -531,7 +553,7 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 								},
 								val.ast_type, f, &err, (loc_t){0}))
 					});
-					if (err){ puts("internal error"); exit(1); }
+					if (err) INTERNAL_ERROR();
 					return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out }; 
 				}
 				case AST_DATATYPE_STRUCTURED:
@@ -550,7 +572,7 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 				}
 			}
 	}
-	puts("internal error"); exit(1);
+	INTERNAL_ERROR();
 }
 
 static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, ast_t ast);
@@ -599,7 +621,7 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 	return LLVM_TYPED_REG(out, find_ast_type(ast.global_scope, "bool"));
 }
 
-static llvm_typed_value_t ast2llvm_int_const_binop(ast_expr_binop_enum_t op, llvm_typed_value_t left_operand, llvm_typed_value_t right_operand){
+static llvm_typed_value_t ast2llvm_int_const_binop(loc_t loc, ast_expr_binop_enum_t op, llvm_typed_value_t left_operand, llvm_typed_value_t right_operand){
 	// NOTE: both left_operand and right_operand must be LLVM_TVALUE_INT_CONST and have .ast_type == 0
 	switch (op){
 		case AST_EXPR_BINOP_ADD:
@@ -609,9 +631,25 @@ static llvm_typed_value_t ast2llvm_int_const_binop(ast_expr_binop_enum_t op, llv
 		case AST_EXPR_BINOP_MUL:
 			bignum_mul(left_operand.int_const, right_operand.int_const); break;
 		case AST_EXPR_BINOP_DIV:
-			bignum_div(left_operand.int_const, right_operand.int_const); break;
+		{
+			bool err;
+			bignum_div(left_operand.int_const, right_operand.int_const, &err);
+			if (err) {
+				printf_error(loc, "division by zero");
+				left_operand = LLVM_TYPED_POISON(0);
+			}
+			break;
+		}
 		case AST_EXPR_BINOP_MOD:
-			bignum_mod(left_operand.int_const, right_operand.int_const); break;
+		{
+			bool err;
+			bignum_mod(left_operand.int_const, right_operand.int_const, &err); break;
+			if (err) {
+				printf_error(loc, "modulo by zero");
+				left_operand = LLVM_TYPED_POISON(0);
+			}
+			break;
+		}
 		case AST_EXPR_BINOP_LT:
 			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) < 0); break;
 		case AST_EXPR_BINOP_GT: 
@@ -767,7 +805,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							}), find_ast_type(ast.global_scope, "bool"));
 						}
 					}
-					puts("internal error"); exit(1);
+					INTERNAL_ERROR();
 				case AST_DATATYPE_POINTER:
 					switch (expr->unop.op){
 						case AST_EXPR_UNOP_NEG:
@@ -796,7 +834,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							return LLVM_TYPED_REG(reg, base_type);
 						}
 					}
-					puts("internal error"); exit(1);
+					INTERNAL_ERROR();
 				case AST_DATATYPE_INTEGRAL:
 					switch (expr->unop.op){
 						case AST_EXPR_UNOP_NEG:
@@ -833,9 +871,9 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							printf_error(expr->loc, "cannot dereference non-pointer value of type '%s'", operand.ast_type->name);
 							return LLVM_TYPED_POISON(0);
 					}
-					puts("internal error"); exit(1);
+					INTERNAL_ERROR();
 				}
-				puts("internal error"); exit(1);
+				INTERNAL_ERROR();
 		}
 
 		case AST_EXPR_BINOP:
@@ -857,7 +895,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 
 			// catch untyped int constants
 			if (left_operand.type == LLVM_TVALUE_INT_CONST && left_operand.ast_type == 0 && right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
-				return ast2llvm_int_const_binop(expr->binop.op, left_operand, right_operand);
+				return ast2llvm_int_const_binop(expr->loc, expr->binop.op, left_operand, right_operand);
 			}
 
 			// type checks and casts
@@ -919,8 +957,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 					break;
 			}
 			if (err) {
-				print_error(expr->loc, "internal error");
-				return LLVM_TYPED_POISON(0);
+				INTERNAL_ERROR();
 			}
 
 			const ast_datatype_t* operand_ast_type = left_operand.ast_type;
@@ -932,8 +969,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				case AST_DATATYPE_VOID:
 				case AST_DATATYPE_STRUCTURED:
 				case AST_DATATYPE_POINTER:
-					print_error(expr->loc, "internal error");
-					return LLVM_TYPED_POISON(0);
+					INTERNAL_ERROR();
 				case AST_DATATYPE_INTEGRAL:
 				{
 					bool signed_op = operand_ast_type->integral.signed_;
@@ -970,7 +1006,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						
 						case AST_EXPR_BINOP_LAND:
 						case AST_EXPR_BINOP_LOR:
-							printf("internal error\n"); exit(1);
+							INTERNAL_ERROR();
 					}
 					llvm_reg_t out = llvm_add_inst(f, inst);
 					if (inst.type == LLVM_INST_ICMP){ // icmp instruction always returns i1 instead of optype
@@ -1019,7 +1055,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						case AST_EXPR_BINOP_BOR: goto binop_invalid_types;
 						case AST_EXPR_BINOP_LAND:
 						case AST_EXPR_BINOP_LOR:
-							printf("internal error\n"); exit(1);
+							INTERNAL_ERROR();
 					}
 				}
 			}
@@ -1063,8 +1099,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			return ast2llvm_cast(val, expr->cast.type_ref, f, 0, expr->loc);
 		}
 	}
-	puts("INTERNAL ERROR");
-	exit(1);
+	INTERNAL_ERROR();
 }
 
 static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_func_t ast_func, const ast_t ast, const loop_labels_t loop_labels){

@@ -35,7 +35,7 @@ typedef struct {
 #define STRING_DEFAULT() } else {
 #define STRING_SWITCH_END() }} while (0);}
 
-command_line_options_t parse_arguments(const unsigned int argc, const char** argv){
+static command_line_options_t parse_arguments(const unsigned int argc, const char** argv){
 	command_line_options_t opts = (command_line_options_t){
 		.input_path = 0,
 		.output_path = 0,
@@ -69,7 +69,7 @@ command_line_options_t parse_arguments(const unsigned int argc, const char** arg
 	return opts;
 }
 
-char* create_tmp_path(const char* suffix){
+static char* create_tmp_path(const char* suffix){
 	char* tmpfile = malloc(strlen("/tmp/XXXXXX")+strlen(suffix)+1);
 	strcpy(tmpfile, "/tmp/XXXXXX");
 	strcat(tmpfile, suffix);
@@ -78,7 +78,7 @@ char* create_tmp_path(const char* suffix){
 	return tmpfile;
 }
 
-const char* opt_level_flag(opt_level_t lvl){
+static const char* opt_level_flag(opt_level_t lvl){
 	switch (lvl){
 		case OPT_0: return "-O0";
 		case OPT_1: return "-O1";
@@ -88,7 +88,7 @@ const char* opt_level_flag(opt_level_t lvl){
 	return "";
 }
 
-void system_concat(unsigned int n, ...){
+static void system_concat(unsigned int n, ...){
 	va_list args1;
 	va_list args2;
 	va_start(args1, n);
@@ -170,7 +170,7 @@ int main(int argc, const char** argv){
 		if (options.output_path){
 			system_concat(3, "mv", opt_ir_fp, options.output_path);
 		}else{
-			puts("no output path specified"); // TODO: print to stdout
+			system_concat(2, "cat", opt_ir_fp);
 		}
 		unlink(opt_ir_fp);
 		free(opt_ir_fp);
@@ -178,10 +178,10 @@ int main(int argc, const char** argv){
 	}
 
 	if (options.output_format == OUTPUT_ASM){
-		if (!options.output_path){
-			puts("no output path specified"); // TODO: print to stdout
-		}else{
+		if (options.output_path){
 			system_concat(6, "llc", "-o", options.output_path, "-filetype=asm", opt_level_flag(options.opt_level), opt_ir_fp);
+		}else{
+			system_concat(6, "llc", "-o", "-", "-filetype=asm", opt_level_flag(options.opt_level), opt_ir_fp);
 		}
 		unlink(opt_ir_fp);
 		free(opt_ir_fp);

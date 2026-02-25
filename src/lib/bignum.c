@@ -319,11 +319,13 @@ void bignum_mul(bignum_t* a, const bignum_t* b){
 	bignum_move_and_free(a, acc);
 	free_bignum(tmp);
 }
-static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b){ // return div, leave mod in a
+static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b, bool* err){ // return div, leave mod in a
 	bignum_t* res = create_bignum();
 	if (bignum_unsigned_cmp_uint(a, 0) == 0){
-		return res; // TODO: throw error?
+		*err = true;
+		return res;
 	}
+	*err = false;
 
 	bool asign = a->sign;
 	bignum_t* tmp = create_bignum();
@@ -364,13 +366,13 @@ static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b){ // return div, l
 	free_bignum(tmp2);
 	return res;
 }
-void bignum_div(bignum_t* a, const bignum_t* b){
-	bignum_t* res = bignum_divmod(a, b);
+void bignum_div(bignum_t* a, const bignum_t* b, bool* err){
+	bignum_t* res = bignum_divmod(a, b, err);
 	bignum_move_and_free(a, res);
 }
 // TODO: test everything below here
-void bignum_mod(bignum_t* a, const bignum_t* b){
-	bignum_t* res = bignum_divmod(a, b);
+void bignum_mod(bignum_t* a, const bignum_t* b, bool* err){
+	bignum_t* res = bignum_divmod(a, b, err);
 	free_bignum(res);
 }
 

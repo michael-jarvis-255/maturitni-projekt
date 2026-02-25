@@ -11,8 +11,7 @@ const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
 		case AST_EXPR_UNOP_NEG: return "-";
 		case AST_EXPR_UNOP_DEREF: return "*";
 	}
-	printf("INTERNAL ERROR\n");
-	exit(1);
+	INTERNAL_ERROR();
 }
 
 const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
@@ -36,8 +35,7 @@ const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 		case AST_EXPR_BINOP_SHR: return ">>";
 		case AST_EXPR_BINOP_SHL: return "<<";
 	}
-	printf("INTERNAL ERROR\n");
-	exit(1);
+	INTERNAL_ERROR();
 }
 
 void print_ast_lvalue(ast_lvalue_t lvalue){

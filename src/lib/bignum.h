@@ -20,8 +20,8 @@ void bignum_negate(bignum_t* a);
 void bignum_add(bignum_t* a, const bignum_t* b);
 void bignum_sub(bignum_t* a, const bignum_t* b);
 void bignum_mul(bignum_t* a, const bignum_t* b);
-void bignum_div(bignum_t* a, const bignum_t* b);
-void bignum_mod(bignum_t* a, const bignum_t* b);
+void bignum_div(bignum_t* a, const bignum_t* b, bool* err);
+void bignum_mod(bignum_t* a, const bignum_t* b, bool* err);
 
 int bignum_cmp(const bignum_t* a, const bignum_t* b);
 int bignum_cmp_uint(const bignum_t* a, uint32_t x);

@@ -39,8 +39,7 @@ static inline loc_t loc_from_ast_id(ast_id_t* id){
 		case AST_ID_TYPE: return id->type_.declare_loc;
 		case AST_ID_GLOBAL: return id->global.var.declare_loc;
 	}
-	printf("INTERNAL ERROR\n");
-	exit(1);
+	INTERNAL_ERROR();
 }
 
 void scope_insert(scope_t* scope, const char* name, ast_id_t* value){

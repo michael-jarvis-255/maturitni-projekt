@@ -37,13 +37,13 @@ static unsigned int standard_print(const char* msg, const unsigned int n, unsign
 		
 		if (c >= 0x7f) continue;
 		if (c >= 0x20) {
-			printf("%c", c);
+			fprintf(stderr, "%c", c);
 			col++;
 			continue;
 		}
 		if (c == '\t'){
 			do {
-				printf(" ");
+				fprintf(stderr, " ");
 				col++;
 			} while (col % TAB_SIZE);
 		}
@@ -53,37 +53,37 @@ static unsigned int standard_print(const char* msg, const unsigned int n, unsign
 }
 
 static void print_msg(loc_t loc, const char* msg_type, const char* msg, const char* colour){
-	printf("%sline %u: %s%s:%s %s\n", STYLE_BOLD, loc.first_line+1, colour, msg_type, STYLE_RESET, msg);
+	fprintf(stderr, "%sline %u: %s%s:%s %s\n", STYLE_BOLD, loc.first_line+1, colour, msg_type, STYLE_RESET, msg);
 	unsigned int tilde_count = 0;
 	unsigned int col = 0;
 	if (loc.first_line == loc.last_line){
-		printf("%5u |    ", loc.first_line+1);
+		fprintf(stderr, "%5u |    ", loc.first_line+1);
 		col = standard_print(global_source_lines.lines[loc.first_line], loc.first_column, col);
-		printf("%s", colour);
+		fprintf(stderr, "%s", colour);
 		unsigned int col2 = standard_print(global_source_lines.lines[loc.first_line] + loc.first_column, loc.last_column - loc.first_column, col);
-		printf("%s", STYLE_RESET);
+		fprintf(stderr, "%s", STYLE_RESET);
 		standard_print(global_source_lines.lines[loc.first_line] + loc.last_column, -1, col2);
-		printf("\n");
+		fprintf(stderr, "\n");
 		
 		tilde_count = loc.last_column - loc.first_column - 1;
 	}else{
-		printf("%5u |    ", loc.first_line+1);
+		fprintf(stderr, "%5u |    ", loc.first_line+1);
 		col = standard_print(global_source_lines.lines[loc.first_line], loc.first_column, col);
-		printf("%s", colour);
+		fprintf(stderr, "%s", colour);
 		standard_print(global_source_lines.lines[loc.first_line] + loc.first_column, -1, col);
-		printf("%s\n", STYLE_RESET);
+		fprintf(stderr, "%s\n", STYLE_RESET);
 
 		tilde_count = strlen(global_source_lines.lines[loc.first_line]) - loc.first_column - 1;
 	}
 
-	printf("      |    %*s%s^", col, "", colour);
+	fprintf(stderr, "      |    %*s%s^", col, "", colour);
 	for (unsigned int i=0; i<tilde_count; i++){
-		printf("~");
+		fprintf(stderr, "~");
 	}
-	printf("%s\n", STYLE_RESET);
+	fprintf(stderr, "%s\n", STYLE_RESET);
 
 	if (loc.first_line != loc.last_line){
-		printf("      |    %s...%s\n", colour, STYLE_RESET);
+		fprintf(stderr, "      |    %s...%s\n", colour, STYLE_RESET);
 	}
 }
 
@@ -122,4 +122,12 @@ void printf_error(loc_t loc, char* msg, ...){
 	va_start(args, msg);
 	vprintf_msg(loc, "error", COLOUR_ERROR, msg, args);
 	va_end(args);
+}
+
+__attribute__ ((noreturn))
+void internal_error(const char* file, int line){
+	fprintf(stderr, "%s%sinternal error:%s ", COLOUR_ERROR, STYLE_BOLD, STYLE_RESET);
+	fprintf(stderr, "%s file \"%s\", line %i:%s ", STYLE_BOLD, file, line, STYLE_RESET);
+	fprintf(stderr, "this is a bug in the compiler, please report it on github: https://github.com/redsti-github/prog\n");
+	exit(1);
 }

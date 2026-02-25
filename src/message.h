@@ -25,6 +25,9 @@ void printf_info(loc_t loc, char* msg, ...) __attribute__ ((format (printf, 2, 3
 void printf_warning(loc_t loc, char* msg, ...) __attribute__ ((format (printf, 2, 3)));
 void printf_error(loc_t loc, char* msg, ...) __attribute__ ((format (printf, 2, 3)));
 
+void internal_error(const char* file, int line) __attribute__ ((noreturn));
+#define INTERNAL_ERROR() internal_error(__FILE__, __LINE__)
+
 extern source_lines_t global_source_lines; // TODO: something better
 
 #endif

@@ -75,10 +75,7 @@ void push_new_scope(scope_t** current_scope){
 
 scope_t* pop_scope(scope_t** current_scope){
 	scope_t* scope = *current_scope;
-	if (scope == 0){
-		printf("internal error\n"); // TODO: better internal error messages
-		exit(1);
-	}
+	if (scope == 0) INTERNAL_ERROR();
 	*current_scope = scope_get_parent(scope);
 	return scope;
 }

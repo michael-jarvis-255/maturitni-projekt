@@ -63,7 +63,7 @@ static void llvm_type_to_target(const llvm_type_t type, print_target_t* t){
 				case 80: tprint(t, "x86_fp80"); break;
 				case 128: tprint(t, "fp128"); break;
 				default:
-					puts("internal error"); exit(1);
+					INTERNAL_ERROR();
 			}
 			break;
 		case LLVM_TYPE_STRUCT:
