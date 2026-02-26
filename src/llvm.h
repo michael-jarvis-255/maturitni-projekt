@@ -235,6 +235,7 @@ create_list_type_header(llvm_basic_block, false);
 
 typedef struct llvm_function_t {
 	char* name;
+	bool has_definition;
 	llvm_basic_block_list_t blocks; // entry block is always block 0
 	bool has_return;
 	llvm_type_t rettype;

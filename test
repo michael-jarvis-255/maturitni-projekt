@@ -13,6 +13,8 @@ typedef struct {
 
 i32 global;
 
+u64 myfunc(u64 a, u64 b);
+
 void function(){
 	u64 x = 0;
 	while (x <= 10){
@@ -61,7 +63,11 @@ u64 foo(i32 X){
 	return *ptr;
 }
 
+void puts(u8* msg);
+
 u32 main(i32 argc, u8** argv){
-	foo(argc);
+	//foo(argc);
+	for (u16 i=0; i < argc; i=i+1)
+		puts(*(u8**)((u64)argv + 8*i));
 	return (u32)argc + 15;
 }

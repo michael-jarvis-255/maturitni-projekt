@@ -19,7 +19,7 @@ scope_t* create_scope(scope_t* parent){
 	return scope;
 }
 
-static ast_id_t* scope_get_local(const scope_t* scope, const char* name){
+ast_id_t* scope_get_local(const scope_t* scope, const char* name){
 	return str2id_hashmap_get(&scope->hashmap, name, 0);
 }
 
@@ -45,7 +45,7 @@ static inline loc_t loc_from_ast_id(ast_id_t* id){
 void scope_insert(scope_t* scope, const char* name, ast_id_t* value){
 	ast_id_t* exists = scope_get(scope, name);
 	if (exists){ // TODO: is this the correct place to catch this error?
-		printf_error(loc_from_ast_id(value), "name '%s' is already defined", name);
+		printf_error(loc_from_ast_id(value), "name '%s' is already declared", name);
 		if (!loc_eq(loc_from_ast_id(exists), (loc_t){0})){ // if not built-in type
 			print_info(loc_from_ast_id(exists), "declared here");
 		}
@@ -69,6 +69,10 @@ void free_scope(scope_t* scope){
 
 scope_t* scope_get_parent(const scope_t* scope){
 	return scope->parent;
+}
+
+void scope_remove(scope_t* scope, const char* name){
+	str2id_hashmap_remove(&scope->hashmap, name);
 }
 
 scope_iterator_t scope_iter(const scope_t* scope){ return str2id_hashmap_iter(&scope->hashmap); }

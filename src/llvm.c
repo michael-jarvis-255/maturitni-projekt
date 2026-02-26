@@ -304,7 +304,7 @@ static void llvm_block_body_to_target(const llvm_basic_block_t* block, print_tar
 }
 
 static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
-	tprint(t, "define ");
+	tprint(t, f->has_definition ? "define " : "declare ");
 	if (f->has_return)
 		llvm_type_to_target(f->rettype, t);
 	else
@@ -316,7 +316,12 @@ static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
 		if (i+1 < f->arg_count)
 			tprint(t, ", ");
 	}
-	tprint(t, "){\n");
+	if (f->has_definition){
+		tprint(t, "){\n");
+	}else{
+		tprint(t, ");\n");
+		return;
+	}
 
 	for (unsigned int i = 0; i < f->blocks.len; i++){
 		tprintf(t, "l%u:\n", i);
@@ -482,10 +487,9 @@ static void free_llvm_basic_block(llvm_basic_block_t block){
 }
 
 static void llvm_global_to_target(llvm_global_def_t global, print_target_t* t){
-	tprintf(t, "@%s = external global ", global.name);
+	tprintf(t, "@%s = unnamed_addr global ", global.name);
 	llvm_type_to_target(global.type, t);
-	tprint(t, "\n");
-	// TODO: emit init value
+	tprint(t, " 0 \n"); // TODO: emit init value
 }
 
 static void llvm_program_to_target(const llvm_program_t program, print_target_t* t){

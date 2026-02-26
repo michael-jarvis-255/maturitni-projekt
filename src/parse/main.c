@@ -81,7 +81,7 @@ scope_t* pop_scope(scope_t** current_scope){
 }
 
 
-void parse_function_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* returntype, const char* name, ast_variable_ptr_list_t args, scope_t* local_scope, ast_stmt_t body){
+void parse_function_def(loc_t loc, scope_t* current_scope, ast_datatype_t* returntype, char* name, ast_variable_ptr_list_t args, scope_t* local_scope, ast_stmt_t body){
 	ast_id_t* func_id = malloc(sizeof(ast_id_t));
 	func_id->type = AST_ID_FUNC;
 	func_id->func.declare_loc = loc;
@@ -90,6 +90,82 @@ void parse_function_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* retu
 	func_id->func.args = args;
 	func_id->func.local_scope = local_scope;
 	func_id->func.body = convert_to_ptr(body);
+
+	ast_id_t* other = scope_get_local(current_scope, name);
+	if (!other) goto try_insert;
+	if (other->type != AST_ID_FUNC) goto try_insert; // use the error implemented in scope_insert
+
+	if (other->func.body){
+		printf_error(loc, "redefinition of function '%s'", name);
+		printf_info(other->func.declare_loc, "previously defined here");
+		goto free_and_return;
+	}
+
+	if (!ast_datatype_eq(returntype, other->func.return_type_ref))
+		goto mismatched_types;
+
+	if (args.len != other->func.args.len)
+		goto mismatched_types;
+
+	for (unsigned int i=0; i < args.len; i++)
+		if (!ast_datatype_eq(args.data[i]->type_ref, other->func.args.data[i]->type_ref))
+			goto mismatched_types;
+
+	// function types match, replace declaration with definition
+	scope_remove(current_scope, name);
+	free_ast_id(other);
+	goto try_insert;
+
+mismatched_types:
+	printf_error(loc, "definition of function '%s' doesn't match previous declaration (types mismatch)", name); // TODO: print the function types
+	printf_info(other->func.declare_loc, "declared here");
+	goto free_and_return;
+	
+free_and_return:
+	free_ast_id(func_id);
+	return;
+
+try_insert:
+	scope_insert(current_scope, name, func_id);
+}
+
+void parse_function_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* returntype, char* name, ast_variable_ptr_list_t args, scope_t* local_scope){
+	ast_id_t* func_id = malloc(sizeof(ast_id_t));
+	func_id->type = AST_ID_FUNC;
+	func_id->func.declare_loc = loc;
+	func_id->func.return_type_ref = returntype;
+	func_id->func.name = name;
+	func_id->func.args = args;
+	func_id->func.local_scope = local_scope;
+	func_id->func.body = 0;
+
+	ast_id_t* other = scope_get_local(current_scope, name);
+	if (!other) goto try_insert;
+	if (other->type != AST_ID_FUNC) goto try_insert; // use the error implemented in scope_insert
+
+	if (!ast_datatype_eq(returntype, other->func.return_type_ref))
+		goto mismatched_types;
+
+	if (args.len != other->func.args.len)
+		goto mismatched_types;
+
+	for (unsigned int i=0; i < args.len; i++)
+		if (!ast_datatype_eq(args.data[i]->type_ref, other->func.args.data[i]->type_ref))
+			goto mismatched_types;
+
+	// function types match, but no need to do anything with this declaration
+	goto free_and_return;
+
+mismatched_types:
+	printf_error(loc, "redeclatation of function '%s' doesn't match previous declaration (types mismatch)", name); // TODO: print the function types
+	printf_info(other->func.declare_loc, "previously declared here");
+	goto free_and_return;
+
+free_and_return:
+	free_ast_id(func_id);
+	return;
+
+try_insert:
 	scope_insert(current_scope, name, func_id);
 }
 

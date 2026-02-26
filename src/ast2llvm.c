@@ -1009,16 +1009,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							INTERNAL_ERROR();
 					}
 					llvm_reg_t out = llvm_add_inst(f, inst);
-					if (inst.type == LLVM_INST_ICMP){ // icmp instruction always returns i1 instead of optype
-						out = llvm_add_inst(f,
-							(llvm_inst_t){
-								.type = LLVM_INST_ZEXT,
-								.conversion.from = LLVM_TYPE_I1,
-								.conversion.to = optype,
-								.conversion.value = (llvm_value_t){.type=LLVM_VALUE_REG, .reg=out},
-							});
-					}
-					return LLVM_TYPED_REG(out, operand_ast_type);
+					return LLVM_TYPED_REG(out, restype);
 				}
 				case AST_DATATYPE_FLOAT:
 				{
@@ -1282,7 +1273,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_get_block(f, cond_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=cond, .br.iftrue=body_start, .br.iffalse=next };
 			llvm_get_block(f, body_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=step_start };
 			llvm_get_block(f, break_target)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next };
-			llvm_get_block(f, step_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=body_start };
+			llvm_get_block(f, step_end)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=cond_start };
 			return;
 		}
 		case AST_STMT_WHILE:
@@ -1311,7 +1302,6 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 	llvm_function_t f;
 	f.name = strdup(func.name);
-	f.blocks = create_llvm_basic_block_list();
 
 	if (func.return_type_ref->kind == AST_DATATYPE_VOID){
 		f.has_return = false;
@@ -1325,6 +1315,14 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast){
 	for (unsigned int i=0; i < func.args.len; i++){
 		f.args[i] = ast_type_to_llvm_type(func.args.data[i]->type_ref);
 	}
+	
+	if (!func.body){
+		f.has_definition = false;
+		return f;
+	}
+
+	f.has_definition = true;
+	f.blocks = create_llvm_basic_block_list();
 
 	llvm_basic_block_list_append(&f.blocks, (llvm_basic_block_t){
 		.regbase = func.args.len,

@@ -31,9 +31,10 @@ void free_ast_id_v(ast_id_t id){
 			free_ast_variable_v(id.var);
 			break;
 		case AST_ID_FUNC:
-			free_ast_stmt(id.func.body);
+			if (id.func.body)
+				free_ast_stmt(id.func.body);
 			free_scope(id.func.local_scope);
-			free((void*)id.func.name);
+			free(id.func.name);
 			free(id.func.args.data);
 			break;
 		case AST_ID_GLOBAL:

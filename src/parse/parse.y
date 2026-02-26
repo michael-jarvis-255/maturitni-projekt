@@ -65,6 +65,7 @@ main:
 
 declaration_list:
 	%empty
+|	declaration_list function_definition
 |	declaration_list function_declaration
 |	declaration_list typedef_declaration
 |	declaration_list global_declaration
@@ -99,6 +100,7 @@ name:
 	TK_NAME
 |	TK_TYPE		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 |	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
+|	TK_FUNC		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
@@ -260,9 +262,13 @@ if_ending_for_loop:
 	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 |	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 
+%nterm function_definition;
+function_definition: // TODO: use block_body instead of scopeless_block ?
+	type name '(' begin_local_scope function_args[args] ')' scopeless_block[body] end_local_scope[scope]	{ parse_function_def(@$, *current_scope, $type, $name.name, $args, $scope, $body); (void)$begin_local_scope; }
+
 %nterm function_declaration;
-function_declaration: // TODO: use block_body instead of scopeless_block ?
-	type name '(' begin_local_scope function_args[args] ')' scopeless_block[body] end_local_scope[scope]	{ parse_function_decl(@$, *current_scope, $type, $name.name, $args, $scope, $body); (void)$begin_local_scope; }
+function_declaration:
+	type name '(' begin_local_scope function_args[args] ')' ';' end_local_scope[scope]	{ parse_function_decl(@$, *current_scope, $type, $name.name, $args, $scope); (void)$begin_local_scope; }
 
 %nterm <var_ptr_list> function_args function_args_non_emtpy;
 function_args:

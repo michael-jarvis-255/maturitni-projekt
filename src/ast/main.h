@@ -209,9 +209,9 @@ create_list_type_header(ast_variable_ptr, false);
 typedef struct ast_func_t {
 	loc_t declare_loc;
 	ast_datatype_t* return_type_ref;
-	const char* name;
+	char* name;
 	ast_variable_ptr_list_t args;
-	ast_stmt_t* body;
+	ast_stmt_t* body; // nullable
 	scope_t* local_scope;
 } ast_func_t;
 

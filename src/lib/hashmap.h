@@ -66,8 +66,9 @@ void T##_remove(T##_t* map, Tk key){	\
 	unsigned long h = Tk##_hash(key) % map->bcap;	\
 	T##_entry_t* entry = map->buckets[h];	\
 	if (Tk##_cmp(entry->key, key) == 0){	\
-		map->buckets[h] = 0;	\
+		map->buckets[h] = entry->next;	\
 		map->size--;	\
+		free(entry);	\
 		return;	\
 	}	\
 	while (entry->next){	\
