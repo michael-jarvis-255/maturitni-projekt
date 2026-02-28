@@ -116,6 +116,9 @@ void print_ast_expr(const ast_expr_t* exp){
 		case AST_EXPR_DOUBLE_CONST:
 			printf("%E", exp->double_constant);
 			return;
+		case AST_EXPR_STRING_CONST:
+			printf("\"%*s\"", exp->string_constant.len, exp->string_constant.data);
+			break;
 		case AST_EXPR_LVALUE:
 			print_ast_lvalue(exp->lvalue);
 			return;

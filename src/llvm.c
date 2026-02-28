@@ -7,6 +7,7 @@ typedef char char_t;
 create_list_type_header(char, false);
 create_list_type_impl(char, false)
 create_list_type_impl(llvm_arg, false)
+create_list_type_impl(llvm_string_def, true)
 
 typedef enum {
 	PRINT_TARGET_STRING,
@@ -492,8 +493,22 @@ static void llvm_global_to_target(llvm_global_def_t global, print_target_t* t){
 	tprint(t, " 0 \n"); // TODO: emit init value
 }
 
+static void llvm_string_to_target(llvm_string_def_t str, print_target_t* t){
+	tprintf(t, "@%s = private unnamed_addr constant [%u x i8] c\"", str.symbol_name, str.len);
+	for (unsigned int i=0; i < str.len; i++){
+		unsigned char c = str.data[i];
+		if ((c >= 32) && (c <= 125) && (c != '"') && (c != '\\')){
+			tprintf(t, "%c", c);
+		}else{
+			tprintf(t, "\\%.2x", c);
+		}
+	}
+	tprint(t, "\"\n");
+}
+
 static void llvm_program_to_target(const llvm_program_t program, print_target_t* t){
 	tprintf(t, "source_filename = \"%s\"\n\n", program.source_path);
+	for (unsigned int i=0; i<program.strings.len; i++) llvm_string_to_target(program.strings.data[i], t);
 	for (unsigned int i=0; i<program.global_count; i++) llvm_global_to_target(program.globals[i], t);
 	for (unsigned int i=0; i<program.function_count; i++) llvm_func_to_target(&program.functions[i], t);
 }
@@ -531,4 +546,10 @@ void free_llvm_program(llvm_program_t program){
 	for (unsigned int i=0; i<program.global_count; i++) free_llvm_global_def(program.globals[i]);
 	free(program.functions);
 	free(program.globals);
+	deep_free_llvm_string_def_list(&program.strings);
+}
+
+void free_llvm_string_def_v(llvm_string_def_t str){
+	free(str.symbol_name);
+	free(str.data);
 }

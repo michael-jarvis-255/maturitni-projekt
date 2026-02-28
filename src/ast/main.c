@@ -101,6 +101,14 @@ ast_expr_t create_ast_expr_double_const(loc_t loc, double value){
 		.double_constant = value
 	};
 }
+ast_expr_t create_ast_expr_string_const(loc_t loc, char* data, unsigned int len){
+	return (ast_expr_t){
+		.type = AST_EXPR_STRING_CONST,
+		.loc = loc,
+		.string_constant.data = data,
+		.string_constant.len = len
+	};
+}
 ast_expr_t create_ast_expr_lvalue(loc_t loc, ast_lvalue_t lvalue){
 	return (ast_expr_t){
 		.type = AST_EXPR_LVALUE,
@@ -161,6 +169,9 @@ void free_ast_expr_v(ast_expr_t exp){
 			free_bignum(exp.int_constant);
 			break;
 		case AST_EXPR_DOUBLE_CONST:
+			break;
+		case AST_EXPR_STRING_CONST:
+			free(exp.string_constant.data);
 			break;
 		case AST_EXPR_REF:
 			free_ast_lvalue_v(exp.ref.lvalue);

@@ -14,7 +14,7 @@
 	static unsigned int err_recovery_scope_depth = 0;
 %}
 
-%token <expr> TK_NUMBER "number"
+%token <expr> TK_CONST "constant"
 %token <str> TK_STRING "string"
 %token <name> TK_NAME "name"
 %token <var_ref> TK_VAR "variable name"
@@ -43,7 +43,6 @@
 %define parse.error custom
 %param {scope_t** current_scope}
 
-%destructor { free($$); } <str>
 %destructor { free_ast_expr_v($$); } <expr>
 %destructor { free_ast_stmt_v($$); } <stmt>
 %destructor { free($$.name); } <name>
@@ -104,7 +103,7 @@ name:
 
 %nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
-	TK_NUMBER	{ $$ = $1; }
+	TK_CONST	{ $$ = $1; }
 |	lvalue		{ $$ = create_ast_expr_lvalue(@$, $1); }
 |	function_call
 |	'(' exp ')'	{ $$ = $2; }

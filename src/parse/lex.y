@@ -3,6 +3,7 @@
 	#include "ast/main.h"
 	#include "parse.tab.h"
 	#include "ast/scope.h"
+	#include <ctype.h>
 	#define YY_DECL int yylex( current_scope ) scope_t** current_scope;
 
 	static void update_yylloc(unsigned int yyleng){
@@ -57,12 +58,11 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 \<\<	update_yylloc(yyleng); return TK_SHL;
 \-\>	update_yylloc(yyleng); return TK_ARROW;
 
-[0-9]+				update_yylloc(yyleng); bignum_t* num = create_bignum(); bignum_from_string(num, yytext); yylval.expr = create_ast_expr_int_const(yylloc, num); return TK_NUMBER;
-([0-9]*\.)?[0-9]+([eE]-?[0-9]+)?	update_yylloc(yyleng); double x; sscanf(yytext, "%lf", &x); yylval.expr = create_ast_expr_double_const(yylloc, x); return TK_NUMBER;
+[0-9]+				update_yylloc(yyleng); bignum_t* num = create_bignum(); bignum_from_string(num, yytext); yylval.expr = create_ast_expr_int_const(yylloc, num); return TK_CONST;
+([0-9]*\.)?[0-9]+([eE]-?[0-9]+)?	update_yylloc(yyleng); double x; sscanf(yytext, "%lf", &x); yylval.expr = create_ast_expr_double_const(yylloc, x); return TK_CONST;
 [a-zA-Z_][0-9a-zA-Z_]*	{ 
 							update_yylloc(yyleng);
-							char* name = malloc(yyleng+1);
-							strncpy(name, yytext, yyleng);
+							char* name = strndup(yytext, yyleng);
 							name[yyleng] = 0;
 
 							ast_id_t* id = scope_get(*current_scope, name);
@@ -95,11 +95,28 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 									return TK_NAME;
 							}
 						}
-\"[^"]*\"				{
+\"(\\.|[^"\\])*\"		{
 							string_update_yylloc(yytext, yyleng);
-							yylval.str = malloc(yyleng);
-							strncpy(yylval.str, yytext, yyleng);
-							return TK_STRING;
+							char* str = strndup(yytext+1, yyleng-2);
+							unsigned int sz = 0;
+							char* curr = str;
+							for (int i=0; i<yyleng-2; i++, curr++, sz++){
+								if (str[i] != '\\'){
+									*curr = str[i];
+									continue;
+								}
+								i++;
+								if (!isxdigit(str[i])){
+									*curr = str[i];
+									continue;
+								}
+								char c = 0;
+								sscanf("%2hhx", str+i, &c);
+								i++;
+								*curr = c;
+							}
+							yylval.expr = create_ast_expr_string_const(yylloc, str, sz);
+							return TK_CONST;
 						}
 
 <comment,INITIAL>"\n"			newline_update_yylloc();

@@ -249,12 +249,20 @@ typedef struct llvm_global_def_t {
 	llvm_value_t init_val;
 } llvm_global_def_t;
 
+typedef struct llvm_string_def_t {
+	char* symbol_name;
+	unsigned int len;
+	char* data;
+} llvm_string_def_t;
+create_list_type_header(llvm_string_def, true);
+
 typedef struct llvm_program_t {
 	char* source_path;
 	unsigned int function_count;
 	unsigned int global_count;
 	llvm_function_t* functions;
 	llvm_global_def_t* globals;
+	llvm_string_def_list_t strings;
 } llvm_program_t;
 
 
@@ -264,5 +272,6 @@ char* llvm_program_to_string(const llvm_program_t program);
 void free_llvm_function(const llvm_function_t func);
 void free_llvm_global_def(llvm_global_def_t global);
 void free_llvm_program(llvm_program_t program);
+void free_llvm_string_def_v(llvm_string_def_t str);
 
 #endif

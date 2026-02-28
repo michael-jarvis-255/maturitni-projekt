@@ -71,6 +71,7 @@ typedef struct {
 typedef enum {
 	AST_EXPR_INT_CONST,
 	AST_EXPR_DOUBLE_CONST,
+	AST_EXPR_STRING_CONST,
 	AST_EXPR_LVALUE,
 	AST_EXPR_FUNC_CALL,
 	AST_EXPR_UNOP,
@@ -123,6 +124,10 @@ typedef struct ast_expr_t {
 	union {
 		bignum_t* int_constant;
 		double double_constant;
+		struct {
+			unsigned int len;
+			char* data;
+		} string_constant;
 		ast_lvalue_t lvalue;
 		struct {
 			ast_expr_unop_enum_t op;
@@ -257,6 +262,7 @@ void free_ast_lvalue_v(ast_lvalue_t lvalue);
 // expressions
 ast_expr_t create_ast_expr_int_const(loc_t loc, bignum_t* value);
 ast_expr_t create_ast_expr_double_const(loc_t loc, double value);
+ast_expr_t create_ast_expr_string_const(loc_t loc, char* data, unsigned int len);
 ast_expr_t create_ast_expr_lvalue(loc_t loc, ast_lvalue_t lvalue);
 ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right);

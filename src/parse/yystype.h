@@ -1,6 +1,5 @@
-#include "ast/main.h"
+#include "../ast/main.h"
 typedef union YYSTYPE {
-	char* str;
 	ast_expr_t expr;
 	ast_stmt_t stmt;
 	ast_name_t name;

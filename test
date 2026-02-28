@@ -44,6 +44,8 @@ u64 foo(i32 X){
 	i64 sum = (i32)1542 + (u16)2688;
 	function();
 
+	u8* string = "the wizard said: \"abracadra!\"";
+
 	if (X > 13){
 		q = 5;
 	} else y = y*10;
