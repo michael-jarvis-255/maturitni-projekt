@@ -106,14 +106,24 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 									continue;
 								}
 								i++;
-								if (!isxdigit(str[i])){
-									*curr = str[i];
-									continue;
+								switch (str[i]){
+									case 'n': *curr = '\n'; continue;
+									case 'r': *curr = '\r'; continue;
+									case 't': *curr = '\t'; continue;
+									case 'b': *curr = '\b'; continue;
+									case '0': *curr = '\x00'; continue;
+									case '"': *curr = '"'; continue;
+									case 'x': 
+										if (isxdigit(str[i+1]) && isxdigit(str[i+2])){
+											char c = 0;
+											sscanf("%2hhx", str+i+1, &c);
+											*curr = c;
+											i += 2;
+											continue;
+										}
+									
 								}
-								char c = 0;
-								sscanf("%2hhx", str+i, &c);
-								i++;
-								*curr = c;
+								*curr = str[i];
 							}
 							yylval.expr = create_ast_expr_string_const(yylloc, str, sz);
 							return TK_CONST;
