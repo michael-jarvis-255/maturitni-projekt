@@ -56,10 +56,19 @@ typedef struct ast_datatype_t {
 
 typedef struct ast_expr_t ast_expr_t;
 
+typedef enum {
+	AST_LVALUE_MEMBER_ACCESS_NORMAL, // .
+	AST_LVALUE_MEMBER_ACCESS_DEREF, // ->
+	AST_LVALUE_MEMBER_ACCESS_INDEX // [i]
+} ast_lvalue_member_access_enum_t;
+
 typedef struct ast_lvalue_member_access_t {
-	bool deref; // '.' if false, '->' if true
-	char* member_name;
+	ast_lvalue_member_access_enum_t type;
 	loc_t loc;
+	union {
+		char* member_name;
+		ast_expr_t* idx;
+	};
 } ast_lvalue_member_access_t;
 
 create_list_type_header(ast_lvalue_member_access, false);
@@ -268,6 +277,7 @@ void free_ast_id(ast_id_t* id);
 ast_lvalue_t create_ast_lvalue_var(ast_variable_t* var, loc_t loc);
 ast_lvalue_t create_ast_lvalue_ptr(ast_expr_t expr, loc_t loc);
 void ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, loc_t oploc, bool deref, ast_name_t member_name);
+void ast_lvalue_index(ast_lvalue_t* lvalue, loc_t loc, loc_t oploc, ast_expr_t idx);
 void free_ast_lvalue_v(ast_lvalue_t lvalue);
 
 // expressions

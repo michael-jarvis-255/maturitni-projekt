@@ -102,6 +102,7 @@ lvalue:
 |	exp0 TK_ARROW[op] name	{ $$ = create_ast_lvalue_ptr($1, @$); ast_lvalue_extend(&$$, @$, @op, true, $name); }
 |	lvalue '.'[op] name		{ $$ = $1; ast_lvalue_extend(&$$, @$, @op, false, $name); }
 |	lvalue TK_ARROW[op] name	{ $$ = $1; ast_lvalue_extend(&$$, @$, @op, true,  $name); }
+|	lvalue '['[op1] exp ']'[op2]	{ $$ = $1; ast_lvalue_index(&$$, @$, loc_add(@op1, @op2), $exp); }
 // TODO: `(*ptr).member` lvalues
 
 exp01:

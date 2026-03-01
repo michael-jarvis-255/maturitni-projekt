@@ -70,6 +70,6 @@ void puts(u8* msg);
 u32 main(i32 argc, u8** argv){
 	//foo(argc);
 	for (u16 i=0; i < argc; i=i+1)
-		puts(*(u8**)((u64)argv + 8*i));
+		puts(argv[i]);
 	return (u32)argc + 15;
 }

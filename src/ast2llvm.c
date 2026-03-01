@@ -172,6 +172,7 @@ static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	INTERNAL_ERROR();
 }
 
+static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t* trgt_type, llvm_function_t* f, bool* err, loc_t loc);
 static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, ast_t ast, llvm_program_t* prog);
 static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f, const ast_t ast, llvm_program_t* prog){
 	llvm_value_t ptr;
@@ -207,47 +208,92 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 
 	for (unsigned int i=0; i < lvalue.member_access.len; i++){
 		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
-		if (member_access.deref){
-			if (type->kind != AST_DATATYPE_POINTER){
-				printf_error(member_access.loc, "member access using '->' on non pointer type '%s'", type->name);
-				return LLVM_TYPED_POISON(0);
-			}
-			ptr = (llvm_value_t){
-				.type = LLVM_VALUE_REG,
-				.reg = llvm_add_inst(f, (llvm_inst_t){
-					.type = LLVM_INST_LOAD,
-					.load.ptr = ptr,
-					.load.type = ast_type_to_llvm_type(type)
-				})
-			};
-			type = type->pointer.base;
-		}
+		switch (member_access.type){
+			case AST_LVALUE_MEMBER_ACCESS_DEREF:
+				if (type->kind != AST_DATATYPE_POINTER){
+					printf_error(member_access.loc, "member access using '->' on non pointer type '%s'", type->name);
+					return LLVM_TYPED_POISON(0);
+				}
+				ptr = (llvm_value_t){
+					.type = LLVM_VALUE_REG,
+					.reg = llvm_add_inst(f, (llvm_inst_t){
+						.type = LLVM_INST_LOAD,
+						.load.ptr = ptr,
+						.load.type = ast_type_to_llvm_type(type)
+					})
+				};
+				type = type->pointer.base;
+				__attribute__((fallthrough));
+		
+			case AST_LVALUE_MEMBER_ACCESS_NORMAL:
+				if (type->kind != AST_DATATYPE_STRUCTURED){
+					printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
+					return LLVM_TYPED_POISON(0);
+				}
 
-		if (type->kind != AST_DATATYPE_STRUCTURED){
-			printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
-			return LLVM_TYPED_POISON(0);
-		}
+				unsigned int member_idx = 0;
+				for (; member_idx < type->structure.members.len; member_idx++){
+					if (strcmp(member_access.member_name, type->structure.members.data[member_idx].name) == 0)
+						break;
+				}
+				if (member_idx >= type->structure.members.len){
+					printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
+					return LLVM_TYPED_POISON(0);
+				}
+				
+				ptr = (llvm_value_t){
+					.type = LLVM_VALUE_REG,
+					.reg = llvm_add_inst(f, (llvm_inst_t){
+						.type = LLVM_INST_GET_ELEMENT_PTR,
+						.getelementptr.aggregate_type = ast_type_to_llvm_type(type),
+						.getelementptr.ptr = ptr,
+						.getelementptr.member_idx = member_idx
+					})
+				};
+				type = type->structure.members.data[member_idx].type_ref;
+				break;
+			
+			case AST_LVALUE_MEMBER_ACCESS_INDEX:
+				if (type->kind != AST_DATATYPE_POINTER){
+					printf_error(member_access.loc, "cannot index non pointer type '%s'", type->name);
+					return LLVM_TYPED_POISON(0);
+				}
 
-		unsigned int member_idx = 0;
-		for (; member_idx < type->structure.members.len; member_idx++){
-			if (strcmp(member_access.member_name, type->structure.members.data[member_idx].name) == 0)
+				llvm_typed_value_t idx = ast2llvm_emit_expr(member_access.idx, var2reg, f, ast, prog);
+				if (idx.type == LLVM_TVALUE_INT_CONST && idx.ast_type == 0){
+					idx = ast2llvm_cast(idx, find_ast_type(ast.global_scope, "u64"), f, 0, member_access.idx->loc);
+				}
+				if (idx.ast_type == 0) return LLVM_TYPED_POISON(0);
+				if (idx.ast_type->kind != AST_DATATYPE_INTEGRAL){
+					printf_error(member_access.loc, "indices must have an integer type (got '%s')", idx.ast_type->name);
+					ptr = POISON_VALUE;
+					type = type->pointer.base;
+					break;
+				}
+
+				ptr = (llvm_value_t){
+					.type = LLVM_VALUE_REG,
+					.reg = llvm_add_inst(f, (llvm_inst_t){
+						.type = LLVM_INST_LOAD,
+						.load.ptr = ptr,
+						.load.type = ast_type_to_llvm_type(type)
+					})
+				};
+				type = type->pointer.base;
+				
+				ptr = (llvm_value_t){
+					.type = LLVM_VALUE_REG,
+					.reg = llvm_add_inst(f, (llvm_inst_t){
+						.type = LLVM_INST_INDEX_PTR,
+						.index_ptr.base_type = ast_type_to_llvm_type(type),
+						.index_ptr.ptr = ptr,
+						.index_ptr.idx_type = ast_type_to_llvm_type(idx.ast_type),
+						.index_ptr.idx = llvm_untype_value(idx)
+					})
+				};
 				break;
 		}
-		if (member_idx >= type->structure.members.len){
-			printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
-			return LLVM_TYPED_POISON(0);
-		}
-		
-		ptr = (llvm_value_t){
-			.type = LLVM_VALUE_REG,
-			.reg = llvm_add_inst(f, (llvm_inst_t){
-				.type = LLVM_INST_GET_ELEMENT_PTR,
-				.getelementptr.aggregate_type = ast_type_to_llvm_type(type),
-				.getelementptr.ptr = ptr,
-				.getelementptr.member_idx = member_idx
-			})
-		};
-		type = type->structure.members.data[member_idx].type_ref;
+
 	}
 
 	return llvm_type_value(ptr, get_ast_pointer_type(type));

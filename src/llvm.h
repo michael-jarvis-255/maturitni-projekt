@@ -130,6 +130,7 @@ typedef enum {
 	LLVM_INST_ALLOCA,
 	LLVM_INST_EXTRACT_VALUE,
 	LLVM_INST_GET_ELEMENT_PTR,
+	LLVM_INST_INDEX_PTR, // note: not a real llvm instruction; returns `&ptr[i]`
 	LLVM_INST_FNEG, // note: not a real llvm instruction
 } llvm_inst_enum_t;
 
@@ -218,6 +219,12 @@ typedef struct llvm_inst_t {
 			llvm_value_t ptr;
 			unsigned int member_idx;
 		} getelementptr;
+		struct {
+			llvm_type_t base_type;
+			llvm_value_t ptr;
+			llvm_type_t idx_type;
+			llvm_value_t idx;
+		} index_ptr;
 		struct {
 			llvm_type_t type;
 			llvm_value_t value;

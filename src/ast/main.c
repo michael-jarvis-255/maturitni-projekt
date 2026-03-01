@@ -67,11 +67,32 @@ ast_lvalue_t create_ast_lvalue_ptr(ast_expr_t expr, loc_t loc){
 }
 void ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, loc_t oploc, bool deref, ast_name_t member_name){
 	lvalue->loc = loc;
-	ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){.deref=deref, .member_name=member_name.name, .loc=oploc });
+	ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){
+		.type = deref ? AST_LVALUE_MEMBER_ACCESS_DEREF : AST_LVALUE_MEMBER_ACCESS_NORMAL,
+		.member_name = member_name.name,
+		.loc = oploc
+	});
+}
+void ast_lvalue_index(ast_lvalue_t* lvalue, loc_t loc, loc_t oploc, ast_expr_t idx){
+	lvalue->loc = loc;
+	ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){
+		.type = AST_LVALUE_MEMBER_ACCESS_INDEX,
+		.idx = convert_to_ptr(idx),
+		.loc = oploc
+	});
 }
 void free_ast_lvalue_v(ast_lvalue_t lvalue){
 	for (unsigned int i=0; i<lvalue.member_access.len; i++){
-		free(lvalue.member_access.data[i].member_name);
+		ast_lvalue_member_access_t m = lvalue.member_access.data[i];
+		switch (m.type){
+			case AST_LVALUE_MEMBER_ACCESS_NORMAL:
+			case AST_LVALUE_MEMBER_ACCESS_DEREF:
+				free(m.member_name);
+				break;
+			case AST_LVALUE_MEMBER_ACCESS_INDEX:
+				free_ast_expr(m.idx);
+				break;
+		}
 	}
 	shallow_free_ast_lvalue_member_access_list(&lvalue.member_access);
 }

@@ -256,6 +256,16 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			llvm_value_to_target(inst.getelementptr.ptr, t);
 			tprintf(t, ", i32 0, i32 %u", inst.getelementptr.member_idx);
 			return;
+		case LLVM_INST_INDEX_PTR:
+			tprint(t, "getelementptr ");
+			llvm_type_to_target(inst.index_ptr.base_type, t);
+			tprint(t, ", ptr ");
+			llvm_value_to_target(inst.index_ptr.ptr, t);
+			tprint(t, ", ");
+			llvm_type_to_target(inst.index_ptr.idx_type, t);
+			tprint(t, " ");
+			llvm_value_to_target(inst.index_ptr.idx, t);
+			return;
 		case LLVM_INST_FNEG:
 			tprint(t, "fsub ");
 			llvm_type_to_target(inst.fneg.type, t);
@@ -446,6 +456,12 @@ static void free_llvm_inst(llvm_inst_t inst){
 		case LLVM_INST_GET_ELEMENT_PTR:
 			free_llvm_type(inst.getelementptr.aggregate_type);
 			free_llvm_value(inst.getelementptr.ptr);
+			break;
+		case LLVM_INST_INDEX_PTR:
+			free_llvm_type(inst.index_ptr.base_type);
+			free_llvm_type(inst.index_ptr.idx_type);
+			free_llvm_value(inst.index_ptr.ptr);
+			free_llvm_value(inst.index_ptr.idx);
 			break;
 		case LLVM_INST_CALL:
 			free_llvm_type(inst.call.rettype);

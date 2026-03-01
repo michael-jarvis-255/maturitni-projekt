@@ -51,12 +51,15 @@ void print_ast_lvalue(ast_lvalue_t lvalue){
 	}
 	for (unsigned int i=0; i < lvalue.member_access.len; i++){
 		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
-		if (member_access.deref){
-			printf("->");
-		}else{
-			printf(".");
+		switch (member_access.type){
+			case AST_LVALUE_MEMBER_ACCESS_NORMAL: printf(".%s", member_access.member_name); break;
+			case AST_LVALUE_MEMBER_ACCESS_DEREF: printf("->%s", member_access.member_name); break;
+			case AST_LVALUE_MEMBER_ACCESS_INDEX:
+				printf("[");
+				print_ast_expr(member_access.idx);
+				printf("]");
+				break;
 		}
-		printf("%s", member_access.member_name);
 	}
 }
 
