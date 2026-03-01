@@ -39,18 +39,24 @@ const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
 }
 
 void print_ast_lvalue(ast_lvalue_t lvalue){
-	printf("%s", lvalue.base_var->name);
-	ast_datatype_t* type = lvalue.base_var->type_ref;
+	switch (lvalue.type){
+		case AST_LVALUE_VAR:
+			printf("%s", lvalue.base_var->name);
+			break;
+		case AST_LVALUE_PTR:
+			printf("(");
+			print_ast_expr(lvalue.base_ptr);
+			printf(")");
+			break;
+	}
 	for (unsigned int i=0; i < lvalue.member_access.len; i++){
 		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
 		if (member_access.deref){
 			printf("->");
-			type = type->pointer.base;
 		}else{
 			printf(".");
 		}
-		printf("%s", type->structure.members.data[member_access.member_idx].name);
-		type = type->structure.members.data[member_access.member_idx].type_ref;
+		printf("%s", member_access.member_name);
 	}
 }
 

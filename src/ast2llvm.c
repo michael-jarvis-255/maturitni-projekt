@@ -17,7 +17,7 @@ typedef enum {
 
 typedef struct llvm_typed_value_t {
 	llvm_typed_value_enum_t type;
-	const ast_datatype_t* ast_type; // nullable for POISON (when type cannot be deduced) and INT_CONST (when type isn't specified)
+	ast_datatype_t* ast_type; // nullable for POISON (when type cannot be deduced) and INT_CONST (when type isn't specified)
 	union {
 		bignum_t* int_const;
 		double double_const;
@@ -172,81 +172,99 @@ static llvm_type_t ast_type_to_llvm_type(const ast_datatype_t* t){
 	INTERNAL_ERROR();
 }
 
-static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f){
-	llvm_reg_t reg = var2reg_map_get(var2reg, lvalue.base_var, LLVM_INVALID_REG);
-	llvm_value_t base_ptr;
-	if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
-		base_ptr = (llvm_value_t){
-			.type = LLVM_VALUE_GLOBAL,
-			.global_name = strdup(lvalue.base_var->name),
-		};
-	}else{
-		base_ptr = (llvm_value_t){
-			.type = LLVM_VALUE_REG,
-			.reg = reg
-		};
-	}
-	const ast_datatype_t* type = lvalue.base_var->type_ref;
-	reg = llvm_add_inst(f, (llvm_inst_t){
-		.type = LLVM_INST_LOAD,
-		.load.ptr = base_ptr,
-		.load.type = ast_type_to_llvm_type(type)
-	});
-
-	for (unsigned int i=0; i < lvalue.member_access.len; i++){
-		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
-		if (member_access.deref){
-			type = type->pointer.base;
-			reg = llvm_add_inst(f, (llvm_inst_t){
-				.type = LLVM_INST_LOAD,
-				.load.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
-				.load.type = ast_type_to_llvm_type(type)
-			});
-		}
-		reg = llvm_add_inst(f, (llvm_inst_t){
-			.type = LLVM_INST_EXTRACT_VALUE,
-			.extract.aggregate_type = ast_type_to_llvm_type(type),
-			.extract.value = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg },
-			.extract.member_idx = member_access.member_idx
-		});
-		type = type->structure.members.data[member_access.member_idx].type_ref;
-	}
-
-	return LLVM_TYPED_REG(reg, type);
-}
-
-static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f){
-	llvm_reg_t reg = var2reg_map_get(var2reg, lvalue.base_var, LLVM_INVALID_REG);
+static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, ast_t ast, llvm_program_t* prog);
+static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f, const ast_t ast, llvm_program_t* prog){
 	llvm_value_t ptr;
-	if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){ // global variable
-		ptr = (llvm_value_t){ .type=LLVM_VALUE_GLOBAL, .global_name=strdup(lvalue.base_var->name) };
-	}else{
-		ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg };
+	ast_datatype_t* type; // the type that 'ptr' is pointing to
+	switch (lvalue.type){
+		case AST_LVALUE_VAR:
+		{
+			llvm_reg_t reg = var2reg_map_get(var2reg, lvalue.base_var, LLVM_INVALID_REG);
+			if (LLVM_REG_EQ(reg, LLVM_INVALID_REG)){
+				ptr = (llvm_value_t){
+					.type = LLVM_VALUE_GLOBAL,
+					.global_name = strdup(lvalue.base_var->name),
+				};
+				type = lvalue.base_var->type_ref;
+			}else{
+				ptr = (llvm_value_t){
+					.type = LLVM_VALUE_REG,
+					.reg = reg
+				};
+				type = lvalue.base_var->type_ref;
+			}
+			break;
+		}
+		case AST_LVALUE_PTR:
+		{
+			llvm_typed_value_t val = ast2llvm_emit_expr(lvalue.base_ptr, var2reg, f, ast, prog);
+			ptr = llvm_untype_value(val);
+			type = val.ast_type;
+			break;
+		}
 	}
-	ast_datatype_t* type = lvalue.base_var->type_ref; // the type that 'reg' is pointing to
+	if (type == 0) return LLVM_TYPED_POISON(0);
 
 	for (unsigned int i=0; i < lvalue.member_access.len; i++){
 		ast_lvalue_member_access_t member_access = lvalue.member_access.data[i];
 		if (member_access.deref){
-			reg = llvm_add_inst(f, (llvm_inst_t){
-				.type = LLVM_INST_LOAD,
-				.load.ptr = ptr,
-				.load.type = ast_type_to_llvm_type(type)
-			});
-			ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg };
+			if (type->kind != AST_DATATYPE_POINTER){
+				printf_error(member_access.loc, "member access using '->' on non pointer type '%s'", type->name);
+				return LLVM_TYPED_POISON(0);
+			}
+			ptr = (llvm_value_t){
+				.type = LLVM_VALUE_REG,
+				.reg = llvm_add_inst(f, (llvm_inst_t){
+					.type = LLVM_INST_LOAD,
+					.load.ptr = ptr,
+					.load.type = ast_type_to_llvm_type(type)
+				})
+			};
 			type = type->pointer.base;
 		}
-		reg = llvm_add_inst(f, (llvm_inst_t){
-			.type = LLVM_INST_GET_ELEMENT_PTR,
-			.getelementptr.aggregate_type = ast_type_to_llvm_type(type),
-			.getelementptr.ptr = ptr,
-			.getelementptr.member_idx = member_access.member_idx
-		});
-		ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=reg };
-		type = type->structure.members.data[member_access.member_idx].type_ref;
+
+		if (type->kind != AST_DATATYPE_STRUCTURED){
+			printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
+			return LLVM_TYPED_POISON(0);
+		}
+
+		unsigned int member_idx = 0;
+		for (; member_idx < type->structure.members.len; member_idx++){
+			if (strcmp(member_access.member_name, type->structure.members.data[member_idx].name) == 0)
+				break;
+		}
+		if (member_idx >= type->structure.members.len){
+			printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
+			return LLVM_TYPED_POISON(0);
+		}
+		
+		ptr = (llvm_value_t){
+			.type = LLVM_VALUE_REG,
+			.reg = llvm_add_inst(f, (llvm_inst_t){
+				.type = LLVM_INST_GET_ELEMENT_PTR,
+				.getelementptr.aggregate_type = ast_type_to_llvm_type(type),
+				.getelementptr.ptr = ptr,
+				.getelementptr.member_idx = member_idx
+			})
+		};
+		type = type->structure.members.data[member_idx].type_ref;
 	}
 
 	return llvm_type_value(ptr, get_ast_pointer_type(type));
+}
+
+static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, const ast_lvalue_t lvalue, llvm_function_t* f, const ast_t ast, llvm_program_t* prog){
+	llvm_typed_value_t ptr = ast2llvm_get_lvalue_pointer(var2reg, lvalue, f, ast, prog);
+	if (ptr.ast_type == 0) return LLVM_TYPED_POISON(0);
+	if (ptr.ast_type->kind != AST_DATATYPE_POINTER) INTERNAL_ERROR();
+	
+	llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+		.type = LLVM_INST_LOAD,
+		.load.ptr = llvm_untype_value(ptr),
+		.load.type = ast_type_to_llvm_type(ptr.ast_type->pointer.base)
+	});
+
+	return LLVM_TYPED_REG(reg, ptr.ast_type->pointer.base);
 }
 
 static void ast2llvm_alloca_scope(const scope_t* scope, var2reg_map_t* var2reg, llvm_function_t* f){
@@ -297,7 +315,7 @@ static void ast2llvm_alloca_stmt(const ast_stmt_t* stmt, var2reg_map_t* var2reg,
 
 // if err == 0, print an error if cannot cast
 // else, set *err to whether cast failed, and cast is treated as implicit
-static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_datatype_t* trgt_type, llvm_function_t* f, bool* err, loc_t loc){
+static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t* trgt_type, llvm_function_t* f, bool* err, loc_t loc){
 	if (err) *err = false;
 	const bool implicit = err ? true : false;
 	const char* warning_string = 0;
@@ -444,7 +462,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, const ast_data
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
 
-					if (src_type->integral.bitwidth < ptr_bits){
+					if (src_type->integral.bitwidth > ptr_bits){
 						warning_string = "cast truncates value";
 						goto implicit_warning;
 					}
@@ -611,7 +629,6 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 	INTERNAL_ERROR();
 }
 
-static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, ast_t ast, llvm_program_t* prog);
 static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* expr, const var2reg_map_t* var2reg, llvm_function_t* f, const ast_t ast, llvm_program_t* prog){
 	// NOTE: expr must be AST_EXPR_BINOP of type AST_EXPR_BINOP_LAND or AST_EXPR_BINOP_LOR
 	llvm_typed_value_t left_operand = ast2llvm_emit_expr(expr->binop.left, var2reg, f, ast, prog);
@@ -737,7 +754,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			return (llvm_typed_value_t){ .type=LLVM_TVALUE_GLOBAL, .global_name=strdup(name), .ast_type=get_ast_pointer_type(find_ast_type(ast.global_scope, "u8")) };
 		}
 		case AST_EXPR_LVALUE:
-			return ast2llvm_read_lvalue(var2reg, expr->lvalue, f);
+			return ast2llvm_read_lvalue(var2reg, expr->lvalue, f, ast, prog);
 		case AST_EXPR_FUNC_CALL:
 		{
 			llvm_typed_value_list_t arglist = create_llvm_typed_value_list();
@@ -772,7 +789,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return LLVM_TYPED_POISON(expr->func_call.func_ref->return_type_ref);
 			}
 
-			const ast_datatype_t* rettype = expr->func_call.func_ref->return_type_ref;
+			ast_datatype_t* rettype = expr->func_call.func_ref->return_type_ref;
 			llvm_inst_t inst;
 			if (rettype->kind == AST_DATATYPE_VOID){
 				inst = (llvm_inst_t){
@@ -1008,10 +1025,10 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				INTERNAL_ERROR();
 			}
 
-			const ast_datatype_t* operand_ast_type = left_operand.ast_type;
+			ast_datatype_t* operand_ast_type = left_operand.ast_type;
 			llvm_type_t optype = ast_type_to_llvm_type(operand_ast_type);
 			llvm_inst_t inst;
-			const ast_datatype_t* restype = operand_ast_type;
+			ast_datatype_t* restype = operand_ast_type;
 			
 			switch (operand_ast_type->kind){
 				case AST_DATATYPE_VOID:
@@ -1131,7 +1148,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			}
 		}
 		case AST_EXPR_REF:
-			return ast2llvm_get_lvalue_pointer(var2reg, expr->ref.lvalue, f);
+			return ast2llvm_get_lvalue_pointer(var2reg, expr->ref.lvalue, f, ast, prog);
 		case AST_EXPR_CAST:
 		{
 			llvm_typed_value_t val = ast2llvm_emit_expr(expr->cast.expr, var2reg, f, ast, prog);
@@ -1192,7 +1209,12 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		case AST_STMT_ASSIGN:
 			{
 				llvm_typed_value_t val = ast2llvm_emit_expr(&stmt->assign.val, var2reg, f, ast, prog);
-				const ast_datatype_t* trgt_type = stmt->assign.lvalue.type;
+				const ast_lvalue_t lvalue = stmt->assign.lvalue;
+				llvm_typed_value_t ptr = ast2llvm_get_lvalue_pointer(var2reg, lvalue, f, ast, prog);
+				if (ptr.ast_type == 0) return;
+				if (ptr.ast_type->kind != AST_DATATYPE_POINTER) INTERNAL_ERROR();
+				
+				ast_datatype_t* trgt_type = ptr.ast_type->pointer.base;
 
 				if (val.type == LLVM_TVALUE_POISON && val.ast_type == 0)
 					return;
@@ -1200,13 +1222,8 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 					bool err;
 					val = ast2llvm_cast(val, trgt_type, f, &err, stmt->loc);
 					if (err){
-						printf_error(stmt->loc, "attempt to assign integer constant to %s '%s' of type '%s'",
-							stmt->assign.lvalue.member_access.len ? "member" : "variable",
-							stmt->assign.lvalue.member_access.len ?
-								stmt->assign.lvalue.type->structure.members.data[stmt->assign.lvalue.member_access.data[stmt->assign.lvalue.member_access.len-1].member_idx].type_ref->name
-								: trgt_type->name,
-							trgt_type->name
-						);
+						printf_error(stmt->loc, "attempt to assign integer constant to type '%s'", trgt_type->name);
+						return;
 					}
 				}
 					
@@ -1216,20 +1233,11 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 					bool err;
 					val = ast2llvm_cast(val, trgt_type, f, &err, stmt->loc);
 					if (err){
-						printf_error(stmt->loc, "attempt to assign type '%s' to %s '%s' of type '%s'",
-							src_type->name,
-							stmt->assign.lvalue.member_access.len ? "member" : "variable",
-							stmt->assign.lvalue.member_access.len ?
-								stmt->assign.lvalue.type->structure.members.data[stmt->assign.lvalue.member_access.data[stmt->assign.lvalue.member_access.len-1].member_idx].type_ref->name
-								: stmt->assign.lvalue.base_var->name,
-							trgt_type->name
-						);
+						printf_error(stmt->loc, "attempt to assign type '%s' to type '%s'", src_type->name, trgt_type->name);
+						return;
 					}
 				}
 				
-				llvm_typed_value_t ptr = ast2llvm_get_lvalue_pointer(var2reg, stmt->assign.lvalue, f);
-				if (ptr.type == LLVM_TVALUE_POISON)
-					return;
 				llvm_add_inst(f, (llvm_inst_t){
 					.type = LLVM_INST_STORE,
 					.store.type = ast_type_to_llvm_type(trgt_type),

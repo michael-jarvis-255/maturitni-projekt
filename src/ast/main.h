@@ -54,17 +54,28 @@ typedef struct ast_datatype_t {
 	struct ast_datatype_t* ptr_type;
 } ast_datatype_t;
 
+typedef struct ast_expr_t ast_expr_t;
+
 typedef struct ast_lvalue_member_access_t {
 	bool deref; // '.' if false, '->' if true
-	unsigned int member_idx;
+	char* member_name;
+	loc_t loc;
 } ast_lvalue_member_access_t;
 
 create_list_type_header(ast_lvalue_member_access, false);
 
+typedef enum {
+	AST_LVALUE_VAR, // lvalue starts with a reference to local or global variable
+	AST_LVALUE_PTR, // lvalue starts with ptr expression, and '->' member access
+} ast_lvalue_enum_t;
+
 typedef struct {
 	loc_t loc;
-	ast_variable_t* base_var;
-	ast_datatype_t* type; // the type after all member accesses
+	ast_lvalue_enum_t type;
+	union {
+		ast_variable_t* base_var;
+		ast_expr_t* base_ptr;
+	};
 	ast_lvalue_member_access_list_t member_access;
 } ast_lvalue_t;
 
@@ -116,7 +127,6 @@ typedef enum {
 } ast_expr_binop_enum_t;
 
 struct ast_func_t;
-typedef struct ast_expr_t ast_expr_t;
 create_list_type_header(ast_expr, true);
 typedef struct ast_expr_t {
 	ast_expr_enum_t type;
@@ -147,7 +157,7 @@ typedef struct ast_expr_t {
 		} ref;
 		struct {
 			struct ast_expr_t* expr;
-			const ast_datatype_t* type_ref;
+			ast_datatype_t* type_ref;
 		} cast;
 	};
 } ast_expr_t;
@@ -255,8 +265,9 @@ void free_ast_id_v(ast_id_t id);
 void free_ast_id(ast_id_t* id);
 
 // lvalues
-ast_lvalue_t create_ast_lvalue(ast_variable_t* var, loc_t loc);
-bool ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, bool deref, ast_name_t member_name);
+ast_lvalue_t create_ast_lvalue_var(ast_variable_t* var, loc_t loc);
+ast_lvalue_t create_ast_lvalue_ptr(ast_expr_t expr, loc_t loc);
+void ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, loc_t oploc, bool deref, ast_name_t member_name);
 void free_ast_lvalue_v(ast_lvalue_t lvalue);
 
 // expressions
@@ -268,7 +279,7 @@ ast_expr_t create_ast_expr_func_call(loc_t loc, ast_func_t* func_ref);
 ast_expr_t create_ast_expr_binop(loc_t loc, ast_expr_binop_enum_t op, ast_expr_t left, ast_expr_t right);
 ast_expr_t create_ast_expr_unop(loc_t loc, ast_expr_unop_enum_t op, ast_expr_t opernad);
 ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue);
-ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, const ast_datatype_t* type);
+ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, ast_datatype_t* type);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
 

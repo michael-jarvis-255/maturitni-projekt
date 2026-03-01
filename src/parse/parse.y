@@ -49,7 +49,6 @@
 %destructor { /* emtpy */ } <type_ref>
 %destructor { /* emtpy */ } <var_ref>
 %destructor { free_ast_lvalue_v($$); } <lvalue>
-%destructor { free_ast_lvalue_v($$.lvalue); } <incomplete_lvalue>
 %destructor { /* emtpy */ } <func_ref>
 %destructor { free_scope($$); err_recovery_scope_depth++; } <scope>
 %destructor { if (err_recovery_scope_depth) err_recovery_scope_depth--; else free_scope(pop_scope(current_scope)); } <scope_start>
@@ -84,16 +83,6 @@ anonymous_struct_body:
 	%empty	 { $$ = create_ast_variable_list(); }
 |	anonymous_struct_body[list] type name ';'	{ $$ = $list; ast_variable_list_append(&$$, (ast_variable_t){ .declare_loc=loc_add(@type, @name), .name=$name.name, .type_ref=$type }); }
 
-%nterm <lvalue> lvalue;
-lvalue:
-	incomplete_lvalue { $$ = $1.lvalue; }
-
-%nterm <incomplete_lvalue> incomplete_lvalue;
-incomplete_lvalue:
-	TK_VAR	{ $$.lvalue = create_ast_lvalue($1, @$); $$.err = false; }
-|	incomplete_lvalue '.' name	{ $$ = $1; if (!$$.err) ($$.err = ast_lvalue_extend(&($$.lvalue), @$, false, $name)); free($name.name); }
-|	incomplete_lvalue TK_ARROW name	{ $$ = $1; if (!$$.err) ($$.err = ast_lvalue_extend(&($$.lvalue), @$, false, $name)); free($name.name); }
-
 %nterm <name> name;
 name:
 	TK_NAME
@@ -101,24 +90,35 @@ name:
 |	TK_VAR		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 |	TK_FUNC		{ $$ = (ast_name_t){ .loc=@1, .name=strdup($1->name) }; }
 
-%nterm <expr> exp exp0 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
+%nterm <expr> exp exp0 exp01 exp1 exp2 exp3 exp4 exp5 exp6 exp7 exp8 exp9;
 exp0:
 	TK_CONST	{ $$ = $1; }
-|	lvalue		{ $$ = create_ast_expr_lvalue(@$, $1); }
 |	function_call
 |	'(' exp ')'	{ $$ = $2; }
-|	'-' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_NEG, $op); }
-|	'~' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_BNOT, $op); }
-|	'!' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_LNOT, $op); }
-|	'*' exp0[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_DEREF, $op); }
+
+%nterm <lvalue> lvalue;
+lvalue:
+	TK_VAR	{ $$ = create_ast_lvalue_var($1, @$); }
+|	exp0 TK_ARROW[op] name	{ $$ = create_ast_lvalue_ptr($1, @$); ast_lvalue_extend(&$$, @$, @op, true, $name); }
+|	lvalue '.'[op] name		{ $$ = $1; ast_lvalue_extend(&$$, @$, @op, false, $name); }
+|	lvalue TK_ARROW[op] name	{ $$ = $1; ast_lvalue_extend(&$$, @$, @op, true,  $name); }
+// TODO: `(*ptr).member` lvalues
+
+exp01:
+	'-' exp01[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_NEG, $op); }
+|	'~' exp01[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_BNOT, $op); }
+|	'!' exp01[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_LNOT, $op); }
+|	'*' exp01[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_DEREF, $op); }
 |	'&' lvalue		{ $$ = create_ast_expr_ref(@$, $lvalue); }
-|	'(' type ')' exp0[op]	{ $$ = create_ast_expr_cast(@$, $op, $type); }
+|	'(' type ')' exp01[op]	{ $$ = create_ast_expr_cast(@$, $op, $type); }
+|	exp0
+|	lvalue		{ $$ = create_ast_expr_lvalue(@$, $1); }
 
 exp1:
-	exp1[l] '*' exp0[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MUL, $l, $r); }
-|	exp1[l] '/' exp0[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_DIV, $l, $r); }
-|	exp1[l] '%' exp0[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MOD, $l, $r); }
-|	exp0
+	exp1[l] '*' exp01[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MUL, $l, $r); }
+|	exp1[l] '/' exp01[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_DIV, $l, $r); }
+|	exp1[l] '%' exp01[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_MOD, $l, $r); }
+|	exp01
 
 exp2:
 	exp2[l] '+' exp1[r]	{ $$ = create_ast_expr_binop(@$, AST_EXPR_BINOP_ADD, $l, $r); }

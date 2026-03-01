@@ -49,41 +49,30 @@ void free_ast_id(ast_id_t* id){
 	free(id);
 }
 
-ast_lvalue_t create_ast_lvalue(ast_variable_t* var, loc_t loc){
+ast_lvalue_t create_ast_lvalue_var(ast_variable_t* var, loc_t loc){
 	return (ast_lvalue_t){
+		.type = AST_LVALUE_VAR,
 		.base_var = var,
 		.loc = loc,
-		.type = var->type_ref,
 		.member_access = create_ast_lvalue_member_access_list()
 	};
 }
-
-bool ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, bool deref, ast_name_t member_name){
-	lvalue->loc = loc;
-	if (deref){
-		if (lvalue->type->kind != AST_DATATYPE_POINTER){
-			printf_error(lvalue->loc, "invalid type access with '->' (type '%s' is not a pointer)", lvalue->type->name);
-			return true;
-		}
-		lvalue->type = lvalue->type->pointer.base;
-	}
-	if (lvalue->type->kind != AST_DATATYPE_STRUCTURED){
-		printf_error(lvalue->loc, "invalid type access with '%s' (type '%s' is not a struct)", deref ? "->" : ".", lvalue->type->name);
-		return true;
-	}
-	for (unsigned int i=0; i < lvalue->type->structure.members.len; i++){
-		const ast_variable_t* member = &lvalue->type->structure.members.data[i];
-		if (strcmp(member->name, member_name.name) == 0){
-			lvalue->type = member->type_ref;
-			ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){.deref = deref, .member_idx = i});
-			return false;
-		}
-	}
-	printf_error(lvalue->loc, "struct type '%s' does not contain member '%s'", lvalue->type->name, member_name.name);
-	return true;
+ast_lvalue_t create_ast_lvalue_ptr(ast_expr_t expr, loc_t loc){
+	return (ast_lvalue_t){
+		.type = AST_LVALUE_PTR,
+		.base_ptr = convert_to_ptr(expr),
+		.loc = loc,
+		.member_access = create_ast_lvalue_member_access_list()
+	};
 }
-
+void ast_lvalue_extend(ast_lvalue_t* lvalue, loc_t loc, loc_t oploc, bool deref, ast_name_t member_name){
+	lvalue->loc = loc;
+	ast_lvalue_member_access_list_append(&lvalue->member_access, (ast_lvalue_member_access_t){.deref=deref, .member_name=member_name.name, .loc=oploc });
+}
 void free_ast_lvalue_v(ast_lvalue_t lvalue){
+	for (unsigned int i=0; i<lvalue.member_access.len; i++){
+		free(lvalue.member_access.data[i].member_name);
+	}
 	shallow_free_ast_lvalue_member_access_list(&lvalue.member_access);
 }
 
@@ -150,7 +139,7 @@ ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue){
 	};
 }
 
-ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, const ast_datatype_t* type){
+ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, ast_datatype_t* type){
 	return (ast_expr_t){
 		.type = AST_EXPR_CAST,
 		.loc = loc,
