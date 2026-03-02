@@ -543,11 +543,14 @@ char* llvm_program_to_string(const llvm_program_t program){
 
 void free_llvm_function(llvm_function_t func){
 	free(func.name);
-	for (unsigned int i = 0; i < func.blocks.len; i++){
-		free_llvm_basic_block(func.blocks.data[i]);
+	if (func.has_definition){
+		for (unsigned int i = 0; i < func.blocks.len; i++){
+			free_llvm_basic_block(func.blocks.data[i]);
+		}
+		shallow_free_llvm_basic_block_list(&func.blocks);
 	}
-	shallow_free_llvm_basic_block_list(&func.blocks);
 	free(func.args);
+	free_llvm_type(func.rettype);
 }
 
 void free_llvm_global_def(llvm_global_def_t global){

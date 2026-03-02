@@ -9,7 +9,7 @@
 	void yyerror(__attribute__((unused)) scope_t** _, char const* err){
 		fprintf(stderr, "%s\n", err);
 	}
-	int yylex ();
+	int yylex(scope_t**);
 
 	static unsigned int err_recovery_scope_depth = 0;
 %}
