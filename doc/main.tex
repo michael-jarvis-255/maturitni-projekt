@@ -1,0 +1,160 @@
+\documentclass[12pt]{article}
+\usepackage[a4paper, margin=2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[czech]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{csquotes}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{paralist}
+\usepackage{scrextend}
+\usepackage{newtxtext} % Times New Roman
+\usepackage{tocloft} % table of contents
+
+\let\e\expandafter
+
+\def\showtodo{\immediate\write16{}}
+\def\TODO#1{%
+	\textbf{ [todo: #1] }%
+	\e\xdef\e\showtodo\e{\showtodo\immediate\write16{todo on line \number\inputlineno: #1}}%
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{\baselineskip}%
+
+\def\file#1{\texttt{#1}}
+\def\code#1{\texttt{#1}}
+
+\def\title{Název práce}
+\def\author{Michael Jarvis}
+\def\year{2025/2026}
+\def\class{8.V}
+
+\begin{document}
+\begin{titlepage}
+	\vspace*{\fill}
+	\centering
+	{\Huge\title\par}
+	\vspace{3\baselineskip}
+	{\Large Dokumentace maturitní práce\par}
+	\vspace{2\baselineskip}
+	{\Large\author\par}
+	\vfill\vfill
+	{\large školní rok: \year}\hfil{\large třída: \class}
+	\vspace*{3cm}
+\end{titlepage}
+
+\newpage \TODO{this page looks bad}
+{\Large Zadání maturitní práce:\par}
+
+Kompiler\\
+Cílem práce je vytvořit kompiler pro vlastní jazyk podobný C za použití knihoven flex, bison a LLVM toolchain. Jazyk by měl podporovat standardní operace s celými čísly (sčítání, odčítání, násobení, dělení, …), definice a volání funkcí, cykly, strukturované datové typy (“struct” v jazyku C).
+Projekt bude napsaný v jazyce C a bude pro operační systém Linux.
+
+Teoretická část - Stavové automaty v parserech
+
+
+\newpage
+\vspace*{\fill}
+\begin{center}
+Prohlašuji, že jsem na práci pracoval samostatně pouze za pomoci použitých zdrojů a že
+v práci i v dokumentaci jasně vymezuji, které části kódů jsou mým originálním dílem, které
+jsou upravenou verzí a které jsou převzaty v plném rozsahu.
+\end{center}
+\vspace{2cm}
+\begin{flushright}
+\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+\vspace{5pt}\\
+podpis žáka \hspace*{4cm}
+\end{flushright}
+\vspace*{\fill}
+
+\newpage
+\renewcommand\contentsname{Obsah}
+\renewcommand\cftsecaftersnum{.}
+\renewcommand\cftsecleader{\cftdotfill{\cftdotsep}}
+\tableofcontents
+
+
+
+
+
+
+\newpage
+\section{TEORETICKÁ ČÁST} \TODO{teoreticka cast}
+\textit{zpracována podle zadání}
+
+\section{CÍLE PRÁCE}
+Cílem této práce bylo vytvořit program, který jako vstup dostane soubor se zdrojovým kódem a přeloží ho do kódu LLVM, který pomocí knihovny LLVM toolchain přeloží do strojového kódu.
+V případě chyby ve vstupním zdrojovém kódu vypíše chybovou hlášku. Také by měl umět v některých případech vypisovat pomocná varování.
+
+Jazyk, který program zpracovává je velmi podobný jazyku C, ale je mnohem omezenější.
+Měl by umět základní operace s čísly a proměnnými (včetně globálních proměnných), funkce a strukturované datové typy. 
+
+
+\section{ZPŮSOBY ŘEŠENÍ A POUŽITÉ POSTUPY} \TODO{}
+%\textit{JAK JE TO ŘEŠENO}\\
+%\textit{podrobný popis programu, použité algoritmy, datové struktury, způsoby testování funkčnosti, ošetření chyb}
+
+\subsection{Tokenizace}
+První krok kompileru je tokenizace -- vstupní soubor je rozdělen na jednotlivé tokeny,
+jsou to klíčová slova (\code{while}, \code{if}), čísla (\code{15}, \code{1.79e308}), textové řetězce (\code{"Hello world!"}),
+názvy funkcí, proměnných a datových typů nebo symboly (\code{+}, \code{*}, \code{>=}, \code{;}).
+V tomto kroku se také zahodí komentáře (řádky začínající \code{//} nebo \code{/* komentar */}) a všechny bílé znaky (mezery, tabulátory, konce řádků).
+
+Ke každému tokenu se také přidá informace o tom, kde se ve zdrojovém kódu vyskytuje. Pokud program narazí na chybu, může tak k chybové hlášce přidat místo, kde se chyba vyskytla.
+
+Pro tokenizaci jsem použil knihovnu Flex, která z pravidel pro tokenizaci (\file{src/parse/lex.y}) vygeneruje potřebný kód.
+
+
+\subsection{Syntaktická analýza}
+Po tokenizaci přichází na řadu syntaktická analýza (neboli \uv{parsing}), která tokeny poskládá do takzvaného syntaktického stromu.
+Každý vrchol v syntaktickém stromě představuje nějakou operaci a má pod sebou parametry této operace
+(například operace \code{while} cyklu bude pod sebou mít podmínku a kód cyklu).
+
+\TODO{tikzni tu nějaký hezký obrázek kódu a jeho syntaktického stromu}
+
+Syntaktický strom je v mém kódu implementován ve složce \file{src/ast/}:
+\begin{itemize}
+	\item v souboru \file{src/ast/main.h} jsou definované datové typy pro jednotlivé vrcholy syntaktického stromu (např. \code{ast\_expr\_t} pro výrazy). Celý strom je pak uložen v datovém typu \code{ast\_t}. (Zkratka \code{ast} od anglického \uv{abstract syntax tree}.)
+	\item v \file{src/ast/main.c} jsou implementace pomocných funkcí pro vytváření syntaktického stromu.
+	\item v \file{src/ast/print.c}, \file{src/ast/print.h} jsou funkce pro vypisování syntaktického stromu, slouží pouze pro debugovací účely. \TODO{smazat soubory?}
+	%\item v \file{src/ast/scope.h}, \file{src/ast/scope.c} je implementace jmenného prostoru
+\end{itemize}
+\TODO{popiš jmenné prostory}
+
+K samotnému převodu tokenů do syntaktického stromu jsem použil knihovnu GNU Bison.
+Ta ze seznamu pravidel (\file{src/parse/parse.y}), které popisují jak se tokeny a symboly mohou spojovat do jiných symbolů, vygeneruje kód, který tato pravidla implementuje.
+Zárověn zkontroluje, že syntax jazyka je jednoznačný, tedy že každý seznam tokenů lze převést do syntaktického stromu pouze jedním způsobem. \TODO{zmínit to o if-else?}
+
+Hlavní funkce \code{parse\_file} a několik pomocných funkcí pro parsování jsou v \file{src/parse/main.c}.
+
+\subsection{Překlad do LLVM}
+\TODO{}
+
+\section{PROGRAMOVACÍ PROSTŘEDKY}
+\TODO{JAKÝMI PROSTŘEDKY}\\
+\textit{vývojové prostředí, použité knihovny, hotové programy atd. včetně zdůvodnění jejich výběru, použité při tvorbě maturitní práce}
+
+
+\section{ZHODNOCENÍ DOSAŽENÝCH VÝSLEDKŮ}
+\TODO{JAK SE TO POVEDLO}\\
+\textit{výčet splněných a nesplněných bodů zadání resp. vlastních předsevzetí}
+
+
+\section{INSTALACE}
+\TODO{JAK SE TO INSTALUJE}\\
+\textit{popis instalace, systémové požadavky, nárok  na HW, SW, atp.}
+
+
+\section{OVLÁDÁNÍ}
+\TODO{JAK SE TO OVLÁDÁ}\\
+\textit{detailní popis uživatelského rozhraní srozumitelný pro uživatele}
+
+
+\section{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
+...
+
+
+\showtodo
+\end{document}

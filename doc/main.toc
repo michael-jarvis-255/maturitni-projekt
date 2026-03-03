@@ -1,0 +1,11 @@
+\babel@toc {czech}{}\relax 
+\contentsline {section}{\numberline {1}TEORETICKÁ ČÁST}{4}{}%
+\contentsline {section}{\numberline {2}CÍLE PRÁCE}{4}{}%
+\contentsline {section}{\numberline {3}ZPŮSOBY ŘEŠENÍ A POUŽITÉ POSTUPY}{4}{}%
+\contentsline {subsection}{\numberline {3.1}Tokenizace}{4}{}%
+\contentsline {subsection}{\numberline {3.2}Syntaktická analýza}{4}{}%
+\contentsline {section}{\numberline {4}PROGRAMOVACÍ PROSTŘEDKY}{5}{}%
+\contentsline {section}{\numberline {5}ZHODNOCENÍ DOSAŽENÝCH VÝSLEDKŮ}{5}{}%
+\contentsline {section}{\numberline {6}INSTALACE}{5}{}%
+\contentsline {section}{\numberline {7}OVLÁDÁNÍ}{6}{}%
+\contentsline {section}{\numberline {8}SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}{6}{}%
