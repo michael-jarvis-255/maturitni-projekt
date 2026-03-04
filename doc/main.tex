@@ -13,6 +13,8 @@
 
 \let\e\expandafter
 
+\TODO{spellcheck}
+
 \def\showtodo{\immediate\write16{}}
 \def\TODO#1{%
 	\textbf{ [todo: #1] }%
@@ -23,7 +25,7 @@
 \setlength{\parskip}{\baselineskip}%
 
 \def\file#1{\texttt{#1}}
-\def\code#1{\texttt{#1}}
+\def\code#1{\texttt{#1}} \TODO{use a~verbatim environment}
 
 \def\title{Název práce}
 \def\author{Michael Jarvis}
@@ -48,17 +50,17 @@
 {\Large Zadání maturitní práce:\par}
 
 Kompiler\\
-Cílem práce je vytvořit kompiler pro vlastní jazyk podobný C za použití knihoven flex, bison a LLVM toolchain. Jazyk by měl podporovat standardní operace s celými čísly (sčítání, odčítání, násobení, dělení, …), definice a volání funkcí, cykly, strukturované datové typy (“struct” v jazyku C).
-Projekt bude napsaný v jazyce C a bude pro operační systém Linux.
+Cílem práce je vytvořit kompiler pro vlastní jazyk podobný C~za použití knihoven flex, bison a~LLVM toolchain. Jazyk by měl podporovat standardní operace s~celými čísly (sčítání, odčítání, násobení, dělení, …), definice a volání funkcí, cykly, strukturované datové typy (“struct” v jazyku C).
+Projekt bude napsaný v~jazyce C~a~bude pro operační systém Linux.
 
-Teoretická část - Stavové automaty v parserech
+Teoretická část - Stavové automaty v~parserech
 
 
 \newpage
 \vspace*{\fill}
 \begin{center}
-Prohlašuji, že jsem na práci pracoval samostatně pouze za pomoci použitých zdrojů a že
-v práci i v dokumentaci jasně vymezuji, které části kódů jsou mým originálním dílem, které
+Prohlašuji, že jsem na práci pracoval samostatně pouze za pomoci použitých zdrojů a~že
+v~práci i~v~dokumentaci jasně vymezuji, které části kódů jsou mým originálním dílem, které
 jsou upravenou verzí a které jsou převzaty v plném rozsahu.
 \end{center}
 \vspace{2cm}
@@ -85,11 +87,11 @@ podpis žáka \hspace*{4cm}
 \textit{zpracována podle zadání}
 
 \section{CÍLE PRÁCE}
-Cílem této práce bylo vytvořit program, který jako vstup dostane soubor se zdrojovým kódem a přeloží ho do kódu LLVM, který pomocí knihovny LLVM toolchain přeloží do strojového kódu.
-V případě chyby ve vstupním zdrojovém kódu vypíše chybovou hlášku. Také by měl umět v některých případech vypisovat pomocná varování.
+Cílem této práce bylo vytvořit program, který jako vstup dostane soubor se zdrojovým kódem a~přeloží ho do kódu LLVM, který pomocí knihovny LLVM toolchain přeloží do strojového kódu.
+V~případě chyby ve vstupním zdrojovém kódu vypíše chybovou hlášku. Také by měl umět v~některých případech vypisovat pomocná varování.
 
 Jazyk, který program zpracovává je velmi podobný jazyku C, ale je mnohem omezenější.
-Měl by umět základní operace s čísly a proměnnými (včetně globálních proměnných), funkce a strukturované datové typy. 
+Měl by umět základní operace s~čísly a~proměnnými (včetně globálních proměnných), funkce a~strukturované datové typy.
 
 
 \section{ZPŮSOBY ŘEŠENÍ A POUŽITÉ POSTUPY} \TODO{}
@@ -99,35 +101,37 @@ Měl by umět základní operace s čísly a proměnnými (včetně globálních
 \subsection{Tokenizace}
 První krok kompileru je tokenizace -- vstupní soubor je rozdělen na jednotlivé tokeny,
 jsou to klíčová slova (\code{while}, \code{if}), čísla (\code{15}, \code{1.79e308}), textové řetězce (\code{"Hello world!"}),
-názvy funkcí, proměnných a datových typů nebo symboly (\code{+}, \code{*}, \code{>=}, \code{;}).
-V tomto kroku se také zahodí komentáře (řádky začínající \code{//} nebo \code{/* komentar */}) a všechny bílé znaky (mezery, tabulátory, konce řádků).
+názvy funkcí, proměnných a~datových typů nebo symboly (\code{+}, \code{*}, \code{>=}, \code{;}).
+V~tomto kroku se také zahodí komentáře (řádky začínající \code{//} nebo \code{/* komentar */}) a~všechny bílé znaky (mezery, tabulátory, konce řádků).
 
-Ke každému tokenu se také přidá informace o tom, kde se ve zdrojovém kódu vyskytuje. Pokud program narazí na chybu, může tak k chybové hlášce přidat místo, kde se chyba vyskytla.
+Ke každému tokenu se také přidá informace o~tom, kde se ve zdrojovém kódu vyskytuje. Pokud program narazí na chybu, může tak k~chybové hlášce přidat místo, kde se chyba vyskytla.
 
-Pro tokenizaci jsem použil knihovnu Flex, která z pravidel pro tokenizaci (\file{src/parse/lex.y}) vygeneruje potřebný kód.
+Pro tokenizaci jsem použil knihovnu Flex, která z~pravidel pro tokenizaci (\file{src/parse/lex.y}) vygeneruje potřebný kód.
 
 
 \subsection{Syntaktická analýza}
 Po tokenizaci přichází na řadu syntaktická analýza (neboli \uv{parsing}), která tokeny poskládá do takzvaného syntaktického stromu.
-Každý vrchol v syntaktickém stromě představuje nějakou operaci a má pod sebou parametry této operace
-(například operace \code{while} cyklu bude pod sebou mít podmínku a kód cyklu).
+Každý vrchol v~syntaktickém stromě představuje nějakou operaci a~má pod sebou parametry této operace
+(například operace \code{while} cyklu bude pod sebou mít podmínku a~kód cyklu).
 
-\TODO{tikzni tu nějaký hezký obrázek kódu a jeho syntaktického stromu}
+\TODO{tikzni tu nějaký hezký obrázek kódu a~jeho syntaktického stromu}
 
-Syntaktický strom je v mém kódu implementován ve složce \file{src/ast/}:
-\begin{itemize}
-	\item v souboru \file{src/ast/main.h} jsou definované datové typy pro jednotlivé vrcholy syntaktického stromu (např. \code{ast\_expr\_t} pro výrazy). Celý strom je pak uložen v datovém typu \code{ast\_t}. (Zkratka \code{ast} od anglického \uv{abstract syntax tree}.)
-	\item v \file{src/ast/main.c} jsou implementace pomocných funkcí pro vytváření syntaktického stromu.
-	\item v \file{src/ast/print.c}, \file{src/ast/print.h} jsou funkce pro vypisování syntaktického stromu, slouží pouze pro debugovací účely. \TODO{smazat soubory?}
-	%\item v \file{src/ast/scope.h}, \file{src/ast/scope.c} je implementace jmenného prostoru
-\end{itemize}
-\TODO{popiš jmenné prostory}
+Syntaktický strom je v~mém kódu implementován ve složce \file{src/ast/};
+v~souboru \file{src/ast/main.h} jsou definované datové typy pro jednotlivé vrcholy syntaktického stromu (např. \code{ast\_expr\_t} pro výrazy).
+Celý strom je pak uložen v~datovém typu \code{ast\_t}. (Zkratka \code{ast} od anglického \uv{abstract syntax tree}.)
 
-K samotnému převodu tokenů do syntaktického stromu jsem použil knihovnu GNU Bison.
-Ta ze seznamu pravidel (\file{src/parse/parse.y}), které popisují jak se tokeny a symboly mohou spojovat do jiných symbolů, vygeneruje kód, který tato pravidla implementuje.
-Zárověn zkontroluje, že syntax jazyka je jednoznačný, tedy že každý seznam tokenů lze převést do syntaktického stromu pouze jedním způsobem. \TODO{zmínit to o if-else?}
+V~\file{src/ast/main.c} jsou implementace pomocných funkcí pro vytváření syntaktického stromu
+a~v~\file{src/ast/print.c}, \file{src/ast/print.h} jsou funkce pro vypisování syntaktického stromu, slouží pouze pro debugovací účely. \TODO{smazat soubory?}
 
-Hlavní funkce \code{parse\_file} a několik pomocných funkcí pro parsování jsou v \file{src/parse/main.c}.
+V~souborech \file{src/ast/scope.c} a~\file{src/ast/scope.h} je definovaný datový typ \code{ast\_scope\_t*}, který mapuje jména lokálních proměnných na jejich objekty.
+Navíc si drží odkaz na vyšší \code{ast\_scope\_t*}, protože lokální prostory mohou být vložené do sebe (např. proměnnou definovanou uvnitř \code{for} cyklu nelze použít mimo tento cyklus).
+
+K~samotnému převodu tokenů do syntaktického stromu jsem použil knihovnu GNU Bison.
+Ta ze seznamu pravidel (\file{src/parse/parse.y}), které popisují jak se tokeny a~symboly mohou spojovat do jiných symbolů, vygeneruje kód, který tato pravidla implementuje.
+Zárověn zkontroluje, že syntax jazyka je jednoznačný, tedy že každý seznam tokenů lze převést do syntaktického stromu pouze jedním způsobem.
+To je důležité hlavně u~vyhodnocování výrazů, protože \code{a+b*c} se musí vyhodnotit jako \code{a+(b*c)}. Operace násobení, dělení a~modulo se musí vyhodnotit zleva doprava. \TODO{vic rozepsat, jake jsem toho dosahl, prip z toho udelat celou podkapitolu?}
+
+Hlavní funkce \code{parse\_file} a~několik pomocných funkcí pro parsování jsou v~\file{src/parse/main.c}.
 
 \subsection{Překlad do LLVM}
 \TODO{}
@@ -139,7 +143,7 @@ Hlavní funkce \code{parse\_file} a několik pomocných funkcí pro parsování 
 
 \section{ZHODNOCENÍ DOSAŽENÝCH VÝSLEDKŮ}
 \TODO{JAK SE TO POVEDLO}\\
-\textit{výčet splněných a nesplněných bodů zadání resp. vlastních předsevzetí}
+\textit{výčet splněných a~nesplněných bodů zadání resp. vlastních předsevzetí}
 
 
 \section{INSTALACE}
