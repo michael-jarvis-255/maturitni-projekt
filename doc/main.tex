@@ -141,7 +141,7 @@ Po tokenizaci přichází na řadu syntaktická analýza (neboli \uv{parsing}), 
 Každý vrchol v~syntaktickém stromě představuje nějakou operaci a~má pod sebou parametry této operace
 (například operace \code{while} cyklu bude pod sebou mít podmínku a~kód cyklu).
 
-\TODO{tikzni tu nějaký hezký obrázek kódu a~jeho syntaktického stromu}
+\TODO{tikzni tu nějaký hezký obrázek kódu a jeho syntaktického stromu}
 
 Syntaktický strom je v~mém kódu implementován ve složce \file{src/ast/};
 v~souboru \file{src/ast/main.h} jsou definované datové typy pro jednotlivé vrcholy syntaktického stromu (např. \code{ast\_expr\_t} pro výrazy).
@@ -273,6 +273,8 @@ Např.: \code{u64 number;} nebo \code{u32 x = y*5};
 
 U~globalních proměnných nelze nastavit počáteční hodnotu. \TODO{odeber to z parseru a vlastne odevsad}
 
+Adresu proměnné lze získat operací \code{\&}. (Např.: \code{u8* ptr = \&number;})
+
 \subsubsection{Funkce}
 Funkci lze buď definovat, nebo deklarovat. Deklarace pouze řekne kompileru, jaké argumenty funkce očekává a~jaký datový typ vrací.
 Jsou potřeba při použití funkcí z~externí knihovny nebo rekurzivních funkcí (ve funkci lze použít pouze ty funkce a~globální proměnné, které jsou deklarované nebo definované dříve v~kódu).
@@ -308,7 +310,33 @@ Poté se vyskutje tělo \code{if}u, případně \code{else} a~další tělo. \TO
 V~obou případech je tělo buď jeden řádek kódu (končící prvním středníkem), nebo libovolný počet řádků obalených ve složených závorkách.
 
 \subsubsection{Výrazy}
-Výrazem se myslí jakákoliv proměnná, \TODO{...}
+Výrazem se myslí jakákoliv proměnná, číselná konstanta nebo složení dvou výrazů nějakou operací.
+
+Povolené operace jsou:
+\begin{itemize}
+	\item násobení, děleno a~modulo (\code{*}, \code{/}, \code{\%})
+	\item sčítání a~odčítání (\code{+}, \code{-})
+	\item bitový posun doleva a~doprava (\code{<<}, \code{>>})
+	\item porovnání (\code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=})
+	\item bitwise AND (\code{\&})
+	\item bitwise XOR (\code{\^})
+	\item bitwise OR  (\code{|})
+	\item logický AND (\code{\&\&}) -- druhý argument se vyhodnotí pouze pokud se první vyhodnotí jako 1
+	\item logický OR (\code{||}) -- druhý argument se vyhodnotí pouze pokud se první vyhodnotí jako 0
+\end{itemize}
+Operace se vyhodnocují v~pořadí tohoto seznamu zeshora (tedy \code{a || b + c | d} se vyhodnotí jako \code{a || ((b+c) | d)}).
+Operace ve stejné skupině se vyhodnocují vždy zleva doprava.
+
+Navíc jsou povolené operace s~jedním argumentem:
+\begin{itemize}
+	\item negace (\code{-})
+	\item bitwise NOT (\code{\~})
+	\item logický NOT (\code{!})
+	\item dereference (\code{*}) -- čtení z~paměti, funguje pouze s~typem pointer
+\end{itemize}
+
+Výrazy lze libovolně závorkovat.
+
 
 \section{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
 ...

@@ -331,7 +331,7 @@ static int yyreport_syntax_error(const yypcontext_t* ctx, __attribute__((unused)
 			break;
 		}
 	}
-	
+
 	loc_t loc = *yypcontext_location(ctx);
 	printf_error(loc, "%ssyntax error:%s unexpected %s%s%s%s%s", STYLE_BOLD, STYLE_RESET, COLOUR_ERROR, STYLE_BOLD, yysymbol_name(yypcontext_token(ctx)), STYLE_RESET, buf);
 	return 0;
