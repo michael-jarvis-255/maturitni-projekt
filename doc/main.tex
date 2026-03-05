@@ -10,10 +10,37 @@
 \usepackage{scrextend}
 \usepackage{newtxtext} % Times New Roman
 \usepackage{tocloft} % table of contents
+\usepackage{listings} % code listings
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+	backgroundcolor=\color{backcolour},
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,
+	breaklines=true,
+	captionpos=b,
+	keepspaces=true,
+	numbers=left,
+	numbersep=5pt,
+	showspaces=false,
+	showstringspaces=false,
+	showtabs=false,
+	tabsize=2
+}
+
+\lstset{style=mystyle}
 
 \let\e\expandafter
 
-\TODO{spellcheck}
+%TODO{spellcheck}
 
 \def\showtodo{\immediate\write16{}}
 \def\TODO#1{%
@@ -25,7 +52,7 @@
 \setlength{\parskip}{\baselineskip}%
 
 \def\file#1{\texttt{#1}}
-\def\code#1{\texttt{#1}} \TODO{use a~verbatim environment}
+\def\code#1{\texttt{#1}} %\TODO{use a~verbatim environment}
 
 \def\title{Název práce}
 \def\author{Michael Jarvis}
@@ -134,7 +161,52 @@ To je důležité hlavně u~vyhodnocování výrazů, protože \code{a+b*c} se m
 Hlavní funkce \code{parse\_file} a~několik pomocných funkcí pro parsování jsou v~\file{src/parse/main.c}.
 
 \subsection{Překlad do LLVM}
-\TODO{}
+Ze syntaktického stromu se dále vygeneruje LLVM kód. Tento jazyk je něco mezi programovacím jazykem a~strojovým kódem.
+Každá funkce v~tomto jazyce je seznamem takzvaných základních bloků, které jsou seznamem instrukcí.
+Poslední instrukce v~bloku musí být skok do jiného bloku (často s~větvením podle hodnoty registru), návrat z~funkce nebo speciální \code{unreachable}, které definuje, že se program při spuštění nikdy
+nedostane do tohoto stavu (toto umožňuje další optimalizace kódu).
+
+Jednotlivé instrukce v~LLVM pracují s~registry.
+Každá instrukce, která vrací nějakou hodnotu (tedy skoro všechny instrukce kromě ukládáí dat do paměti) rovnou zapíše tuto hodnotu do \textit{nového} registru.
+Do registrů lze v~LLVM totiž zapisovat pouze jednou (to nám generování LLVM trochu ztěžuje, ale tato forma kódu je jednodušeji optimalizovatelnější).
+
+Také lze použít pouze ty registry, které jsou \uv{přímými předchůdci} danému bloku kódu; to znamená, že pokud definujeme registr uvnitř \code{if} bloku, tak ho nemůžeme přímo použít mimo něj.
+K~tomuto účelu slouží speciální instrukce \code{phi}, která sama o~sobě nic nepočítá, ale vrátí hodnotu podle toho, ze kterého bloku jsme se dostali do tohoto bloku.
+Například funkce, která vrací větší ze dvou čísel by mohla vypadat takto:
+
+\TODO{diakritika v code listingu}
+\begin{lstlisting}[language=llvm]
+i32 @max(i32 %x, i32 %y){
+	entry:
+		%cmp = icmp sgt i32 %x, %y  ; %cmp = 1 pokud %x < %y, jinak 0
+		br i1 %cmp, label X, label Y
+	X:
+		br label end
+	Y:
+		br label end
+	end:
+		%res = phi i32 [%x, X], [%y, Y]  ; vrati %x pokud predchazejici blok byl X, jinak vrati %y
+		ret i32 %res
+}
+\end{lstlisting}
+
+Datové typy pro LLVM kód (bloky, funkce, registry) jsem si zadefinoval v~\file{src/llvm.h} a~funkce pro převod tohoto kódu do textové podoby jsou v~\file{src/llvm.c}.
+
+Samotný převod ze syntaktického stromu do LLVM kódu jsem implementoval rekurzivně v~\file{src/ast2llvm.c}.
+Při tomto převodu se také zachytí většina chyb, například operace se špatnými typy (sčítání čísla a~typu \code{void} apod.) nebo volání funkcí se špatným počtem nebo typem argumentů.
+
+Původně jsem tento převod naprogramoval tak, že jsem hodnoty lokálních proměnných ukládal přímo do LLVM registrů a~pro smyčky a~podmínky jsem použil mnoho \code{phi} instrukcí.
+To sice fungovalo bez problému, ale nebylo možné získat adresu proměnné v~paměti, jelikož proměnné nebyli uložené přímo v~paměti, ale v~registrech.
+Ale protože jsem chtěl ve svém jazyku možnost získat adresy lokálních proměnných, musel jsem kód přepsat.
+Nyní používám LLVM instrukci \code{alloca} abych na stacku rezervoval paměť pro proměnné, a~v~registrech ukládám pouze adresy na tyto proměnné.
+Tím jsem ze zbavil i~skoro všech \code{phi} instrukcí, které však nahradilo množství instrukcí \code{store} (ukládání do paměti) a~\code{load} (čtení z~paměti).
+
+\subsection{Kompilace LLVM kódu do strojového kódu}
+Pro tuto část jsem použil již hotové programy z~LLVM toolchain a~linuxový linker \code{ld}.
+
+Prvně se vygenerovaný LLVM kód prožene programem \file{opt}, který ho zoptimalizuje. Poté se optimalizovaný LLVM kód převede na strojový pomocí programu \file{llc}.
+Do výsledného strojového kódu se pak pomocí \file{ld} přidá C~runtime library (ta před spuštěním samotného kódu připraví stack a~poté zavolá funkci \code{main} s~argumenty z~příkazové řádky)
+a~\file{libc} (knihovna, která obsahuje moho užitečných funkcí -- bez ní by programy v~mém jazyce neuměli nic užitečného, protože můj jazyk neumí komunikovat s~operačním systémem).
 
 \section{PROGRAMOVACÍ PROSTŘEDKY}
 \TODO{JAKÝMI PROSTŘEDKY}\\
@@ -152,9 +224,91 @@ Hlavní funkce \code{parse\_file} a~několik pomocných funkcí pro parsování 
 
 
 \section{OVLÁDÁNÍ}
-\TODO{JAK SE TO OVLÁDÁ}\\
-\textit{detailní popis uživatelského rozhraní srozumitelný pro uživatele}
+\subsection{Použití kompileru}
 
+Kompiler se musí spustit z~příkazové řádky s~alespoň jedním argumentem: lokací vstupního souboru. (Kompiler umí kompilovat pouze jeden soubor najednou).
+(Např.: \code{./compiler code.txt}.) V~tomto případě se kód zkompiluje, příp. vyhodí chybové hlášky nebo varování a~vypíše \uv{\code{no output path specified}}.
+
+Pokud chceme výsledek kompilace uložit do souboru, stačí použít \uv{\code{-o <výstupni soubor>}}.
+
+Kompiler umí generovat i~assembly nebo LLVM kód, pokud dostane vlajku \uv{\code{-filetype=asm}}, respektive \uv{\code{-filetype=llvm}}.
+V~obou případech výpíše daný kód na standartní výstup, pokud nedostane lokaci výstupního souboru (vlajkou \uv{\code{-o}}).
+
+Stupeň optimalizace lze ovládat vlajkami \code{-O0} (žádná optimalizace), \code{-O1}, \code{-O2} a~\code{-O3} (nejvyšší stupeň optimalizace).
+
+\subsection{Popis jazyka}
+Jazyk je velmi podobný jazyku C.
+Kód se na nejvyšší úrovni skládá ze seznamu funkcí, globálních proměnných a~definicemi typů.
+
+\subsubsection{Typy}
+Jazyk podporuje pět hlavních typy typů: celá čísla, destinná čísla, pointery (adresy do paměti), strukturovaný datový typ a~speciální typ \code{void}.
+
+Celočíselné typy jsou buď se znaménkem (\code{i8, i16, i32, i64}) nebo bez znaménka (\code{u8, u16, u32, u64}). Číslo v~jejich názvu odpovídá jejich velikosti (počtu bitů).
+Speciální Celočíselné datový typ je navíc \code{bool}, který je vždy buď 1, nebo 0.
+
+Destinné typy jsou dva: \code{f32} a~\code{f64}, které obsahují \code{float}, respektive \code{double}.
+
+Typ pointer lze vytvořit z~libovolného typu přidáním \code{*} na konec. Například typ \code{float*} bude obsahovat adresu, na které se vyskytuje \code{float}.
+
+Speciální typ \code{void} lze použít pouze při definici funkce, která nevrací žádnou hodnotu, nebo jako obecný pointer \code{void*}.
+
+Strukturované datové typy lze definovat pomocí klíčového slova \code{struct}, složených závorek a~seznamem typů a~jmen, které má obsahovat.
+Např.: \code{struct {i32 x; i32 y;}}.
+Obsah proměnné se strukturovaným typem lze získat, stejně jako v~jazyku C, pomocí \uv\code{.}, nebo, pokud se jedná pointer k~strukturovanému typu, \uv\code{->}.
+
+Typům lze také dát jiné jméno, pomocí klíčového slova \code{typedef}, následovaný typem, nové jméno pro daný typ a~středníkem. Toto se hodí hlavně u~strukturovaných typů.
+Např.:
+\begin{lstlisting}[language=C]
+typedef i32 int;
+
+typedef struct {
+	int x;
+	int y;
+} vector2;
+\end{lstlisting}
+
+\subsubsection{Proměnné}
+Lokální i~globální proměnné se definují typem proměnné, jménem, případně počáteční hodnotou (pouze u~lokálních proměnných) a~středníkemů.
+Např.: \code{u64 number;} nebo \code{u32 x = y*5};
+
+U~globalních proměnných nelze nastavit počáteční hodnotu. \TODO{odeber to z parseru a vlastne odevsad}
+
+\subsubsection{Funkce}
+Funkci lze buď definovat, nebo deklarovat. Deklarace pouze řekne kompileru, jaké argumenty funkce očekává a~jaký datový typ vrací.
+Jsou potřeba při použití funkcí z~externí knihovny nebo rekurzivních funkcí (ve funkci lze použít pouze ty funkce a~globální proměnné, které jsou deklarované nebo definované dříve v~kódu).
+
+Deklarace funkce začíná typem, který funkce vrací (nebo speciální typ \code{void}, pokud funce nevrací žádnou hodnotu),
+následuje jméno funkce, pak v~kulatých závorkách typy a~jména argumentů a~nakonec středník.
+
+Například:
+\begin{lstlisting}[language=C]
+i32 puts(u8* s);
+void* malloc(u64 size);
+void free(void* ptr);
+\end{lstlisting}
+
+Definice funkce začíná stejně jako deklarace funkce, ale místo středníku následuje tělo funkce ve složených závorkách.
+Například:
+
+\begin{lstlisting}[language=C]
+i32 max(i32 x, i32 y){
+	if (x > y){
+		return x;
+	} else {
+		return y;
+	}
+}
+\end{lstlisting}
+
+\subsubsection{Podmínky}
+Podmínky se definuje pomocí klíčových slov \code{if} a~\code{else}.
+Po \code{if} vždy následuje výraz v~kulatých závorkách podle kterého se program rozhodne, kterou část podmínky vyhodnotí.
+Poté se vyskutje tělo \code{if}u, případně \code{else} a~další tělo. \TODO{je "telo" spravne slovo pro tohle?}
+
+V~obou případech je tělo buď jeden řádek kódu (končící prvním středníkem), nebo libovolný počet řádků obalených ve složených závorkách.
+
+\subsubsection{Výrazy}
+Výrazem se myslí jakákoliv proměnná, \TODO{...}
 
 \section{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
 ...

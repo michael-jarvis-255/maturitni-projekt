@@ -107,7 +107,7 @@ static void system_concat(unsigned int n, ...){
 
 	int res = system(buf);
 	free(buf);
-	
+
 	if (res) exit(1);
 
 	va_end(args2);
@@ -152,7 +152,7 @@ int main(int argc, const char** argv){
 	llvm_program_to_stream(llvm, ir1_file);
 	free_llvm_program(llvm);
 	fclose(ir1_file);
-	
+
 	if (received_error){
 		printf("compilation stopped due to error(s)\n");
 		unlink(ir1_fp);
