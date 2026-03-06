@@ -60,7 +60,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 
 [0-9]+				update_yylloc(yyleng); bignum_t* num = create_bignum(); bignum_from_string(num, yytext); yylval.expr = create_ast_expr_int_const(yylloc, num); return TK_CONST;
 ([0-9]*\.)?[0-9]+([eE]-?[0-9]+)?	update_yylloc(yyleng); double x; sscanf(yytext, "%lf", &x); yylval.expr = create_ast_expr_double_const(yylloc, x); return TK_CONST;
-[a-zA-Z_][0-9a-zA-Z_]*	{ 
+[a-zA-Z_][0-9a-zA-Z_]*	{
 							update_yylloc(yyleng);
 							char* name = strndup(yytext, yyleng);
 							name[yyleng] = 0;
@@ -71,7 +71,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 								yylval.name.loc = yylloc;
 								return TK_NAME;
 							}
-							
+
 							switch (id->type){
 								case AST_ID_TYPE:
 									yylval.type_ref = &id->type_;
@@ -113,7 +113,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 									case 'b': *curr = '\b'; continue;
 									case '0': *curr = '\x00'; continue;
 									case '"': *curr = '"'; continue;
-									case 'x': 
+									case 'x':
 										if (isxdigit(str[i+1]) && isxdigit(str[i+2])){
 											char c = 0;
 											sscanf("%2hhx", str+i+1, &c);
@@ -121,7 +121,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 											i += 2;
 											continue;
 										}
-									
+
 								}
 								*curr = str[i];
 							}

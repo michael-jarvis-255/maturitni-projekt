@@ -1,7 +1,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include "ast2llvm.h"
-#include "lib/set.h"
 #include "message.h"
 #include "ast/print.h"
 
@@ -123,8 +122,6 @@ static unsigned long ast_variable_ptr_hash(ast_variable_ptr p){
 }
 static inline bool ast_variable_ptr_cmp(ast_variable_ptr a, ast_variable_ptr b){ return a != b; }
 create_hashmap_type_impl(ast_variable_ptr, llvm_reg_t, var2reg_map)
-create_set_type_header(ast_variable_ptr);
-create_set_type_impl(ast_variable_ptr)
 
 create_list_type_impl(llvm_inst, false)
 create_list_type_impl(llvm_basic_block, false)
