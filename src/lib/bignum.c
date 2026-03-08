@@ -122,7 +122,7 @@ static int bignum_unsigned_cmp(const bignum_t* a, const bignum_t* b){ // returns
 	unsigned int sz = (a->size > b->size) ? a->size : b->size;
 	for (unsigned int j = sz; j > 0; j--){
 		unsigned int i = j-1;
-		uint A = bignum_extract(a, i); 
+		uint A = bignum_extract(a, i);
 		uint B = bignum_extract(b, i);
 		if (A > B) return 1;
 		if (A < B) return -1;
@@ -254,12 +254,12 @@ char* bignum_to_string(const bignum_t* x){
 		return str;
 	}
 	end[1] = 0;
-	
+
 	while (start < end){
 		char tmp = *start;
 		*start = *end;
 		*end = tmp;
-		
+
 		start++;
 		end--;
 	}
@@ -344,11 +344,11 @@ static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b, bool* err){ // re
 			ulong A = ((ulong)bignum_extract(a, btop_pos+i+1) << 32) + bignum_extract(a, btop_pos+i);
 			ulong d = A / (btop + 1);
 			if (d == 0) d++;
-			
+
 			bignum_set(tmp2, tmp);
 			bignum_mul_uint(tmp2, d);
 			bignum_unsigned_sub(a, tmp2);
-			
+
 			// TODO: add shifted ulong directly, instead of through tmp2
 			bignum_set_uint(tmp2, d);
 			bignum_shift_left_uint(tmp2, 32*i);

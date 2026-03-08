@@ -2,7 +2,6 @@
 #include <stdarg.h>
 #include "ast2llvm.h"
 #include "message.h"
-#include "ast/print.h"
 
 #define ptr_bits 64
 
@@ -221,7 +220,7 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 				};
 				type = type->pointer.base;
 				__attribute__((fallthrough));
-		
+
 			case AST_LVALUE_MEMBER_ACCESS_NORMAL:
 				if (type->kind != AST_DATATYPE_STRUCTURED){
 					printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
@@ -237,7 +236,7 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 					printf_error(member_access.loc, "type '%s' has no member '%s'", type->name, member_access.member_name);
 					return LLVM_TYPED_POISON(0);
 				}
-				
+
 				ptr = (llvm_value_t){
 					.type = LLVM_VALUE_REG,
 					.reg = llvm_add_inst(f, (llvm_inst_t){
@@ -249,7 +248,7 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 				};
 				type = type->structure.members.data[member_idx].type_ref;
 				break;
-			
+
 			case AST_LVALUE_MEMBER_ACCESS_INDEX:
 				if (type->kind != AST_DATATYPE_POINTER){
 					printf_error(member_access.loc, "cannot index non pointer type '%s'", type->name);
@@ -277,7 +276,7 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 					})
 				};
 				type = type->pointer.base;
-				
+
 				ptr = (llvm_value_t){
 					.type = LLVM_VALUE_REG,
 					.reg = llvm_add_inst(f, (llvm_inst_t){
@@ -300,7 +299,7 @@ static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, con
 	llvm_typed_value_t ptr = ast2llvm_get_lvalue_pointer(var2reg, lvalue, f, ast, prog);
 	if (ptr.ast_type == 0) return LLVM_TYPED_POISON(0);
 	if (ptr.ast_type->kind != AST_DATATYPE_POINTER) INTERNAL_ERROR();
-	
+
 	llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 		.type = LLVM_INST_LOAD,
 		.load.ptr = llvm_untype_value(ptr),
@@ -432,7 +431,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 						.type = LLVM_INST_PTR_TO_INT,
 						.conversion.from = ast_type_to_llvm_type(src_type),
-						.conversion.to = ast_type_to_llvm_type(trgt_type),	
+						.conversion.to = ast_type_to_llvm_type(trgt_type),
 						.conversion.value = llvm_untype_value(value)
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
@@ -458,7 +457,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 							.type = LLVM_INST_FPEXT,
 							.conversion.from = ast_type_to_llvm_type(src_type),
-							.conversion.to = ast_type_to_llvm_type(trgt_type),	
+							.conversion.to = ast_type_to_llvm_type(trgt_type),
 							.conversion.value = llvm_untype_value(value)
 						});
 						value = LLVM_TYPED_REG(reg, trgt_type);
@@ -468,7 +467,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 						llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 							.type = LLVM_INST_FPTRUNC,
 							.conversion.from = ast_type_to_llvm_type(src_type),
-							.conversion.to = ast_type_to_llvm_type(trgt_type),	
+							.conversion.to = ast_type_to_llvm_type(trgt_type),
 							.conversion.value = llvm_untype_value(value)
 						});
 						value = LLVM_TYPED_REG(reg, trgt_type);
@@ -484,7 +483,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 						.type = trgt_type->integral.signed_ ? LLVM_INST_FLOAT_TO_SINT : LLVM_INST_FLOAT_TO_UINT,
 						.conversion.from = ast_type_to_llvm_type(src_type),
-						.conversion.to = ast_type_to_llvm_type(trgt_type),	
+						.conversion.to = ast_type_to_llvm_type(trgt_type),
 						.conversion.value = llvm_untype_value(value)
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
@@ -500,7 +499,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 						.type = LLVM_INST_INT_TO_PTR,
 						.conversion.from = ast_type_to_llvm_type(src_type),
-						.conversion.to = ast_type_to_llvm_type(trgt_type),	
+						.conversion.to = ast_type_to_llvm_type(trgt_type),
 						.conversion.value = llvm_untype_value(value)
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
@@ -518,7 +517,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 						.type = src_type->integral.signed_ ? LLVM_INST_SINT_TO_FLOAT : LLVM_INST_SINT_TO_FLOAT,
 						.conversion.from = ast_type_to_llvm_type(src_type),
-						.conversion.to = ast_type_to_llvm_type(trgt_type),	
+						.conversion.to = ast_type_to_llvm_type(trgt_type),
 						.conversion.value = llvm_untype_value(value)
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
@@ -534,7 +533,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 					if (src_width == trgt_width){
 						if (src_signed == trgt_signed)
 							goto no_cast;
-						
+
 						warning_string = "mismatched signedness";
 						goto implicit_warning;
 					}
@@ -544,10 +543,10 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 							.type = LLVM_INST_TRUNC,
 							.conversion.value = llvm_untype_value(value),
 							.conversion.from = ast_type_to_llvm_type(src_type),
-							.conversion.to = ast_type_to_llvm_type(trgt_type)	
+							.conversion.to = ast_type_to_llvm_type(trgt_type)
 						});
 						value = LLVM_TYPED_REG(reg, trgt_type);
-						
+
 						warning_string = src_signed == trgt_signed ? "truncating may change value" : "truncating may change value, mismatched signedness";
 						goto implicit_warning;
 					}
@@ -558,17 +557,17 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 							.type = LLVM_INST_ZEXT,
 							.conversion.value = llvm_untype_value(value),
 							.conversion.from = ast_type_to_llvm_type(src_type),
-							.conversion.to = ast_type_to_llvm_type(trgt_type)	
+							.conversion.to = ast_type_to_llvm_type(trgt_type)
 						});
 						return LLVM_TYPED_REG(reg, trgt_type);
 					}
-					
+
 					// src_signed == true
 					llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
 						.type = LLVM_INST_SEXT,
 						.conversion.value = llvm_untype_value(value),
 						.conversion.from = ast_type_to_llvm_type(src_type),
-						.conversion.to = ast_type_to_llvm_type(trgt_type)	
+						.conversion.to = ast_type_to_llvm_type(trgt_type)
 					});
 					value = LLVM_TYPED_REG(reg, trgt_type);
 
@@ -605,8 +604,8 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 		case LLVM_TVALUE_POISON:
 			return POISON_VALUE;
 		case LLVM_TVALUE_DOUBLE_CONST:
-		{	
-			llvm_reg_t out = llvm_add_inst(f, 
+		{
+			llvm_reg_t out = llvm_add_inst(f,
 			(llvm_inst_t){
 				.type = LLVM_INST_FCMP,
 				.fcmp.cond = LLVM_FCMP_UNE,
@@ -622,8 +621,8 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 				case AST_DATATYPE_VOID:
 					INTERNAL_ERROR();
 				case AST_DATATYPE_POINTER:
-				{	
-					llvm_reg_t out = llvm_add_inst(f, 
+				{
+					llvm_reg_t out = llvm_add_inst(f,
 					(llvm_inst_t){
 						.type = LLVM_INST_ICMP,
 						.icmp.cond = LLVM_ICMP_NE,
@@ -651,13 +650,13 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 								val.ast_type, f, &err, (loc_t){0}))
 					});
 					if (err) INTERNAL_ERROR();
-					return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out }; 
+					return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
 				}
 				case AST_DATATYPE_STRUCTURED:
 					return POISON_VALUE; // TODO: error
 				case AST_DATATYPE_INTEGRAL:
-				{	
-					llvm_reg_t out = llvm_add_inst(f, 
+				{
+					llvm_reg_t out = llvm_add_inst(f,
 					(llvm_inst_t){
 						.type = LLVM_INST_ICMP,
 						.icmp.cond = LLVM_ICMP_NE,
@@ -682,7 +681,7 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 	}else{
 		left = llvm_cast_to_i1(left_operand, f, ast);
 	}
-	
+
 	llvm_label_t base_label = llvm_function_last_label(f);
 	llvm_label_t long_start_label = llvm_add_block(f);
 	llvm_typed_value_t right_operand = ast2llvm_emit_expr(expr->binop.right, var2reg, f, ast, prog);
@@ -695,12 +694,12 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 	}else{
 		right = llvm_cast_to_i1(right_operand, f, ast);
 	}
-	
+
 	llvm_label_t long_end_label = llvm_function_last_label(f);
 	llvm_label_t next_label = llvm_add_block(f);
-	
+
 	llvm_get_block(f, long_end_label)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
-	
+
 	if (expr->binop.op == AST_EXPR_BINOP_LAND){
 		llvm_get_block(f, base_label)->term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_BR, .br.cond=left, .br.iftrue=long_start_label, .br.iffalse=next_label };
 	}else{
@@ -748,7 +747,7 @@ static llvm_typed_value_t ast2llvm_int_const_binop(loc_t loc, ast_expr_binop_enu
 		}
 		case AST_EXPR_BINOP_LT:
 			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) < 0); break;
-		case AST_EXPR_BINOP_GT: 
+		case AST_EXPR_BINOP_GT:
 			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) > 0); break;
 		case AST_EXPR_BINOP_LE:
 			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) <= 0); break;
@@ -822,10 +821,10 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				const ast_datatype_t* expected_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
 				const ast_datatype_t* given_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
 				if (!given_argtype) continue;
-				
-				if (ast_datatype_eq(expected_argtype, given_argtype)) 
+
+				if (ast_datatype_eq(expected_argtype, given_argtype)) // TODO: try implicit cast
 					continue;
-				
+
 				printf_error(expr->func_call.arglist.data[i].loc, "incompatible argument of type '%s' (expecting '%s')", given_argtype->name, expected_argtype->name);
 				printf_info(expr->func_call.func_ref->declare_loc, "declared here");
 				shallow_free_llvm_typed_value_list(&arglist);
@@ -898,7 +897,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 								.type = LLVM_INST_FNEG,
 								.fneg.type = ast_type_to_llvm_type(operand.ast_type),
 								.fneg.value = llvm_untype_value(operand)
-							}), operand.ast_type);						
+							}), operand.ast_type);
 						case AST_EXPR_UNOP_LNOT:
 						{
 							bignum_t* num = create_bignum();
@@ -1020,7 +1019,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				}
 			}else switch (left_operand.ast_type->kind){
 				case AST_DATATYPE_VOID: goto binop_invalid_types;
-				case AST_DATATYPE_STRUCTURED: goto binop_invalid_types; 
+				case AST_DATATYPE_STRUCTURED: goto binop_invalid_types;
 				case AST_DATATYPE_POINTER: goto binop_invalid_types;
 				case AST_DATATYPE_FLOAT:
 					if (right_operand.type == LLVM_TVALUE_INT_CONST && right_operand.ast_type == 0){
@@ -1072,7 +1071,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 			llvm_type_t optype = ast_type_to_llvm_type(operand_ast_type);
 			llvm_inst_t inst;
 			ast_datatype_t* restype = operand_ast_type;
-			
+
 			switch (operand_ast_type->kind){
 				case AST_DATATYPE_VOID:
 				case AST_DATATYPE_STRUCTURED:
@@ -1097,7 +1096,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							inst.binop.first = llvm_untype_value(left_operand);
 							inst.binop.second = llvm_untype_value(right_operand);
 							break;
-							
+
 						case AST_EXPR_BINOP_LT: inst.icmp.cond = signed_op ? LLVM_ICMP_SLT : LLVM_ICMP_ULT; goto icmp;
 						case AST_EXPR_BINOP_GT: inst.icmp.cond = signed_op ? LLVM_ICMP_SGT : LLVM_ICMP_UGT; goto icmp;
 						case AST_EXPR_BINOP_LE: inst.icmp.cond = signed_op ? LLVM_ICMP_SLE : LLVM_ICMP_ULE; goto icmp;
@@ -1111,7 +1110,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							inst.icmp.op2 = llvm_untype_value(right_operand);
 							restype = find_ast_type(ast.global_scope, "bool");
 							break;
-						
+
 						case AST_EXPR_BINOP_LAND:
 						case AST_EXPR_BINOP_LOR:
 							INTERNAL_ERROR();
@@ -1132,7 +1131,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							inst.binop.first = llvm_untype_value(left_operand);
 							inst.binop.second = llvm_untype_value(right_operand);
 							break;
-						
+
 						case AST_EXPR_BINOP_LT: inst.fcmp.cond = LLVM_FCMP_OLT; goto fcmp;
 						case AST_EXPR_BINOP_GT: inst.fcmp.cond = LLVM_FCMP_OGT; goto fcmp;
 						case AST_EXPR_BINOP_LE: inst.fcmp.cond = LLVM_FCMP_OLE; goto fcmp;
@@ -1146,7 +1145,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 							inst.fcmp.op2 = llvm_untype_value(right_operand);
 							restype = find_ast_type(ast.global_scope, "bool");
 							break;
-							
+
 						case AST_EXPR_BINOP_SHL: goto binop_invalid_types;
 						case AST_EXPR_BINOP_SHR: goto binop_invalid_types;
 						case AST_EXPR_BINOP_BXOR: goto binop_invalid_types;
@@ -1211,7 +1210,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_add_block(f);
 			llvm_label_t iftrue_start = llvm_function_last_label(f);
 			ast2llvm_emit_stmt(stmt->if_.iftrue, var2reg, f, ast_func, ast, loop_labels, prog);
-			llvm_label_t iftrue_end = llvm_function_last_label(f);			
+			llvm_label_t iftrue_end = llvm_function_last_label(f);
 
 			llvm_label_t next_label = llvm_add_block(f);
 			f->blocks.data[iftrue_end.idx].term_inst = (llvm_term_inst_t){ .type=LLVM_TERM_INST_JMP, .jmp.target=next_label };
@@ -1256,7 +1255,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 				llvm_typed_value_t ptr = ast2llvm_get_lvalue_pointer(var2reg, lvalue, f, ast, prog);
 				if (ptr.ast_type == 0) return;
 				if (ptr.ast_type->kind != AST_DATATYPE_POINTER) INTERNAL_ERROR();
-				
+
 				ast_datatype_t* trgt_type = ptr.ast_type->pointer.base;
 
 				if (val.type == LLVM_TVALUE_POISON && val.ast_type == 0)
@@ -1269,7 +1268,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 						return;
 					}
 				}
-					
+
 				const ast_datatype_t* src_type = val.ast_type;
 
 				if (!ast_datatype_eq(trgt_type, src_type)){
@@ -1280,7 +1279,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 						return;
 					}
 				}
-				
+
 				llvm_add_inst(f, (llvm_inst_t){
 					.type = LLVM_INST_STORE,
 					.store.type = ast_type_to_llvm_type(trgt_type),
@@ -1317,12 +1316,12 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 				if (stmt->return_.val){
 					printf_error(stmt->loc, "return value in function returning 'void'");
 				}
-				
+
 				llvm_function_last_block(f)->term_inst = (llvm_term_inst_t){ .type = LLVM_TERM_INST_RET_VOID };
 				llvm_add_block(f);
 				return;
 			}
-			
+
 			llvm_typed_value_t val = ast2llvm_emit_expr(stmt->return_.val, var2reg, f, ast, prog);
 			if (val.type == LLVM_TVALUE_POISON && val.ast_type == 0) return;
 			if (val.type == LLVM_TVALUE_INT_CONST && val.ast_type == 0){
@@ -1340,7 +1339,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 					val = LLVM_TYPED_POISON(ast_func.return_type_ref);
 				}
 			}
-			
+
 			llvm_function_last_block(f)->term_inst = (llvm_term_inst_t){
 				.type = LLVM_TERM_INST_RET,
 				.ret.type = f->rettype,
@@ -1358,7 +1357,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_label_t cond_start = llvm_add_block(f);
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f, ast, prog), f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
-			
+
 			llvm_label_t step_start = llvm_add_block(f);
 			ast2llvm_emit_stmt(stmt->for_.step, var2reg, f, ast_func, ast, loop_labels, prog);
 			llvm_label_t step_end = llvm_function_last_label(f);
@@ -1379,7 +1378,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		{
 			llvm_label_t base_label = llvm_function_last_label(f);
 			llvm_label_t break_target = llvm_add_block(f);
-			
+
 			llvm_label_t cond_start = llvm_add_block(f);
 			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f, ast, prog), f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
@@ -1414,7 +1413,7 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast, llvm_progr
 	for (unsigned int i=0; i < func.args.len; i++){
 		f.args[i] = ast_type_to_llvm_type(func.args.data[i]->type_ref);
 	}
-	
+
 	if (!func.body){
 		f.has_definition = false;
 		return f;
@@ -1430,7 +1429,7 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast, llvm_progr
 	});
 
 	var2reg_map_t var2reg = create_var2reg_map();
-	
+
 	ast2llvm_alloca_scope(func.local_scope, &var2reg, &f);
 	for (unsigned int i=0; i < func.args.len; i++){
 		ast_variable_t* var = func.args.data[i];
@@ -1441,7 +1440,7 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast, llvm_progr
 			.store.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=var2reg_map_get(&var2reg, var, LLVM_INVALID_REG) }
 		});
 	}
-	
+
 	ast2llvm_alloca_stmt(func.body, &var2reg, &f);
 	ast2llvm_emit_stmt(func.body, &var2reg, &f, func, ast, create_empty_loop_labels(), prog);
 	free_var2reg_map(&var2reg);

@@ -9,7 +9,7 @@ source_lines_t global_source_lines;
 
 source_lines_t create_source_lines(const char* source){
 	source_lines_t source_lines = (source_lines_t){ .line_count=1, .lines=0 };
-	
+
 	for (const char* c = source; *c; c++)
 		if (*c == '\n') source_lines.line_count++;
 	source_lines.lines = calloc(source_lines.line_count, sizeof(const char*));
@@ -34,7 +34,7 @@ void free_source_lines_v(source_lines_t source_lines){
 static unsigned int standard_print(const char* msg, const unsigned int n, unsigned int col){ // col is column that print starts at (for expanding tabs)
 	for (unsigned int i=0; i<n; i++){
 		char c = msg[i];
-		
+
 		if (c >= 0x7f) continue;
 		if (c >= 0x20) {
 			fprintf(stderr, "%c", c);
@@ -64,7 +64,7 @@ static void print_msg(loc_t loc, const char* msg_type, const char* msg, const ch
 		fprintf(stderr, "%s", STYLE_RESET);
 		standard_print(global_source_lines.lines[loc.first_line] + loc.last_column, -1, col2);
 		fprintf(stderr, "\n");
-		
+
 		tilde_count = loc.last_column - loc.first_column - 1;
 	}else{
 		fprintf(stderr, "%5u |    ", loc.first_line+1);

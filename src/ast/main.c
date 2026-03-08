@@ -41,7 +41,6 @@ void free_ast_id_v(ast_id_t id){
 			free(id.global.var.name);
 			if (id.global.init) free_ast_expr(id.global.init);
 			break;
-			
 	}
 }
 void free_ast_id(ast_id_t* id){
@@ -203,6 +202,40 @@ void free_ast_expr_v(ast_expr_t exp){
 			free_ast_expr(exp.cast.expr);
 			break;
 	}
+}
+
+const char* ast_expr_unop_string(ast_expr_unop_enum_t op){
+	switch (op){
+		case AST_EXPR_UNOP_BNOT: return "~";
+		case AST_EXPR_UNOP_LNOT: return "!";
+		case AST_EXPR_UNOP_NEG: return "-";
+		case AST_EXPR_UNOP_DEREF: return "*";
+	}
+	INTERNAL_ERROR();
+}
+
+const char* ast_expr_binop_string(ast_expr_binop_enum_t op){
+	switch (op){
+		case AST_EXPR_BINOP_ADD: return "+";
+		case AST_EXPR_BINOP_SUB: return "-";
+		case AST_EXPR_BINOP_MUL: return "*";
+		case AST_EXPR_BINOP_DIV: return "/";
+		case AST_EXPR_BINOP_MOD: return "%";
+		case AST_EXPR_BINOP_LT: return "<";
+		case AST_EXPR_BINOP_GT: return ">";
+		case AST_EXPR_BINOP_LE: return "<=";
+		case AST_EXPR_BINOP_GE: return ">=";
+		case AST_EXPR_BINOP_EQ: return "==";
+		case AST_EXPR_BINOP_NE: return "!=";
+		case AST_EXPR_BINOP_BXOR: return "^";
+		case AST_EXPR_BINOP_BAND: return "&";
+		case AST_EXPR_BINOP_BOR: return "|";
+		case AST_EXPR_BINOP_LAND: return "&&";
+		case AST_EXPR_BINOP_LOR: return "||";
+		case AST_EXPR_BINOP_SHR: return ">>";
+		case AST_EXPR_BINOP_SHL: return "<<";
+	}
+	INTERNAL_ERROR();
 }
 
 ast_stmt_t create_ast_stmt_block(loc_t loc, ast_stmt_list_t stmt_list, scope_t* local_scope){

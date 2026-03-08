@@ -292,6 +292,8 @@ ast_expr_t create_ast_expr_ref(loc_t loc, ast_lvalue_t lvalue);
 ast_expr_t create_ast_expr_cast(loc_t loc, ast_expr_t expr, ast_datatype_t* type);
 void free_ast_expr_v(ast_expr_t exp);
 void free_ast_expr(ast_expr_t* exp);
+const char* ast_expr_unop_string(ast_expr_unop_enum_t op);
+const char* ast_expr_binop_string(ast_expr_binop_enum_t op);
 
 // statements
 ast_stmt_t create_ast_stmt_block(loc_t loc, ast_stmt_list_t stmt_list, scope_t* local_scope);

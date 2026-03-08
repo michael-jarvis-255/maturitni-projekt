@@ -120,7 +120,7 @@ mismatched_types:
 	printf_error(loc, "definition of function '%s' doesn't match previous declaration (types mismatch)", name); // TODO: print the function types
 	printf_info(other->func.declare_loc, "declared here");
 	goto free_and_return;
-	
+
 free_and_return:
 	free_ast_id(func_id);
 	return;

@@ -128,7 +128,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			tprint(t, ", ");
 			llvm_value_to_target(inst.binop.second, t);
 			return;
-		
+
 		// memory access
 		case LLVM_INST_LOAD:
 			tprint(t, "load ");
@@ -164,7 +164,7 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 			tprint(t, " to ");
 			llvm_type_to_target(inst.conversion.to, t);
 			return;
-		
+
 		// other
 		case LLVM_INST_ICMP:
 			tprint(t, "icmp ");
@@ -338,7 +338,7 @@ static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
 		tprintf(t, "l%u:\n", i);
 		llvm_block_body_to_target(&f->blocks.data[i], t);
 	}
-	
+
 	tprint(t, "}\n\n");
 }
 
