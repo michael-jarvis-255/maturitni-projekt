@@ -44,20 +44,23 @@
 \lstset{style=mystyle}
 
 % my todo system
+\newif\ifdoc\docfalse
 \def\showtodo{\immediate\write16{}}
 \def\TODO#1{%
-	\textbf{ [todo: #1] }%
+	\ifdoc%
+		\textbf{ [todo: #1] }%
+	\fi%
 	\e\xdef\e\showtodo\e{\showtodo\immediate\write16{todo on line \number\inputlineno: #1}}%
 }
-%TODO{spellcheck}
+\TODO{spellcheck}
 
 
 % text formating
-% \TODO{vsechno bez kurzivy a vseho, jenom tucnost? tzn. zmen \code s \file?}
-% \TODO{kody vlozene do textu maji mit vysvetleni nad kodem}
-% \TODO{asi neni potreba citovat vlastni obrazek/diagram, ne?}
-% \TODO{add citations}
-% \TODO{proper baseline skip and make sure its normostrana}
+\TODO{vsechno bez kurzivy a vseho, jenom tucnost? tzn. zmen code a file makra?}
+\TODO{kody vlozene do textu maji mit vysvetleni nad kodem}
+\TODO{asi neni potreba citovat vlastni obrazek/diagram, ne?}
+\TODO{add citations}
+\TODO{proper baseline skip and make sure its normostrana}
 \setlength{\parindent}{0pt}
 \setlength{\baselineskip}{18pt} % font size is 12pt
 \setlength{\parskip}{12pt}
@@ -80,7 +83,7 @@
 
 
 % TITLEPAGE
-\begin{document}
+\begin{document}\doctrue
 \begin{titlepage}
 	\vspace*{\fill}
 	\centering
