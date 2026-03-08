@@ -253,7 +253,6 @@ typedef struct llvm_function_t {
 typedef struct llvm_global_def_t {
 	char* name;
 	llvm_type_t type;
-	llvm_value_t init_val;
 } llvm_global_def_t;
 
 typedef struct llvm_string_def_t {

@@ -153,8 +153,8 @@ static void llvm_inst_body_to_target(const llvm_inst_t inst, print_target_t* t){
 		case LLVM_INST_INT_TO_PTR: tprint(t, "inttoptr "); goto conversion_op;
 		case LLVM_INST_UINT_TO_FLOAT: tprint(t, "uitofp "); goto conversion_op;
 		case LLVM_INST_SINT_TO_FLOAT: tprint(t, "sitofp "); goto conversion_op;
-		case LLVM_INST_FLOAT_TO_UINT: tprint(t, "fptoui "); goto conversion_op; // TODO: use saturating intrinsic instead?
-		case LLVM_INST_FLOAT_TO_SINT: tprint(t, "fptosi "); goto conversion_op; // TODO: use saturating intrinsic instead?
+		case LLVM_INST_FLOAT_TO_UINT: tprint(t, "fptoui "); goto conversion_op;
+		case LLVM_INST_FLOAT_TO_SINT: tprint(t, "fptosi "); goto conversion_op;
 		case LLVM_INST_FPEXT: tprint(t, "fpext "); goto conversion_op;
 		case LLVM_INST_FPTRUNC: tprint(t, "fptrunc "); goto conversion_op;
 		conversion_op:
@@ -506,7 +506,7 @@ static void free_llvm_basic_block(llvm_basic_block_t block){
 static void llvm_global_to_target(llvm_global_def_t global, print_target_t* t){
 	tprintf(t, "@%s = unnamed_addr global ", global.name);
 	llvm_type_to_target(global.type, t);
-	tprint(t, " 0 \n"); // TODO: emit init value
+	tprint(t, " 0 \n");
 }
 
 static void llvm_string_to_target(llvm_string_def_t str, print_target_t* t){
@@ -556,7 +556,6 @@ void free_llvm_function(llvm_function_t func){
 void free_llvm_global_def(llvm_global_def_t global){
 	free(global.name);
 	free_llvm_type(global.type);
-	free_llvm_value(global.init_val);
 }
 
 void free_llvm_program(llvm_program_t program){

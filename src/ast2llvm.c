@@ -107,7 +107,7 @@ static llvm_typed_value_t llvm_type_value(const llvm_value_t v, ast_datatype_t* 
 	}
 	return tv;
 }
-static ast_datatype_t* find_ast_type(const scope_t* global_scope, const char* name){ // TODO: maybe built-in types can be stored globally somewhere?
+static ast_datatype_t* find_ast_type(const scope_t* global_scope, const char* name){
 	return &scope_get(global_scope, name)->type_;
 }
 
@@ -596,7 +596,7 @@ no_cast:
 	return value;
 }
 
-static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, const ast_t ast){
+static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, loc_t loc, llvm_function_t* f, const ast_t ast){
 	switch (val.type){
 		case LLVM_TVALUE_INT_CONST:
 			bignum_set_uint(val.int_const, bignum_is_nonzero(val.int_const));
@@ -653,7 +653,8 @@ static llvm_value_t llvm_cast_to_i1(llvm_typed_value_t val, llvm_function_t* f, 
 					return (llvm_value_t){ .type = LLVM_VALUE_REG, .reg = out };
 				}
 				case AST_DATATYPE_STRUCTURED:
-					return POISON_VALUE; // TODO: error
+					printf_error(loc, "cannot interpret structured type '%s' as boolean value", val.ast_type->name);
+					return POISON_VALUE;
 				case AST_DATATYPE_INTEGRAL:
 				{
 					llvm_reg_t out = llvm_add_inst(f,
@@ -679,7 +680,7 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 		printf_error(expr->binop.left->loc, "struct type '%s' is not supported for binary operation '%s'", left_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
 		left = POISON_VALUE;
 	}else{
-		left = llvm_cast_to_i1(left_operand, f, ast);
+		left = llvm_cast_to_i1(left_operand, expr->binop.left->loc, f, ast);
 	}
 
 	llvm_label_t base_label = llvm_function_last_label(f);
@@ -692,7 +693,7 @@ static llvm_typed_value_t ast2llvm_emit_short_circuiting_expr(const ast_expr_t* 
 		printf_error(expr->binop.right->loc, "struct type '%s' is not supported for binary operation '%s'", right_operand.ast_type->name, ast_expr_binop_string(expr->binop.op));
 		right = POISON_VALUE;
 	}else{
-		right = llvm_cast_to_i1(right_operand, f, ast);
+		right = llvm_cast_to_i1(right_operand, expr->binop.right->loc, f, ast);
 	}
 
 	llvm_label_t long_end_label = llvm_function_last_label(f);
@@ -818,11 +819,14 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 				return LLVM_TYPED_POISON(expr->func_call.func_ref->return_type_ref);
 			}
 			for (unsigned int i=0; i < arglist.len; i++){
-				const ast_datatype_t* expected_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
-				const ast_datatype_t* given_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
+				ast_datatype_t* expected_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
+				ast_datatype_t* given_argtype = expr->func_call.func_ref->args.data[i]->type_ref;
 				if (!given_argtype) continue;
 
-				if (ast_datatype_eq(expected_argtype, given_argtype)) // TODO: try implicit cast
+				bool err;
+				arglist.data[i] = ast2llvm_cast(arglist.data[i], expected_argtype, f, &err, expr->func_call.arglist.data[i].loc);
+
+				if (!err)
 					continue;
 
 				printf_error(expr->func_call.arglist.data[i].loc, "incompatible argument of type '%s' (expecting '%s')", given_argtype->name, expected_argtype->name);
@@ -902,7 +906,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						{
 							bignum_t* num = create_bignum();
 							bignum_set_uint(num, 0);
-							llvm_value_t res = llvm_cast_to_i1(operand, f, ast);
+							llvm_value_t res = llvm_cast_to_i1(operand, expr->unop.operand->loc, f, ast);
 							return LLVM_TYPED_REG(llvm_add_inst(f, (llvm_inst_t){
 								.type = LLVM_INST_ICMP,
 								.icmp.cond = LLVM_ICMP_EQ,
@@ -921,7 +925,7 @@ static llvm_typed_value_t ast2llvm_emit_expr(const ast_expr_t* expr, const var2r
 						{
 							bignum_t* num = create_bignum();
 							bignum_set_uint(num, 0);
-							llvm_value_t res = llvm_cast_to_i1(operand, f, ast);
+							llvm_value_t res = llvm_cast_to_i1(operand, expr->unop.operand->loc, f, ast);
 							return LLVM_TYPED_REG(llvm_add_inst(f, (llvm_inst_t){
 								.type = LLVM_INST_ICMP,
 								.icmp.cond = LLVM_ICMP_EQ,
@@ -1204,7 +1208,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 	switch (stmt->type){
 		case AST_STMT_IF:
 		{
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_.cond, var2reg, f, ast, prog), f, ast);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_.cond, var2reg, f, ast, prog), stmt->if_.cond.loc, f, ast);
 			llvm_label_t base_label = llvm_function_last_label(f);
 
 			llvm_add_block(f);
@@ -1220,7 +1224,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 		}
 		case AST_STMT_IF_ELSE:
 		{
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_else.cond, var2reg, f, ast, prog), f, ast);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->if_else.cond, var2reg, f, ast, prog), stmt->if_else.cond.loc, f, ast);
 			llvm_label_t base_label = llvm_function_last_label(f);
 
 			llvm_add_block(f);
@@ -1355,7 +1359,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_label_t break_target = llvm_add_block(f);
 
 			llvm_label_t cond_start = llvm_add_block(f);
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f, ast, prog), f, ast);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->for_.cond, var2reg, f, ast, prog), stmt->for_.cond.loc, f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
 
 			llvm_label_t step_start = llvm_add_block(f);
@@ -1380,7 +1384,7 @@ static void ast2llvm_emit_stmt(ast_stmt_t* stmt, const var2reg_map_t* var2reg, l
 			llvm_label_t break_target = llvm_add_block(f);
 
 			llvm_label_t cond_start = llvm_add_block(f);
-			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f, ast, prog), f, ast);
+			llvm_value_t cond = llvm_cast_to_i1(ast2llvm_emit_expr(&stmt->while_.cond, var2reg, f, ast, prog), stmt->while_.cond.loc, f, ast);
 			llvm_label_t cond_end = llvm_function_last_label(f);
 
 			llvm_label_t body_start = llvm_add_block(f);
@@ -1460,8 +1464,7 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast, llvm_progr
 static llvm_global_def_t ast2llvm_emit_global(ast_global_t global){
 	return (llvm_global_def_t){
 		.name = strdup(global.var.name),
-		.type = ast_type_to_llvm_type(global.var.type_ref),
-		.init_val = POISON_VALUE // TODO
+		.type = ast_type_to_llvm_type(global.var.type_ref)
 	};
 }
 

@@ -4,26 +4,18 @@
 #include "parse.tab.h"
 #include <string.h>
 
-void yy_scan_string(const char *str); // TODO: include from header?
+void yy_scan_string(const char *str); // GNU Flex function
 
-static void ast_scope_insert_type(scope_t* scope, const char* name, ast_datatype_t type){ // TODO: move elsewhere
-	ast_id_t* id = malloc(sizeof(ast_id_t));
-	id->type = AST_ID_TYPE;
-	id->type_ = type;
-	id->type_.name = strdup(name);
-	scope_insert(scope, name, id);
-}
-
-ast_t parse_file(FILE* source_file, const char* source_path){ // TODO: support for stdin
+ast_t parse_file(FILE* source_file, const char* source_path){
 	if (fseek(source_file, 0, SEEK_END)){
-		printf("Failed to seek file.\n"); // TODO: better error message
+		printf("Failed to seek file.\n");
 		exit(1);
 	}
 	size_t sz = ftell(source_file);
 	char* source = malloc(sz+1);
 
 	if (fseek(source_file, 0, SEEK_SET)){
-		printf("Failed to seek file.\n"); // TODO: better error message
+		printf("Failed to seek file.\n");
 		exit(1);
 	}
 
@@ -31,7 +23,7 @@ ast_t parse_file(FILE* source_file, const char* source_path){ // TODO: support f
 	while (bytes_read < sz){
 		size_t res = fread(source + bytes_read, 1, sz - bytes_read, source_file);
 		if (res == 0){
-			printf("Failed to read file.\n"); // TODO: better error message
+			printf("Failed to read file.\n");
 			exit(1);
 		}
 		bytes_read += res;
@@ -43,26 +35,36 @@ ast_t parse_file(FILE* source_file, const char* source_path){ // TODO: support f
 	return ast;
 }
 
+static void add_builtin_type(scope_t* scope, const char* name, ast_datatype_t type){
+	type.name = strdup(name);
+	type.declare_loc = (loc_t){0};
+
+	ast_id_t* id = malloc(sizeof(ast_id_t));
+	id->type = AST_ID_TYPE;
+	id->type_ = type;
+	scope_insert(scope, name, id);
+}
+
 ast_t parse_string(const char* source, const char* source_path){
 	source_lines_t source_lines = create_source_lines(source);
 	scope_t* global_scope = create_scope(0);
 	scope_t* current_scope = global_scope;
 
 	// fill global scope with built-in types
-	ast_scope_insert_type(global_scope, "i64", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=64, .integral.signed_=true,  .ptr_type=0});
-	ast_scope_insert_type(global_scope, "i32", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=32, .integral.signed_=true,  .ptr_type=0});
-	ast_scope_insert_type(global_scope, "i16", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=16, .integral.signed_=true,  .ptr_type=0});
-	ast_scope_insert_type(global_scope, "i8",  (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=8,  .integral.signed_=true,  .ptr_type=0});
-	ast_scope_insert_type(global_scope, "u64", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=64, .integral.signed_=false, .ptr_type=0});
-	ast_scope_insert_type(global_scope, "u32", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=32, .integral.signed_=false, .ptr_type=0});
-	ast_scope_insert_type(global_scope, "u16", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=16, .integral.signed_=false, .ptr_type=0});
-	ast_scope_insert_type(global_scope, "u8",  (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=8,  .integral.signed_=false, .ptr_type=0});
-	ast_scope_insert_type(global_scope, "bool", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=1, .integral.signed_=false, .ptr_type=0});
-	ast_scope_insert_type(global_scope, "void", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_VOID, .ptr_type=0 });
-	ast_scope_insert_type(global_scope, "f64", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_FLOAT, .floating.bitwidth=64, .ptr_type=0 });
-	ast_scope_insert_type(global_scope, "f32", (ast_datatype_t){ .declare_loc=(loc_t){0}, .kind=AST_DATATYPE_FLOAT, .floating.bitwidth=32, .ptr_type=0 });
+	add_builtin_type(global_scope, "i64", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=64, .integral.signed_=true,  .ptr_type=0});
+	add_builtin_type(global_scope, "i32", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=32, .integral.signed_=true,  .ptr_type=0});
+	add_builtin_type(global_scope, "i16", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=16, .integral.signed_=true,  .ptr_type=0});
+	add_builtin_type(global_scope, "i8",  (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=8,  .integral.signed_=true,  .ptr_type=0});
+	add_builtin_type(global_scope, "u64", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=64, .integral.signed_=false, .ptr_type=0});
+	add_builtin_type(global_scope, "u32", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=32, .integral.signed_=false, .ptr_type=0});
+	add_builtin_type(global_scope, "u16", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=16, .integral.signed_=false, .ptr_type=0});
+	add_builtin_type(global_scope, "u8",  (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=8,  .integral.signed_=false, .ptr_type=0});
+	add_builtin_type(global_scope, "bool", (ast_datatype_t){ .kind=AST_DATATYPE_INTEGRAL, .integral.bitwidth=1, .integral.signed_=false, .ptr_type=0});
+	add_builtin_type(global_scope, "void", (ast_datatype_t){ .kind=AST_DATATYPE_VOID, .ptr_type=0 });
+	add_builtin_type(global_scope, "f64", (ast_datatype_t){ .kind=AST_DATATYPE_FLOAT, .floating.bitwidth=64, .ptr_type=0 });
+	add_builtin_type(global_scope, "f32", (ast_datatype_t){ .kind=AST_DATATYPE_FLOAT, .floating.bitwidth=32, .ptr_type=0 });
 
-	yy_scan_string(source); // TODO: use scan_bytes instead? or yy_scan_buffer?
+	yy_scan_string(source);
 	global_source_lines = source_lines;
 	yyparse(&current_scope);
 	return (ast_t){ .source_path=strdup(source_path), .source_lines=source_lines, .global_scope=global_scope };
@@ -117,7 +119,7 @@ void parse_function_def(loc_t loc, scope_t* current_scope, ast_datatype_t* retur
 	goto try_insert;
 
 mismatched_types:
-	printf_error(loc, "definition of function '%s' doesn't match previous declaration (types mismatch)", name); // TODO: print the function types
+	printf_error(loc, "definition of function '%s' doesn't match previous declaration (types mismatch)", name);
 	printf_info(other->func.declare_loc, "declared here");
 	goto free_and_return;
 
@@ -157,7 +159,7 @@ void parse_function_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* retu
 	goto free_and_return;
 
 mismatched_types:
-	printf_error(loc, "redeclatation of function '%s' doesn't match previous declaration (types mismatch)", name); // TODO: print the function types
+	printf_error(loc, "redeclatation of function '%s' doesn't match previous declaration (types mismatch)", name);
 	printf_info(other->func.declare_loc, "previously declared here");
 	goto free_and_return;
 
@@ -192,7 +194,7 @@ ast_id_t* parse_variable_decl(loc_t loc, scope_t* current_scope, ast_datatype_t*
 
 ast_stmt_t parse_variable_assign_decl(loc_t loc, loc_t name_loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
 	ast_id_t* var_id = parse_variable_decl(loc, current_scope, type, name);
-	if (!var_id) return (ast_stmt_t){0}; // TODO: is this safe?
+	if (!var_id) return (ast_stmt_t){0};
 	return create_ast_stmt_assign(loc, create_ast_lvalue_var(&var_id->var, name_loc), value);
 }
 
@@ -216,7 +218,6 @@ ast_datatype_t* parse_anonymous_struct(loc_t loc, scope_t* current_scope, ast_va
 
 	// we are being cheeky and inserting even when "<anonymous struct>" might already be in the scope
 	// we are placing it into the scope so that it can be free()'d
-	// TODO: find a more elegant solution
 	scope_force_insert(current_scope, "<anonymous struct>", id);
 	return &id->type_;
 }

@@ -103,7 +103,6 @@ lvalue:
 |	lvalue '.'[op] name		{ $$ = $1; ast_lvalue_extend(&$$, @$, @op, false, $name); }
 |	lvalue TK_ARROW[op] name	{ $$ = $1; ast_lvalue_extend(&$$, @$, @op, true,  $name); }
 |	lvalue '['[op1] exp ']'[op2]	{ $$ = $1; ast_lvalue_index(&$$, @$, loc_add(@op1, @op2), $exp); }
-// TODO: `(*ptr).member` lvalues
 
 exp01:
 	'-' exp01[op]	{ $$ = create_ast_expr_unop(@$, AST_EXPR_UNOP_NEG, $op); }
@@ -253,7 +252,7 @@ if_ending_while_stmt:
 	TK_WHILE '(' exp[cond] ')' if_ending_stmt[body]	{ $$ = create_ast_stmt_while(@$, $cond, $body); }
 
 %nterm <stmt> non_if_for_loop;
-non_if_for_loop: // TODO: variables inside block can shadow 'init'
+non_if_for_loop:
 	TK_FOR '(' begin_local_scope basic_stmt[init]         ';' exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 |	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' non_if_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 
@@ -263,7 +262,7 @@ if_ending_for_loop:
 |	TK_FOR '(' begin_local_scope var_assign_declaration[init] exp[cond] ';' basic_stmt[step] ')' if_ending_stmt[body] end_local_scope[scope]	{ $$ = create_ast_stmt_for(@$, $init, $cond, $step, $body, $scope); (void)$begin_local_scope; }
 
 %nterm function_definition;
-function_definition: // TODO: use block_body instead of scopeless_block ?
+function_definition:
 	type name '(' begin_local_scope function_args[args] ')' scopeless_block[body] end_local_scope[scope]	{ parse_function_def(@$, *current_scope, $type, $name.name, $args, $scope, $body); (void)$begin_local_scope; }
 
 %nterm function_declaration;
