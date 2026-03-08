@@ -241,7 +241,6 @@ typedef struct ast_func_t {
 
 typedef struct ast_global_t {
 	ast_variable_t var;
-	ast_expr_t* init; // TODO: use this
 } ast_global_t;
 
 typedef enum {

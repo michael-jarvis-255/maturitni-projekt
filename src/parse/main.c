@@ -206,12 +206,7 @@ void parse_global_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, 
 	var_id->global.var.type_ref = type;
 	var_id->global.var.declare_loc = loc;
 	var_id->global.var.name = name.name;
-	var_id->global.init = 0;
 	scope_insert(current_scope, name.name, var_id);
-}
-
-void parse_global_assign_decl(loc_t loc, scope_t* current_scope, ast_datatype_t* type, ast_name_t name, ast_expr_t value){
-	parse_global_decl(loc, current_scope, type, name);
 }
 
 ast_datatype_t* parse_anonymous_struct(loc_t loc, scope_t* current_scope, ast_variable_list_t members){

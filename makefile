@@ -17,4 +17,4 @@ build/src/lex.y.c: src/parse/lex.y build/h/parse.tab.h src/parse/yystype.h
 	flex -o $@ src/parse/lex.y
 
 cloc:
-	cloc --exclude-dir=build .
+	cloc --exclude-dir=build,doc,tests .

@@ -39,7 +39,6 @@ void free_ast_id_v(ast_id_t id){
 			break;
 		case AST_ID_GLOBAL:
 			free(id.global.var.name);
-			if (id.global.init) free_ast_expr(id.global.init);
 			break;
 	}
 }

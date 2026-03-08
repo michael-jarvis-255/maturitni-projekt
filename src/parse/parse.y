@@ -300,7 +300,6 @@ var_assign_declaration:
 %nterm global_declaration;
 global_declaration:
 	type name	';'				{ parse_global_decl(@$, *current_scope, $type, $name); }
-|	type name '=' exp[val] ';'	{ parse_global_assign_decl(@$, *current_scope, $type, $name, $val); }
 
 %nterm typedef_declaration;
 typedef_declaration:
