@@ -13,6 +13,8 @@
 \usepackage{listings} % code listings
 \usepackage{hyperref}
 \usepackage{titlesec} % section title settings
+\usepackage[style=iso-numeric,backend=bibtex]{biblatex}
+\addbibresource{refs.bib}
 \let\e\expandafter
 
 % references
@@ -308,7 +310,7 @@ a~\file{libc} (knihovna, která obsahuje moho užitečných funkcí -- bez ní b
 \section{PROGRAMOVACÍ PROSTŘEDKY}
 \subsection{C (programovací jazyk)}
 Zvolil jsem tento jazyk, protože s~ním mám hodně zkušeností, je rychlý a~nenáročný na pamět.
-Zároveň další použité knihovny (Flex a~Bison) jsou dělané primárně pro práci s~C, ale umí i~C++.
+Zároveň další použité knihovny (Flex a~Bison) jsou dělané primárně pro práci s~C, ale umí i~C++.\cite{flex:docs}\cite{bison:docs}
 
 Velká nevýhoda C~je nutnost explicitně rezervovat a~uvolňovat paměť. Příště bych zvážil, jestli takovýto projekt nenapsat v~C++, který umí alokovat a~uvolňovat paměť mnohem jednodušeji.
 
@@ -463,7 +465,7 @@ Výrazy lze libovolně závorkovat.
 
 \section{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
 \TODO{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
-
+\printbibliography
 
 \showtodo
 \end{document}
