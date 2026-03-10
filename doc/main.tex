@@ -6,6 +6,8 @@
 \usepackage{csquotes}
 \usepackage{xcolor}
 \usepackage{tikz}
+\usetikzlibrary{graphs}
+\usetikzlibrary{arrows.meta}
 \usepackage{paralist}
 \usepackage{scrextend}
 \usepackage{newtxtext} % Times New Roman
@@ -13,6 +15,7 @@
 \usepackage{listings} % code listings
 \usepackage{hyperref}
 \usepackage{titlesec} % section title settings
+\usepackage{amsmath}
 \usepackage[style=iso-numeric,backend=bibtex]{biblatex}
 \addbibresource{refs.bib}
 \let\e\expandafter
@@ -41,6 +44,7 @@
 	showspaces=false,
 	showstringspaces=false,
 	showtabs=false,
+	language=C,
 	tabsize=2
 }
 \lstset{style=mystyle}
@@ -141,7 +145,48 @@ podpis žáka \hspace*{4cm}
 
 \newpage
 \section{TEORETICKÁ ČÁST} \TODO{teoreticka cast}
-\textit{zpracována podle zadání}
+\subsection{Stavový automat}
+Stavový (či konečný) automat je programovací model, ve kterém je program representován seznamem možných stavů $S$ a~přechody mezi nimi.
+
+Stavový automat vždy začíná v~počátečním stavu $s \in S$ a~jako vstup dostane seznam symbolů.
+Množina všech vstupních symbolů, které daný stavový automat smí dostat se nazývá \textit{abeceda} a~formálně se značí jako $\Sigma$. \cite{wiki:dfa}
+Při každém \uv{kroku} vezme další symbol ze vstupu a~podle něj a~aktuálního stavu se přesune do dalšího stavu, případně zůstane ve stejném stavu.
+Tento krok opakuje, dokud se nedostane do jednoho z~konečných stavů, nebo dokud neprojde celý vstup.
+
+Protože stavové automaty operují s~seznamem symbolů, hodí se například na hledání v~textu (včetně regulárních výrazů) nebo pro parsery.
+Níže je vykreslený stavový automat, který v~textu hledá slovo \uv{ananas}.
+Kruhy značí jednotlivé stavy (počáteční stav je označen šipkou \uv{start}), šipky mezi nimi značí přechody.
+Pro přehlednost nejou vykresleny všechny přechody. Ty které nejsou vykresleny míří vždy zpět do počátečního stavu. Stav označen \uv{F} je konečný stav.
+
+\begin{figure}[h]
+	\centering
+	\begin{tikzpicture}[scale=2]
+		\node[draw,circle] (empty) at (0, 0) {};
+		\node[draw,circle] (a) at (1, 0) {};
+		\node[draw,circle] (an) at (2, 0) {};
+		\node[draw,circle] (ana) at (3, 0) {};
+		\node[draw,circle] (anan) at (4, 0) {};
+		\node[draw,circle] (anana) at (5, 0) {};
+		\node[draw,circle] (ananas) at (6, 0) {F};
+
+		\draw[-{Latex[length=3mm]}] (-1, 0) -- node [above,midway] {start} (empty);
+		\draw[-{Latex[length=3mm]}] (empty) -- node [above,midway] {a} (a);
+		\draw[-{Latex[length=3mm]}] (a) -- node [above,midway] {n} (an);
+		\draw[-{Latex[length=3mm]}] (an) -- node [above,midway] {a} (ana);
+		\draw[-{Latex[length=3mm]}] (ana) -- node [above,midway] {n} (anan);
+		\draw[-{Latex[length=3mm]}] (anan) -- node [above,midway] {a} (anana);
+		\draw[-{Latex[length=3mm]}] (anana) -- node [above,midway] {s} (ananas);
+
+		\draw[-{Latex[length=3mm]}] (ana) edge[bend right] node [above,midway] {a} (a);
+		\draw[-{Latex[length=3mm]}] (anana) edge[bend left=20] node [below,midway] {a} (a);
+		\draw[-{Latex[length=3mm]}] (anana) edge[bend right=60] node [above,midway] {n} (anan);
+	\end{tikzpicture}
+	\caption{Stavový automat pro hledání slova \uv{ananas}}
+\end{figure}
+
+
+
+
 
 
 
@@ -180,7 +225,7 @@ Po tokenizaci přichází na řadu syntaktická analýza (neboli \uv{parsing}), 
 Každý vrchol v~syntaktickém stromě představuje nějakou operaci a~má pod sebou parametry této operace
 (například operace \code{while} cyklu bude pod sebou mít podmínku a~kód cyklu).
 
-\begin{figure} %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{figure}[h] %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \def\mypicture{
 	\begin{tikzpicture}[level distance=1cm,level/.style={sibling distance=4cm/##1}]
 		\node {\code{while}}

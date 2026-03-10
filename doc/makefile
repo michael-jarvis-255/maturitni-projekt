@@ -1,5 +1,6 @@
 
 main.pdf: main.tex refs.bib
+	@rm -rf build/
 	mkdir build
 	cp $^ build/
 	cd build && \
