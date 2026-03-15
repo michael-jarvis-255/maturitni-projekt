@@ -218,7 +218,8 @@ basic_stmt:
 
 %nterm <stmt> return_stmt;
 return_stmt:
-	TK_RETURN exp		{ $$ = create_ast_stmt_return(@$, $exp); }
+	TK_RETURN exp		{ $$ = create_ast_stmt_return_value(@$, $exp); }
+|	TK_RETURN			{ $$ = create_ast_stmt_return(@$); }
 
 %nterm <stmt> break_stmt;
 break_stmt:

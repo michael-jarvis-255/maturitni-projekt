@@ -114,9 +114,13 @@ void parse_function_def(loc_t loc, scope_t* current_scope, ast_datatype_t* retur
 			goto mismatched_types;
 
 	// function types match, replace declaration with definition
-	scope_remove(current_scope, name);
-	free_ast_id(other);
-	goto try_insert;
+	// TODO: this is hacky
+	func_id->func.name = other->func.name;
+	other->func.name = name;
+	free_ast_id_v(*other);
+	*other = *func_id;
+	free(func_id);
+	return;
 
 mismatched_types:
 	printf_error(loc, "definition of function '%s' doesn't match previous declaration (types mismatch)", name);

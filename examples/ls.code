@@ -1,0 +1,126 @@
+
+// TODO: cite: Linux man-pages 6.9.1 - readdir(3), opendir(3), closedir(3)
+typedef struct {
+	u64		d_ino;			/* Inode number */
+	i64		d_off;			/* Not an offset; see below */
+	u16		d_reclen;		/* Length of this record */
+	u8		d_type;			/* Type of file; not supported by all filesystem types */
+	u8		d_name_start;	/* Null-terminated filename */
+} dirent_t;
+dirent_t* readdir(void* dirp);
+void* opendir(u8* name);
+i32 closedir(void* dir);
+
+i32 strcmp(u8* s1, u8* s2);
+u32 strlen(u8* s);
+u8* strcat(u8* dst, u8* src);
+void* malloc(u32 sz);
+void free(void* ptr);
+i32 printf(u8* fmt, u8* str); // note: this language doesn't yet support varargs (...), so we use printf to print strings only
+
+void print_str(u8* str){
+	printf("%s", str);
+}
+
+void print_char(u8 char){
+	printf("%.1s", &char);
+}
+
+
+bool flag_R;
+bool flag_a;
+
+void list_dir(u8* path);
+void list_dir(u8* path){
+	print_str("\x1b[1m");
+	print_str(path);
+	print_str(":\n");
+	print_str("\x1b[0m");
+
+	void* dir = opendir(path);
+	if ((u64)dir == 0){
+		print_str("error: failed to open directory '");
+		print_str(path);
+		print_str("'\n");
+		return;
+	}
+
+	while (1){
+		dirent_t* dirent = readdir(dir);
+		if ((u64)dirent == 0) break;
+		if (!flag_a && dirent->d_name_start == 46) continue; // '.'
+
+		if (dirent->d_type == 4) // DT_DIR
+			print_str("\x1b[1;34m");
+		print_str(&dirent->d_name_start);
+		print_str("\x1b[0m");
+
+		print_str("  ");
+	}
+	print_str("\n");
+	closedir(dir);
+	if (!flag_R) return;
+
+	// list directories recursively
+	dir = opendir(path);
+	while (1){
+		dirent_t* dirent = readdir(dir);
+		if ((u64)dirent == 0) break;
+		if (dirent->d_type != 4) continue; // DT_DIR
+		if (!flag_a && dirent->d_name_start == 46) continue; // '.'
+
+		if (strcmp(&dirent->d_name_start, ".") == 0) continue;
+		if (strcmp(&dirent->d_name_start, "..") == 0) continue;
+
+		u8* next = malloc(strlen(path) + 1 + strlen(&dirent->d_type) + 1);
+		next[0] = 0;
+		strcat(next, path);
+		strcat(next, "/");
+		strcat(next, &dirent->d_name_start);
+
+		print_str("\n");
+		list_dir(next);
+
+		free(next);
+	}
+	closedir(dir);
+}
+
+u32 main(u32 argc, u8** argv){
+	flag_a = 0;
+	flag_R = 0;
+
+	u32 dir_count = 0;
+	u8** dirs = malloc(8*argc);
+
+	for (u32 i=1; i < argc; i = i+1){
+		if (argv[i][0] == 45) { // '-'
+			for (u32 j=1; argv[i][j]; j = j+1){
+				if (argv[i][j] == 97) // 'a'
+					flag_a = 1;
+				else if (argv[i][j] == 82) // 'R'
+					flag_R = 1;
+				else{
+					print_str("unknown flag '-");
+					print_char(argv[i][j]);
+					print_str("'\n");
+				}
+			}
+		} else {
+			dirs[dir_count] = argv[i];
+			dir_count = dir_count + 1;
+		}
+	}
+
+	if (dir_count == 0){
+		dirs[0] = ".";
+		dir_count = 1;
+	}
+
+	for (u32 i=0; i < dir_count; i = i+1){
+		list_dir(dirs[i]);
+		if (i+1 < dir_count){
+			print_str("\n");
+		}
+	}
+}

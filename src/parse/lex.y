@@ -97,7 +97,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 						}
 \"(\\.|[^"\\])*\"		{
 							string_update_yylloc(yytext, yyleng);
-							char* str = strndup(yytext+1, yyleng-2);
+							char* str = strndup(yytext+1, yyleng-1);
 							unsigned int sz = 0;
 							char* curr = str;
 							for (int i=0; i<yyleng-2; i++, curr++, sz++){
@@ -115,8 +115,8 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 									case '"': *curr = '"'; continue;
 									case 'x':
 										if (isxdigit(str[i+1]) && isxdigit(str[i+2])){
-											char c = 0;
-											sscanf("%2hhx", str+i+1, &c);
+											unsigned char c = 0;
+											sscanf(str+i+1, "%2hhx", &c);
 											*curr = c;
 											i += 2;
 											continue;
@@ -125,6 +125,7 @@ struct		update_yylloc(yyleng); return TK_STRUCT;
 								}
 								*curr = str[i];
 							}
+							*curr = 0; sz++;
 							yylval.expr = create_ast_expr_string_const(yylloc, str, sz);
 							return TK_CONST;
 						}

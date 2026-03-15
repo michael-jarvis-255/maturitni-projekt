@@ -277,11 +277,19 @@ ast_stmt_t create_ast_stmt_if_else(loc_t loc, ast_expr_t cond, ast_stmt_t iftrue
 		.if_else.iffalse = convert_to_ptr(iffalse)
 	};
 }
-ast_stmt_t create_ast_stmt_return(loc_t loc, ast_expr_t expr){
+ast_stmt_t create_ast_stmt_return_value(loc_t loc, ast_expr_t expr){
 	return (ast_stmt_t){
 		.type = AST_STMT_RETURN,
 		.loc = loc,
 		.return_.val = convert_to_ptr(expr)
+	};
+}
+
+ast_stmt_t create_ast_stmt_return(loc_t loc){
+	return (ast_stmt_t){
+		.type = AST_STMT_RETURN,
+		.loc = loc,
+		.return_.val = 0
 	};
 }
 
@@ -336,7 +344,7 @@ void free_ast_stmt_v(ast_stmt_t stmt){
 		case AST_STMT_CONTINUE:
 			break;
 		case AST_STMT_RETURN:
-			free_ast_expr(stmt.return_.val);
+			if (stmt.return_.val) free_ast_expr(stmt.return_.val);
 			break;
 		case AST_STMT_WHILE:
 			free_ast_expr_v(stmt.while_.cond);
