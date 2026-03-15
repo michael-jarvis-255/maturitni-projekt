@@ -184,9 +184,25 @@ Pro přehlednost nejou vykresleny všechny přechody. Ty které nejsou vykreslen
 	\caption{Stavový automat pro hledání slova \uv{ananas}}
 \end{figure}
 
+Důležité jsou zpětné hrany, díky kterým stačí každé písmeno v~textu projít pouze jednou. Využijí například při hledání v~textu \uv{anananas}.
 
+\subsection{Parsery}
+Parser (též syntakticý analyzátor) dostane jako vstup seznam tokenů (typicky to jsou klíčová slova, názvy proměných, čísla a~znaménka \code{\{}, \code{+}, apod.),
+které následně podle daných pravidel poskládá do větších celků (takzvaných symbolů). Jedno takové pravidlo může být například \uv{dva výrazy oddělené znaménkem \code{+} je také výraz} nebo
+\uv{název proměnné, znaménko \code{=}, výraz a~středník je jedna instrukce}.
 
+Pravidla budu dále psát ve stejném formátu jako program GNU Bison.
+Každé pravidlo se skládá z~jména výsledného symbolu, dvojtečky a~seznamem symbolů, které lze nahradit za výsledný symbol
+(symboly reprezentující jeden znak budu značit daným snakem v~uvozovkách) \cite{bison:docs}.
+Několik pravidel, které vytvoří stejný výsledný symbol budu psát za sebe, oddělené svislou čarou.
 
+Jednoduché pravidlo pro výrazy by mohlo vypadat následovně:
+
+\begin{lstlisting}[language=]
+vyraz:
+	vyraz '+' cislo
+|	vyraz '-' cislo
+\end{lstlisting}
 
 
 
