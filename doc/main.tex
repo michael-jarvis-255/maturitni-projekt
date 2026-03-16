@@ -215,15 +215,15 @@ Jazyk, který program zpracovává je velmi podobný jazyku C, ale je mnohem ome
 Měl by umět základní operace s~čísly a~proměnnými (včetně globálních proměnných), funkce a~strukturované datové typy. (Podrobnější popis v~části \fullref{sec:language})
 
 
-\section{ZPŮSOBY ŘEŠENÍ A POUŽITÉ POSTUPY} \TODO{podrobnější popis?}
-%\textit{JAK JE TO ŘEŠENO}\\
-%\textit{podrobný popis programu, použité algoritmy, datové struktury, způsoby testování funkčnosti, ošetření chyb}
-
+\section{ZPŮSOBY ŘEŠENÍ A POUŽITÉ POSTUPY}
+\TODO{podrobnější popis?}
 \TODO{Pak ukažte pár konkrétních kusů kódu, kde prezentujete nějaký zajímavý problém či jinak klíčovou část vaší aplikace a rozepište se, proč to řešíte a jak to řešíte (a jaké třeba byly další varianty). "tohle bylo složité či zajímavé a takhle jsem se s tím popral".}
 
 \subsection{Použité datové struktury}
 Implementoval jsem si dvě datové struktury, seznam a~hashmapu (v souborech \file{src/lib/list.h} a~\file{src/lib/hashmap.h}).
-Obě jsou definované skrze makra, takže lze v~kódu jednoduše vytvořit seznam s~daným datovým typem.
+Obě jsou definované skrze makra, takže lze v~kódu jednoduše vytvořit seznam/hashmapu s~daným datovým typem.
+
+Navíc jsem si v \file{src/lib/bignum.c} implementoval počítání s neomezeně velkými čisly. (Ty jsou využité pro číselné konstanty v jazyce.)
 
 \subsection{Tokenizace}
 První krok kompileru je tokenizace -- vstupní soubor je rozdělen na jednotlivé tokeny (nejmenší syntaktické celky).
@@ -522,6 +522,16 @@ Navíc jsou povolené operace s~jedním argumentem:
 \end{itemize}
 
 Výrazy lze libovolně závorkovat.
+
+\subsubsection{Konstanty}
+Konstanta může být buď celočíselná, desetinná, nebo textový řetězec.
+Desetinná konstanta musí obsahovat desetinnou tečku nebo písmeno \uv{e} následované exponentem čísla (např. \code{15.0} nebo \code{1e9}).
+Textový řetězec začíná a končí uvozovkami \code{"}. Zpětná lomítka následovné uvozovkou místo ukončení řetězce do něj vloží uvozovku.
+Zpětné lomítko následované písmenem \uv{n} vloží nový řádek, \uv{r} vloží symbol CR (carriage return), \uv{x} následované dvěmi hexadecimálními číslicemi vloží daný byte.
+
+Celočíselné konstanty mohou být libovolně velké, a operace s nimi mohou mít libovolně velký výsledek.
+Pokud se celočíselná konstanta převede na specifický datový typ (například \code{u64}), ať už explicitně (použitím \code{(u64)} před výrazem) nebo implicitně (např. při sčítání s proměnou s typem),
+zůstane omezeně velká v limitech daného datového typu (pokud se při převodu změní hodnota čísla, vypíše kompiler varování).
 
 
 \section{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
