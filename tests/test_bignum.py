@@ -3,42 +3,64 @@ from subprocess import PIPE, Popen
 import sys
 sys.set_int_max_str_digits(6000)
 
-MAX_BITS = 4096
+MAX_BITS = 256 # 4096
 TEST_COUNT = 1000
+
+def generate_random_number() -> int:
+    if (random.random() < 0.2): return 0 # 0 is often a special case we want to test for
+    l = random.randrange(0, MAX_BITS)
+    return random.randrange(-2**l, 2**l)
 
 def sign(x):
     if x > 0: return 1
     if x == 0: return 0
     return -1
 
-for i in range(TEST_COUNT): # TODO: test different sizes (long a with short b, etc.)
-    al,bl = [random.randrange(0, MAX_BITS) for _ in "ab"]
-    a,b = [random.randrange(-2**l, 2**l) for l in (al, bl)]
-    print(i, end='\r')
-    op = random.choice(['+', '-', '*', '/'])
 
+
+def run(*args):
     try:
-        p = Popen(["./a.out", str(a), op, str(b)], stdout=PIPE)
+        p = Popen(["./a.out", *args], stdout=PIPE)
         p.wait()
     except:
         print()
-        print(a, op, b)
-        print("failed test! received error")
+        print("Error: Popen failed!")
         exit(1)
-    
-    res = int(p.stdout.read().strip())
-    expected = {
-        '+': a+b,
-        '-': a-b,
-        '*': a*b,
-        '/': (abs(a)//abs(b)) * sign(a)*sign(b)
-    }[op]
 
-    if res != expected:
-        print()
-        print(a, op, b)
-        print(f"failed test!\n{expected} expected\n{res} recieved")
+    res = p.stdout.read().strip()
+    if res == b"err": return "err"
+    try:
+        res = int(res)
+    except:
+        print("Error: expected number, received:\n", res)
+        print("args:", args)
         exit(1)
-print(' '*64, end='\r')
-print(f"all {TEST_COUNT} tests passed")
 
+    return res
+
+
+
+def test_binop(test_count, op, solver):
+    for i in range(test_count):
+        print(f"testing {op}: {i}/{test_count}", end='\r')
+        a = generate_random_number()
+        b = generate_random_number() if random.random() < 0.2 else a # a==b is often a special case we want to test for
+
+        res = run(op, str(a), str(b))
+        correct = solver(a, b)
+
+        if res != correct:
+            print(f"Incorrect result!      \nop: {op}\na: {a}\nb: {b}\ngot: {res}\nexp: {correct}")
+            exit(1)
+    print(f"all tests passed for {op}")
+
+TEST_COUNT = 1000
+test_binop(TEST_COUNT, "+", lambda x,y: x+y)
+test_binop(TEST_COUNT, "-", lambda x,y: x-y)
+test_binop(TEST_COUNT, "*", lambda x,y: x*y)
+test_binop(TEST_COUNT, "/", lambda x,y: "err" if y==0 else sign(x)*sign(y)*(abs(x)//abs(y)))
+test_binop(TEST_COUNT, "%", lambda x,y: "err" if y==0 else x % abs(y))
+test_binop(TEST_COUNT, "cmp", lambda x,y: -1 if x < y else 0 if x == y else 1)
+test_binop(TEST_COUNT, "xor", lambda x,y: x^y)
+test_binop(TEST_COUNT, "and", lambda x,y: x&y)
+test_binop(TEST_COUNT, "or", lambda x,y: x|y)

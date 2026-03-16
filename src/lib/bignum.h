@@ -38,5 +38,6 @@ void bignum_mul_uint(bignum_t* a, uint32_t b);
 uint32_t bignum_divmod_uint(bignum_t* a, uint32_t b);
 
 void bignum_shift_left_uint(bignum_t* x, uint32_t shift);
+void bignum_shift_right_uint(bignum_t* x, uint32_t shift);
 
 #endif

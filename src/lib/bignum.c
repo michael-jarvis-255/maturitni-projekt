@@ -204,6 +204,22 @@ void bignum_shift_left_uint(bignum_t* x, uint shift){
 		}
 	}
 }
+void bignum_shift_right_uint(bignum_t* x, uint32_t shift){
+	unsigned int block_shift = shift / 32;
+	if (block_shift){
+		for (unsigned int i = 0; i < x->size; i++){
+			x->arr[i] = bignum_extract(x, i + block_shift);
+		}
+	}
+
+	shift = shift - 32*block_shift;
+	if (!shift) return;
+
+	for (unsigned int i = 0; i < x->size; i++){
+		x->arr[i] >>= shift;
+		x->arr[i] |= (bignum_extract(x, i+1) >> (32-shift));
+	}
+}
 
 unsigned int bignum_divmod_uint(bignum_t* a, uint b){
 	uint carry = 0;
@@ -321,7 +337,7 @@ void bignum_mul(bignum_t* a, const bignum_t* b){
 }
 static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b, bool* err){ // return div, leave mod in a
 	bignum_t* res = create_bignum();
-	if (bignum_unsigned_cmp_uint(a, 0) == 0){
+	if (bignum_unsigned_cmp_uint(b, 0) == 0){
 		*err = true;
 		return res;
 	}
@@ -356,9 +372,14 @@ static bignum_t* bignum_divmod(bignum_t* a, const bignum_t* b, bool* err){ // re
 		}
 	}
 
-	while (bignum_unsigned_cmp(a, b) > -1){
+	while (bignum_unsigned_cmp(a, b) > -1){ // a > b
 		bignum_unsigned_sub(a, b);
 		bignum_unsigned_add_uint(res, 1);
+	}
+
+	if (asign && bignum_is_nonzero(a)) { // modulo result needs to be adjusted
+		bignum_unsigned_sub(a, b);
+		a->sign = false;
 	}
 
 	res->sign = asign != b->sign;
@@ -370,7 +391,6 @@ void bignum_div(bignum_t* a, const bignum_t* b, bool* err){
 	bignum_t* res = bignum_divmod(a, b, err);
 	bignum_move_and_free(a, res);
 }
-// TODO: test everything below here
 void bignum_mod(bignum_t* a, const bignum_t* b, bool* err){
 	bignum_t* res = bignum_divmod(a, b, err);
 	free_bignum(res);
@@ -398,6 +418,7 @@ void bignum_xor(bignum_t* a, const bignum_t* b){
 		unsigned int i = j-1;
 		bignum_insert(a, i, bignum_extract(a, i) ^ bignum_extract(b, i));
 	}
+	a->sign = a->sign != b->sign;
 }
 void bignum_and(bignum_t* a, const bignum_t* b){
 	unsigned int sz = (a->size > b->size) ? a->size : b->size;
