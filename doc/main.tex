@@ -1,5 +1,5 @@
 \documentclass[12pt]{article}
-\usepackage[a4paper, margin=2cm]{geometry}
+\usepackage[a4paper, margin=3cm]{geometry}
 \usepackage[T1]{fontenc}
 \usepackage[czech]{babel}
 \usepackage[utf8]{inputenc}
@@ -68,7 +68,7 @@
 \TODO{add citations}
 \TODO{proper baseline skip and make sure its normostrana}
 \setlength{\parindent}{0pt}
-\setlength{\baselineskip}{18pt} % font size is 12pt
+\renewcommand{\baselinestretch}{1.5} 
 \setlength{\parskip}{12pt}
 \titleformat{\section}{\normalfont\fontsize{14pt}{\baselineskip}\bfseries}{\thesection.}{1em}{}
 \titleformat{\subsection}{\normalfont\fontsize{14pt}{\baselineskip}\bfseries}{\thesubsection.}{1em}{}
@@ -505,7 +505,7 @@ Povolené operace jsou:
 	\item bitový posun doleva a~doprava (\code{<<}, \code{>>})
 	\item porovnání (\code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=})
 	\item bitwise AND (\code{\&})
-	\item bitwise XOR (\code{\^})
+	\item bitwise XOR (\code{\textasciicircum})
 	\item bitwise OR  (\code{|})
 	\item logický AND (\code{\&\&}) -- druhý argument se vyhodnotí pouze pokud se první vyhodnotí jako 1
 	\item logický OR (\code{||}) -- druhý argument se vyhodnotí pouze pokud se první vyhodnotí jako 0
@@ -516,7 +516,7 @@ Operace ve stejné skupině se vyhodnocují vždy zleva doprava.
 Navíc jsou povolené operace s~jedním argumentem:
 \begin{itemize}
 	\item negace (\code{-})
-	\item bitwise NOT (\code{\~})
+	\item bitwise NOT (\code{\textasciitilde})
 	\item logický NOT (\code{!})
 	\item dereference (\code{*}) -- čtení z~paměti, funguje pouze s~typem pointer
 \end{itemize}
