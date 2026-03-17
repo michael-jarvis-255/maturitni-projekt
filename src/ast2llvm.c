@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include "ast2llvm.h"
 #include "message.h"
+#include <limits.h>
 
 #define ptr_bits 64
 
@@ -762,9 +763,43 @@ static llvm_typed_value_t ast2llvm_int_const_binop(loc_t loc, ast_expr_binop_enu
 		case AST_EXPR_BINOP_NE:
 			bignum_set_uint(left_operand.int_const, bignum_cmp(left_operand.int_const, right_operand.int_const) != 0); break;
 		case AST_EXPR_BINOP_SHL:
-			printf("<shift left unimplemented>\n"); exit(1); // TODO
-		case AST_EXPR_BINOP_SHR:
-			printf("<shift right unimplemented>\n"); exit(1); // TODO
+		{
+			if (bignum_cmp_uint(left_operand.int_const, 0) == -1){
+				printf_error(loc, "left shift of negative number");
+				left_operand = LLVM_TYPED_POISON(0);
+				break;
+			}
+			if (bignum_cmp_uint(right_operand.int_const, 0) == -1){
+				printf_error(loc, "left shift by negative number");
+				right_operand = LLVM_TYPED_POISON(0);
+				break;
+			}
+			if (bignum_cmp_uint(right_operand.int_const, UINT_MAX) == 1){
+				printf_error(loc, "left shift too large");
+				right_operand = LLVM_TYPED_POISON(0);
+				break;
+			}
+			bignum_shift_left_uint(left_operand.int_const, bignum_to_uint(right_operand.int_const));
+			break;
+		}
+		case AST_EXPR_BINOP_SHR:{
+			if (bignum_cmp_uint(left_operand.int_const, 0) == -1){
+				printf_error(loc, "right shift of negative number");
+				left_operand = LLVM_TYPED_POISON(0);
+				break;
+			}
+			if (bignum_cmp_uint(right_operand.int_const, 0) == -1){
+				printf_error(loc, "right shift by negative number");
+				right_operand = LLVM_TYPED_POISON(0);
+				break;
+			}
+			unsigned int shift = bignum_to_uint(right_operand.int_const);
+			if (bignum_cmp_uint(right_operand.int_const, UINT_MAX) == 1){
+				shift = UINT_MAX;
+			}
+			bignum_shift_right_uint(left_operand.int_const, shift);
+			break;
+		}
 		case AST_EXPR_BINOP_BXOR:
 			bignum_xor(left_operand.int_const, right_operand.int_const); break;
 		case AST_EXPR_BINOP_BAND:

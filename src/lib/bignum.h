@@ -49,5 +49,6 @@ char* bignum_to_string(const bignum_t* x);
 double bignum_to_double(bignum_t* x);
 bool bignum_trunc_unsigned(bignum_t* a, unsigned int bitwidth);
 bool bignum_trunc_signed(bignum_t* a, unsigned int bitwidth);
+uint32_t bignum_to_uint(const bignum_t* a);
 
 #endif

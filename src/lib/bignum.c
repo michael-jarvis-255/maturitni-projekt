@@ -527,3 +527,6 @@ bool bignum_trunc_signed(bignum_t* a, unsigned int bitwidth){
 	a->sign_ext = new_sign;
 	return changed;
 }
+uint32_t bignum_to_uint(const bignum_t* a){
+	return a->arr[0];
+}
