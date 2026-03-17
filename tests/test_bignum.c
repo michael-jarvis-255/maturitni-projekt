@@ -16,6 +16,10 @@ int main(int argc, const char** argv){
 	for (unsigned int i=0; i<n; i++){
 		nums[i] = create_bignum();
 		bignum_from_string(nums[i], argv[i+2]);
+
+		//char* res = bignum_to_string(nums[i]);
+		//puts(res);
+		//free(res);
 	}
 
 	bool err = false;
@@ -41,13 +45,14 @@ int main(int argc, const char** argv){
 		bignum_or(nums[0], nums[1]);
 	} else if (strcmp(op, "double") == 0) {
 		double res = bignum_to_double(nums[0]);
-		printf("%lg\n", res);
+		printf("%.20e\n", res);
 		goto end;
 	}
 	// TODO: trunc
 	// TODO: uint tests
+	// TODO: shifts
 	else {
-		fprintf(stderr, "unknown operation '%s'", argv[2]);
+		fprintf(stderr, "unknown operation '%s'", op);
 		return 1;
 	}
 	if (err) {

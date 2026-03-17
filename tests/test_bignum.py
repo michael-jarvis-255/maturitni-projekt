@@ -20,7 +20,7 @@ def sign(x):
 
 def run(*args):
     try:
-        p = Popen(["./a.out", *args], stdout=PIPE)
+        p = Popen(["./a.out", *args], stdout=PIPE, stderr=PIPE)
         p.wait()
     except:
         print()
@@ -30,13 +30,19 @@ def run(*args):
     res = p.stdout.read().strip()
     if res == b"err": return "err"
     try:
-        res = int(res)
+        return int(res)
     except:
-        print("Error: expected number, received:\n", res)
-        print("args:", args)
-        exit(1)
+        pass
 
-    return res
+    try:
+        return float(res)
+    except:
+        pass
+
+    print("Error: expected number, received:", res, sep="\n")
+    print("args:", args)
+    print("stderr:", p.stderr.read().strip())
+    exit(1)
 
 
 
@@ -54,6 +60,21 @@ def test_binop(test_count, op, solver):
             exit(1)
     print(f"all tests passed for {op}")
 
+def test_double(test_count):
+    for i in range(test_count):
+        print(f"testing double: {i}/{test_count}", end='\r')
+        x = generate_random_number()
+
+        res = run("double", str(x))
+        correct = float(x)
+        err = 0.0000000001
+
+        if (correct*(1-err) <= res) != (res <= correct*(1+err)):
+            print(f"Incorrect result!      \nop: \"double\"\nx: {x}\n\ngot: {res}\nexp: {correct}")
+            exit(1)
+    print(f"all tests passed for \"double\"")
+
+
 TEST_COUNT = 1000
 test_binop(TEST_COUNT, "+", lambda x,y: x+y)
 test_binop(TEST_COUNT, "-", lambda x,y: x-y)
@@ -64,3 +85,4 @@ test_binop(TEST_COUNT, "cmp", lambda x,y: -1 if x < y else 0 if x == y else 1)
 test_binop(TEST_COUNT, "xor", lambda x,y: x^y)
 test_binop(TEST_COUNT, "and", lambda x,y: x&y)
 test_binop(TEST_COUNT, "or", lambda x,y: x|y)
+test_double(TEST_COUNT)

@@ -371,7 +371,7 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 			case AST_DATATYPE_VOID: goto error;
 			case AST_DATATYPE_POINTER:
 			{
-				bool changed = bignum_trunc(value.int_const, ptr_bits, false);
+				bool changed = bignum_trunc_unsigned(value.int_const, ptr_bits);
 				if (changed){
 					char* str = bignum_to_string(value.int_const);
 					printf_warning(loc, "casting integer constant to pointer type '%s' changes value to '%s'", trgt_type->name, str);
@@ -402,7 +402,10 @@ static llvm_typed_value_t ast2llvm_cast(llvm_typed_value_t value, ast_datatype_t
 				return LLVM_TYPED_POISON(trgt_type);
 			case AST_DATATYPE_INTEGRAL:
 			{
-				bool changed = bignum_trunc(value.int_const, trgt_type->integral.bitwidth, trgt_type->integral.signed_);
+				bool changed;
+				if (trgt_type->integral.signed_) changed = bignum_trunc_signed(value.int_const, trgt_type->integral.bitwidth);
+				else changed = bignum_trunc_unsigned(value.int_const, trgt_type->integral.bitwidth);
+
 				if (changed){
 					char* str = bignum_to_string(value.int_const);
 					printf_warning(loc, "casting integer constant to type '%s' changes value to '%s'", trgt_type->name, str);
@@ -774,6 +777,12 @@ static llvm_typed_value_t ast2llvm_int_const_binop(loc_t loc, ast_expr_binop_enu
 			bignum_set_uint(left_operand.int_const, (bignum_cmp_uint(left_operand.int_const, 0)==0) || (bignum_cmp_uint(left_operand.int_const, 0)==0)); break;
 	}
 	free_bignum(right_operand.int_const);
+
+	if (left_operand.ast_type){
+		if (left_operand.ast_type->integral.signed_) bignum_trunc_signed(left_operand.int_const, left_operand.ast_type->integral.bitwidth);
+		else bignum_trunc_unsigned(left_operand.int_const, left_operand.ast_type->integral.bitwidth);
+	}
+
 	return left_operand;
 }
 
