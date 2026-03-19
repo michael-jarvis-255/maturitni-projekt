@@ -262,7 +262,7 @@ V~tomto kroku se také zahodí komentáře (text obalený v~\uv{\code{/*}} a~\uv
 
 Ke každému tokenu se také přidá informace o~tom, kde ve zdrojovém kódu se vyskytuje. Pokud program narazí na chybu, může tak k~chybové hlášce (nebo varování) přidat místo, kde se chyba vyskytla.
 
-Pro tokenizaci jsem použil knihovnu Flex, která ze seznamu pravidel (soubor \file{src/parse/lex.y}) vygeneruje kód potřebný k~tokenizaci.
+Pro tokenizaci jsem použil knihovnu Flex, která ze seznamu pravidel (\file{src/parse/lex.y}) vygeneruje kód potřebný k~tokenizaci.
 
 
 \subsection{Syntaktická analýza}
@@ -337,7 +337,7 @@ Celý strom je pak uložen v~datovém typu \code{ast\_t}. (Zkratka \code{ast} od
 
 V~\file{src/ast/main.c} jsou implementace pomocných funkcí pro vytváření syntaktického stromu
 
-V~souborech \file{src/ast/scope.c} a~\file{src/ast/scope.h} je definovaný datový typ \code{ast\_scope\_t*}, který mapuje jména proměnných, funkcí a~typů na jejich objekty.
+V~souborech \file{src/ast/scope.c} a~\file{src/ast/scope.h} je definovaný typ \code{ast\_scope\_t*}, který mapuje jména proměnných, funkcí a~typů na jejich objekty.
 Každý blok (např. uvnitř cyklu, podmínek) má vlastní \code{ast\_scope\_t*}, do kterého si ukládá informace o~lokálních proměnných.
 Globální proměnné a~funkce jsou uložené v~\code{ast\_scope\_t*} v~typu \code{ast\_t}.
 
@@ -346,7 +346,7 @@ Ta ze seznamu pravidel (\file{src/parse/parse.y}), které popisují syntax jazyk
 Zárověn zkontroluje, že syntax jazyka je jednoznačný, tedy že každý seznam tokenů lze převést do syntaktického stromu pouze jedním způsobem.
 To je důležité hlavně u~vyhodnocování výrazů, protože \code{a+b*c} se musí vyhodnotit jako \code{a+(b*c)}. Operace násobení, dělení a~modulo se musí vyhodnotit zleva doprava.
 
-Hlavní funkce \code{parse\_file} a~několik pomocných funkcí pro parsování jsou v~\file{src/parse/main.c}.
+Hlavní funkce \code{parse\_file} a~několik pomocných funkcí pro parsování jsou v~souboru \file{src/parse/main.c}.
 
 \subsection{Překlad do LLVM}
 Ze syntaktického stromu se dále vygeneruje LLVM kód.
@@ -403,14 +403,14 @@ a~\file{libc} (knihovna, která obsahuje mnoho standardních funkcí -- bez ní 
 \section{OVLÁDÁNÍ}
 \subsection{Použití kompileru}\label{sec:usage}
 
-Kompiler se musí spustit z~příkazové řádky s~alespoň jedním argumentem: lokací vstupního souboru. (Kompiler umí kompilovat pouze jeden soubor najednou.)
+Kompiler se musí spustit z~příkazové řádky s~alespoň jedním argumentem: lokací vstupního souboru. (Kompiler umí kompilovat pouze jeden soubor najednou.)\\
 Např.: \code{./compiler code.txt}.
 
-Pokud chceme výsledek kompilace uložit do souboru, stačí použít \uv{\code{-o <výstupní soubor>}}.
+Pokud chceme výsledek kompilace uložit do souboru, stačí použít vlajku \uv{\code{-o}} s~lokací výstupního souboru.
 Pokud se nespecifikuje výstupní soubor, tak se pouze vypíší případné chybové hlášky nebo varování a~\uv{\code{no output path specified}}.
 
-Kompiler umí generovat i~assembly nebo LLVM kód, pokud dostane vlajku \uv{\code{-filetype=asm}}, respektive \uv{\code{-filetype=llvm}}.
-V~obou případech vypíše daný kód na standardní výstup, pokud nedostane lokaci výstupního souboru (vlajkou \uv{\code{-o}}).
+Kompiler umí generovat místo spustitelného souboru i~assembly nebo LLVM kód, pokud dostane vlajku \uv{\code{-filetype=asm}}, respektive \uv{\code{-filetype=llvm}}.
+V~obou případech vypíše daný kód na standardní výstup, pokud nedostane lokaci výstupního souboru.
 
 Stupeň optimalizace lze ovládat vlajkami \code{-O0} (žádná optimalizace), \code{-O1}, \code{-O2} a~\code{-O3} (nejvyšší stupeň optimalizace).
 
@@ -561,8 +561,8 @@ Instalace není potřeba, stačí spustit soubor \file{compiler} (viz \fullref{s
 Případně lze program zkompilovat pomocí programu \code{Make}.
 
 \subsection{Nároky na software (používání projektu)}
-Aby výsledný program správně fungoval, musí běžet na operačním systému linux.
-V~systému musí být knihovny \file{/lib64/ld-linux-x86-64.so.2}, \file{/lib/x86\_64-linux-gnu/crt1.o} a~knihovna \file{libc}. (Tyto knihovny jsou v~linuxovém prostředí standardní.)
+Projekt funguje pouze na operačním systému Linux.
+V~systému musí být knihovna C~runtime, a~to v~lokaci \file{/lib/x86\_64-linux-gnu/crt1.o} a~knihovna \file{libc}.
 
 \subsection{Nároky na software (kompilace projektu)}
 Jsou potřeba programy \code{gcc} (C kompiler), \code{bison}, \code{flex} a~\code{make}.

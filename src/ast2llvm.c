@@ -200,6 +200,8 @@ static llvm_typed_value_t ast2llvm_get_lvalue_pointer(const var2reg_map_t* var2r
 			type = val.ast_type;
 			break;
 		}
+		default:
+			INTERNAL_ERROR();
 	}
 	if (type == 0) return LLVM_TYPED_POISON(0);
 

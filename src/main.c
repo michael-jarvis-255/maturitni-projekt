@@ -200,7 +200,7 @@ int main(int argc, const char** argv){
 		free(obj_fp);
 		return 1;
 	}
-	system_concat(4, "ld -lc -L /lib/x86_64-linux-gnu -dynamic-linker /lib64/ld-linux-x86-64.so.2 /lib/x86_64-linux-gnu/crt1.o", obj_fp, "-o", options.output_path);
+	system_concat(4, "ld -lc -dynamic-linker /lib/ld-linux.so.2 /lib/x86_64-linux-gnu/crt1.o", obj_fp, "-o", options.output_path);
 	unlink(obj_fp);
 	free(obj_fp);
 

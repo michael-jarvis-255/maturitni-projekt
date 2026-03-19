@@ -88,7 +88,7 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 		case LLVM_VALUE_UNDEF: tprint(t, "undef"); break;
 		case LLVM_VALUE_POISON: tprint(t, "poison"); break;
 		case LLVM_VALUE_REG: tprintf(t, "%%%u", val.reg.idx); break;
-		case LLVM_VALUE_DOUBLE_CONST: tprintf(t, "%#016lx", *(unsigned long*)&val.double_const); break;
+		case LLVM_VALUE_DOUBLE_CONST: tprintf(t, "%#016lx", (union{double d;uint64_t i;}){.d=val.double_const}.i); break;
 		case LLVM_VALUE_GLOBAL: tprintf(t, "@%s", val.global_name); break;
 		case LLVM_VALUE_INT_CONST:
 		{
