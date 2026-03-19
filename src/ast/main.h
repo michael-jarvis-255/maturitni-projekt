@@ -307,9 +307,6 @@ ast_stmt_t create_ast_stmt_for(loc_t loc, ast_stmt_t init, ast_expr_t cond, ast_
 void free_ast_stmt_v(ast_stmt_t stmt);
 void free_ast_stmt(ast_stmt_t* stmt);
 
-// TODO: move elsewhere
-extern bool received_error;
-
 // datatypes
 bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b);
 ast_datatype_t* get_ast_pointer_type(ast_datatype_t* base);

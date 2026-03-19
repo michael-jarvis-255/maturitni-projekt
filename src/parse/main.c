@@ -114,7 +114,6 @@ void parse_function_def(loc_t loc, scope_t* current_scope, ast_datatype_t* retur
 			goto mismatched_types;
 
 	// function types match, replace declaration with definition
-	// TODO: this is hacky
 	func_id->func.name = other->func.name;
 	other->func.name = name;
 	free_ast_id_v(*other);
@@ -128,6 +127,7 @@ mismatched_types:
 	goto free_and_return;
 
 free_and_return:
+	free(name);
 	free_ast_id(func_id);
 	return;
 

@@ -12,8 +12,6 @@ create_list_type_impl(ast_stmt, true)
 create_list_type_impl(ast_expr, true)
 create_list_type_impl(ast_lvalue_member_access, false)
 
-bool received_error;
-
 void free_ast_variable_v(ast_variable_t var){
 	free(var.name);
 }
@@ -410,7 +408,7 @@ bool ast_datatype_eq(const ast_datatype_t* a, const ast_datatype_t* b){
 			if (a->floating.bitwidth != b->floating.bitwidth) return false;
 			break;
 		case AST_DATATYPE_STRUCTURED:
-			return a == b; // TODO: compare members?
+			return a == b;
 		case AST_DATATYPE_POINTER:
 			return ast_datatype_eq(a->pointer.base, b->pointer.base);
 	}

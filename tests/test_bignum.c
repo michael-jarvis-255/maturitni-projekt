@@ -47,11 +47,7 @@ int main(int argc, const char** argv){
 		double res = bignum_to_double(nums[0]);
 		printf("%.20e\n", res);
 		goto end;
-	}
-	// TODO: trunc
-	// TODO: uint tests
-	// TODO: shifts
-	else {
+	} else {
 		fprintf(stderr, "unknown operation '%s'", op);
 		return 1;
 	}

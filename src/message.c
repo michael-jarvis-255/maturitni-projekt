@@ -4,7 +4,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
-extern bool received_error; // TODO: something better than this
+bool received_error;
 source_lines_t global_source_lines;
 
 source_lines_t create_source_lines(const char* source){

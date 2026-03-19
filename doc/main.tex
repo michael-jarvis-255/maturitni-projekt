@@ -68,7 +68,7 @@
 \TODO{add citations}
 \TODO{proper baseline skip and make sure its normostrana}
 \setlength{\parindent}{0pt}
-\renewcommand{\baselinestretch}{1.5} 
+\renewcommand{\baselinestretch}{1.5}
 \setlength{\parskip}{12pt}
 \titleformat{\section}{\normalfont\fontsize{14pt}{\baselineskip}\bfseries}{\thesection.}{1em}{}
 \titleformat{\subsection}{\normalfont\fontsize{14pt}{\baselineskip}\bfseries}{\thesubsection.}{1em}{}
@@ -208,38 +208,67 @@ vyraz:
 
 
 \section{CÍLE PRÁCE}
-Cílem této práce bylo vytvořit program, který jako vstup dostane soubor se zdrojovým kódem a~přeloží ho do kódu LLVM, který pomocí knihovny LLVM toolchain přeloží do strojového kódu.
+Cílem této práce bylo vytvořit program, který jako vstup dostane soubor se zdrojovým kódem a~přeloží ho do kódu LLVM, který pomocí programů z~LLVM toolchain přeloží do strojového kódu.
 V~případě chyby ve vstupním zdrojovém kódu vypíše chybovou hlášku. Také by měl umět v~některých případech vypisovat pomocná varování.
 
 Jazyk, který program zpracovává je velmi podobný jazyku C, ale je mnohem omezenější.
-Měl by umět základní operace s~čísly a~proměnnými (včetně globálních proměnných), funkce a~strukturované datové typy. (Podrobnější popis v~části \fullref{sec:language})
+Měl by umět základní operace s~čísly a~proměnnými (včetně globálních proměnných), funkce, cykly a~strukturované datové typy. (Podrobný popis v~části \fullref{sec:language})
+
+
+\section{PROGRAMOVACÍ PROSTŘEDKY}
+\subsection{C (programovací jazyk)}
+Zvolil jsem tento jazyk, protože s~ním mám hodně zkušeností, navíc je rychlý a~nenáročný na pamět.
+Zároveň další použité knihovny (Flex a~Bison) primárně pracují s~C, ale umí i~C++.\cite{flex:docs,bison:docs}
+
+Velká nevýhoda C~je nutnost explicitně rezervovat a~uvolňovat paměť. Příště bych tento projekt napsal v~C++, který umí reservovat a~uvolňovat paměť mnohem jednodušeji.
+
+\subsection{GNU Make}
+Make je program, který umožňuje jednoduše spuštět všechny potřebné příkazy pro kompilaci projektu.
+Pravidla v~souboru\file{makefile} definují, které soubory jsou potřeba k~vytvoření výsledného souboru (příp. mezivýsledného) a~příkazy jak ho vytvořit.
+Make pak spustí pouze ty příkazy, které jsou potřeba (pokud se nezměnili zdrojové soubory, nepokusí se výsledný soubor vyrobit znovu).
+
+Ulehčuje a~zrychluje tím vývoj projektu, protože celou kompilaci lze spustit jedním jednoduchým příkazem.
+
+\subsection{GNU Bison}
+Bison je generátor parserů (ze seznamu parsovacích pravidel (syntaxu) vytvoří parsovací kód) pro jazyky C, C++, D~a~Java.\cite{bison:docs}
+Bison jsem vybral, protože je rychlý a~dovoluje rychlé experimentování s~různými způsoby parsování syntaxu.
+Navíc je velmi užitečná jeho schoponost generovat protipříklady pro nejednoznačné syntaxe.
+
+\subsection{GNU Flex}
+Knihovna Flex generuje kód, který umí text rozdělit na tokeny podle daných pravidel.
+Vybral jsem Flex hlavně kvůli jednoduché integraci s~knihovnou Bison.
+
+\subsection{LLVM toolchain}
+LLVM toolchain je soubor několika hotových programů a~knihoven, které umí pracovat s~LLVM kódem.
+Z~nich jsem použil pouze programy \texttt{opt} a~\texttt{llc}, které umí optimalizovat LLVM kód, respektive ho kompilovat do strojového kódu.
+LLVM jsem vybral, protože umí velmi dobře optimalizovat kód, a~také se z~něj jednoduše vytváří kód pro mnoho procesorových architektur (x86, ARM, RISC-V, ...).
+(Kompatibilitu mého kompileru s~kompilací do architektury jiné než x86 jsem však netestoval.)
 
 
 \section{ZPŮSOBY ŘEŠENÍ A POUŽITÉ POSTUPY}
-\TODO{podrobnější popis?}
 \TODO{Pak ukažte pár konkrétních kusů kódu, kde prezentujete nějaký zajímavý problém či jinak klíčovou část vaší aplikace a rozepište se, proč to řešíte a jak to řešíte (a jaké třeba byly další varianty). "tohle bylo složité či zajímavé a takhle jsem se s tím popral".}
 
 \subsection{Použité datové struktury}
-Implementoval jsem si dvě datové struktury, seznam a~hashmapu (v souborech \file{src/lib/list.h} a~\file{src/lib/hashmap.h}).
-Obě jsou definované skrze makra, takže lze v~kódu jednoduše vytvořit seznam/hashmapu s~daným datovým typem.
+Implementoval jsem si dvě pomocné datové struktury, seznam a~hashmapu (v souborech \file{src/lib/list.h} a~\file{src/lib/hashmap.h}).
+Obě jsou definované skrze makra, takže lze v~kódu jednoduše vytvořit seznam/hashmapu s~libovolným datovým typem.
 
-Navíc jsem si v \file{src/lib/bignum.c} implementoval počítání s neomezeně velkými čisly. (Ty jsou využité pro číselné konstanty v jazyce.)
+Navíc jsem si v~\file{src/lib/bignum.c} implementoval počítání s~neomezeně velkými čisly. (Ty jsou využité pro číselné konstanty v~jazyce.)
 
 \subsection{Tokenizace}
 První krok kompileru je tokenizace -- vstupní soubor je rozdělen na jednotlivé tokeny (nejmenší syntaktické celky).
 Tokeny v~mém jazyce jsou: klíčová slova (\code{while}, \code{if}), čísla (\code{15}, \code{1.79e308}), textové řetězce (\code{"Hello world!"}),
-názvy funkcí, proměnných a~datových typů (\code{main}, \code{var}, \code{u32}) nebo symboly (\code{+}, \code{*}, \code{>=}, \code{;}).
+názvy funkcí, proměnných a~datových typů (\code{main}, \code{var}, \code{u32}) nebo znaménka (\code{+}, \code{*}, \code{>=}, \code{;}).
 V~tomto kroku se také zahodí komentáře (text obalený v~\uv{\code{/*}} a~\uv{\code{*/}} nebo řádky začínající \code{//}) a~všechny bílé znaky (mezery, tabulátory, konce řádků).
 
-Ke každému tokenu se také přidá informace o~tom, kde se ve zdrojovém kódu vyskytuje. Pokud program narazí na chybu, může tak k~chybové hlášce přidat místo, kde se chyba vyskytla.
+Ke každému tokenu se také přidá informace o~tom, kde ve zdrojovém kódu se vyskytuje. Pokud program narazí na chybu, může tak k~chybové hlášce (nebo varování) přidat místo, kde se chyba vyskytla.
 
 Pro tokenizaci jsem použil knihovnu Flex, která ze seznamu pravidel (soubor \file{src/parse/lex.y}) vygeneruje kód potřebný k~tokenizaci.
 
 
 \subsection{Syntaktická analýza}
 Po tokenizaci přichází na řadu syntaktická analýza (neboli \uv{parsing}), která tokeny poskládá do takzvaného syntaktického stromu.
-Každý vrchol v~syntaktickém stromě představuje nějakou operaci a~má pod sebou parametry této operace
-(například operace \code{while} cyklu bude pod sebou mít podmínku a~kód cyklu).
+Každý vrchol v~syntaktickém stromě představuje nějakou operaci a~má pod sebou parametry této operace.
+Například \code{while} cyklus bude pod sebou mít podmínku a~kód cyklu (které pod sebou mohou mít další operace).
 
 \begin{figure}[h] %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \def\mypicture{
@@ -302,35 +331,38 @@ while(i < 10){
 	\caption{Příklad převodu kódu do syntakitckého stromu}
 \end{figure} %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-Syntaktický strom je v~mém kódu implementován ve složce \file{src/ast/}.
+Syntaktický strom je v~mém kódu implementován v~souborech složky \file{src/ast/}.
 V~souboru \file{src/ast/main.h} jsou definované datové typy pro jednotlivé vrcholy syntaktického stromu (např. \code{ast\_expr\_t} pro výrazy).
 Celý strom je pak uložen v~datovém typu \code{ast\_t}. (Zkratka \code{ast} od anglického \uv{abstract syntax tree}.)
 
 V~\file{src/ast/main.c} jsou implementace pomocných funkcí pro vytváření syntaktického stromu
 
-V~souborech \file{src/ast/scope.c} a~\file{src/ast/scope.h} je definovaný datový typ \code{ast\_scope\_t*}, který mapuje jména lokálních proměnných na jejich objekty.
-Navíc si drží odkaz na vyšší \code{ast\_scope\_t*}, protože lokální prostory mohou být vložené do sebe (např. proměnnou definovanou uvnitř \code{for} cyklu nelze použít mimo tento cyklus).
+V~souborech \file{src/ast/scope.c} a~\file{src/ast/scope.h} je definovaný datový typ \code{ast\_scope\_t*}, který mapuje jména proměnných, funkcí a~typů na jejich objekty.
+Každý blok (např. uvnitř cyklu, podmínek) má vlastní \code{ast\_scope\_t*}, do kterého si ukládá informace o~lokálních proměnných.
+Globální proměnné a~funkce jsou uložené v~\code{ast\_scope\_t*} v~typu \code{ast\_t}.
 
 K~samotnému převodu tokenů do syntaktického stromu jsem použil knihovnu GNU Bison.
-Ta ze seznamu pravidel (\file{src/parse/parse.y}), které popisují jak se tokeny a~symboly mohou spojovat do jiných symbolů, vygeneruje kód, který tato pravidla implementuje.
+Ta ze seznamu pravidel (\file{src/parse/parse.y}), které popisují syntax jazyka, vygeneruje kód, který provede syntaktickou analýzu.
 Zárověn zkontroluje, že syntax jazyka je jednoznačný, tedy že každý seznam tokenů lze převést do syntaktického stromu pouze jedním způsobem.
-To je důležité hlavně u~vyhodnocování výrazů, protože \code{a+b*c} se musí vyhodnotit jako \code{a+(b*c)}. Operace násobení, dělení a~modulo se musí vyhodnotit zleva doprava. \TODO{vic rozepsat, jake jsem toho dosahl, prip z toho udelat celou podkapitolu?}
+To je důležité hlavně u~vyhodnocování výrazů, protože \code{a+b*c} se musí vyhodnotit jako \code{a+(b*c)}. Operace násobení, dělení a~modulo se musí vyhodnotit zleva doprava.
 
 Hlavní funkce \code{parse\_file} a~několik pomocných funkcí pro parsování jsou v~\file{src/parse/main.c}.
 
 \subsection{Překlad do LLVM}
-Ze syntaktického stromu se dále vygeneruje LLVM kód. Tento jazyk je něco mezi programovacím jazykem a~strojovým kódem.
+Ze syntaktického stromu se dále vygeneruje LLVM kód.
+Tento kód je něco mezi programovacím jazykem a~strojovým kódem; špatně se v~něm programuje, ale jednodušeji se strojově optimalizuje.
+
 Každá funkce v~LLVM je seznamem takzvaných základních bloků, které jsou seznamem instrukcí.
-Poslední instrukce v~každém bloku je speciální a~musí být skok do jiného bloku (často s~větvením podle hodnoty některého registru),
+Poslední instrukce v~každém bloku je \uv{terminální} instrukcí a~musí být skok nebo větení do jiného bloku,
 návrat z~funkce nebo speciální instrukce \code{unreachable}, která definuje, že se program při spuštění nikdy
-nedostane do tohoto bloku (toto dovoluje LLVM kompileru smazat celý tento blok).
+nedostane do tohoto bloku (toto dovoluje LLVM kompileru smazat celý tento blok). \cite{llvm:docs}
 
 Jednotlivé instrukce v~LLVM pracují s~\textit{registry}.
 Každá instrukce, která vrací nějakou hodnotu (tedy skoro všechny instrukce kromě ukládání dat do paměti) rovnou zapíše tuto hodnotu do \textit{nového} registru.
-Do registrů lze v~LLVM totiž zapisovat pouze jednou (to nám generování LLVM trochu ztěžuje, ale tato forma kódu je pro LLVM kompilery jednodušeji optimalizovatelnější).
+Do každého registru lze zapsat pouze jednou, při jeho vytvoření. \cite{llvm:docs}
 
-Také lze použít pouze ty registry, které jsou \uv{přímými předchůdci} danému bloku kódu; to znamená, že pokud definujeme registr uvnitř \code{if} bloku, tak ho nemůžeme přímo použít mimo něj.
-K~tomuto účelu slouží speciální instrukce \code{phi}, která sama o~sobě nic nepočítá, ale vrátí hodnotu podle toho, ze kterého bloku jsme se dostali do tohoto bloku.
+V~instrukci použít pouze ty registry, které jsou ve stejném bloku, nebo v~bloku který je \uv{přímým předchůdcem} -- nesmí existovat možnost, ve které by instrukce použila nedefinovaný registr.
+Vyjímkou je speciální instrukce \code{phi}; v~daném seznamu dvojic blok-registr najde předchozí blok (ten, ze kterého program \uv{přišel} do tohoto) a~vrátí hodnotu k~němu přidruženého registru.
 Například funkce, která vrací větší ze dvou čísel by mohla vypadat takto:
 
 \begin{lstlisting}[language=llvm]
@@ -348,13 +380,13 @@ i32 @max(i32 %x, i32 %y){
 }
 \end{lstlisting}
 
-Zde program skočí do bloku \code{X} nebo bloku \code{Y} podle toho, které z~\code{\%x} a~\code{\%y} je větší.
-V~bloku \code{end} se pak \code{\%res} nastaví na \code{\%x} pokud program prošel blokem \code{X}, jinak se nastaví na \code{\%y}.
+Tato funkce skočí do bloku \code{X} nebo bloku \code{Y} podle toho, který z~registrů \code{\%x} nebo \code{\%y} je větší.
+V~bloku \code{end} se pak \code{\%res} nastaví na \code{\%x} pokud program prošel blokem \code{X} nebo \code{\%y} pokud program prošel blokem \code{Y} (jiná možnost není).
 
 Datové typy pro reprezentaci LLVM kódu (bloky, funkce, registry) jsem si zadefinoval v~\file{src/llvm.h} a~funkce pro převod tohoto kódu do textové podoby jsou v~\file{src/llvm.c}.
 
 Samotný převod ze syntaktického stromu do LLVM kódu jsem implementoval rekurzivně (soubor \file{src/ast2llvm.c}).
-Při tomto převodu se také zachytí většina chyb, například operace se špatnými datovými typy (sčítání strukturovaných datových typů apod.) nebo volání funkcí se špatným počtem nebo typem argumentů.
+Většina chyb se zachytí při tomto převodu, například operace se špatnými datovými typy (sčítání strukturovaných datových typů apod.) nebo volání funkcí se špatným počtem nebo typem argumentů.
 
 Původně jsem tento převod naprogramoval tak, že jsem hodnoty lokálních proměnných ukládal přímo do LLVM registrů a~pro smyčky a~podmínky jsem použil mnoho \code{phi} instrukcí.
 To sice fungovalo bez problému, ale nebylo možné získat adresu proměnné v~paměti, protože proměnné nebyly uložené přímo v~paměti, ale v~registrech.
@@ -364,68 +396,37 @@ Tím jsem ze zbavil i~skoro všech \code{phi} instrukcí, které však nahradilo
 \subsection{Kompilace LLVM kódu do strojového kódu}
 Pro tuto část jsem použil již hotové programy z~LLVM toolchain a~linuxový linker \code{ld}.
 
-Prvně se vygenerovaný LLVM kód prožene programem \file{opt}, který ho zoptimalizuje. Poté se optimalizovaný LLVM kód převede na strojový pomocí programu \file{llc}.
-Do výsledného strojového kódu se pak pomocí \file{ld} přidá C~runtime library (ta před spuštěním samotného kódu připraví stack a~poté zavolá funkci \code{main} s~argumenty z~příkazové řádky)
-a~\file{libc} (knihovna, která obsahuje moho užitečných funkcí -- bez ní by programy v~mém jazyce neuměli nic užitečného, protože můj jazyk neumí komunikovat s~operačním systémem přímo).
-
-\section{PROGRAMOVACÍ PROSTŘEDKY}
-\subsection{C (programovací jazyk)}
-Zvolil jsem tento jazyk, protože s~ním mám hodně zkušeností, je rychlý a~nenáročný na pamět.
-Zároveň další použité knihovny (Flex a~Bison) jsou dělané primárně pro práci s~C, ale umí i~C++.\cite{flex:docs}\cite{bison:docs}
-
-Velká nevýhoda C~je nutnost explicitně rezervovat a~uvolňovat paměť. Příště bych zvážil, jestli takovýto projekt nenapsat v~C++, který umí alokovat a~uvolňovat paměť mnohem jednodušeji.
-
-\subsection{GNU Bison}
-Bison je generátor parserů (ze seznamu parsovacích pravidel vytvoří kód) pro jazyky C, C++, D~a~Java.
-Bison jsem vybral, protože je rychlý a~dovoluje rychlé experimentování s~různými způsoby parsování syntaxu.
-Navíc je velmi užitečná jeho schoponost generovat protipříklady pro nejednoznačné syntaxe.
-
-\subsection{GNU Flex}
-Knihovna Flex generuje kód, který umí text rozdělit na tokeny podle daných pravidel.
-Vybral jsem Flex hlavně kvůli jednoduché integraci s~knihovnou Bison.
-
-\subsection{LLVM toolchain}
-LLVM toolchain je soubor několika hotových programů a~knihoven.
-Z~nich jsem použil pouze programy \texttt{opt} a~\texttt{llc}, které umí optimalizovat LLVM kód, respektive ho kompilovat do strojového kódu.
-LLVM jsem vybral, protože umí velmi dobře optimalizovat kód, a~také se z~něj jednoduše vytváří kód pro mnoho procesorových architektur (x86, ARM, RISC-V, ...).
-(Kompatibilitu mého kompileru s~kompilací do architektury jiné než x86 jsem ale netestoval.)
-
-\section{ZHODNOCENÍ DOSAŽENÝCH VÝSLEDKŮ}
-\TODO{JAK SE TO POVEDLO}\\
-\textit{výčet splněných a~nesplněných bodů zadání resp. vlastních předsevzetí}
-
-
-\section{INSTALACE}
-\TODO{JAK SE TO INSTALUJE}\\
-\textit{popis instalace, systémové požadavky, nárok  na HW, SW, atp.}
-
+Prvně se vygenerovaný LLVM kód zoptimalizuje programem \file{opt}. Poté se optimalizovaný LLVM kód převede na strojový pomocí programu \file{llc}.
+Do výsledného strojového kódu se pomocí programu \file{ld} přidá C~runtime library (ta před spuštěním samotného kódu připraví stack a~poté zavolá funkci \code{main} s~argumenty z~příkazové řádky)
+a~\file{libc} (knihovna, která obsahuje mnoho standardních funkcí -- bez ní by programy v~mém jazyce neuměli nic užitečného, protože můj jazyk neumí přímo komunikovat s~operačním systémem).
 
 \section{OVLÁDÁNÍ}
-\subsection{Použití kompileru}
+\subsection{Použití kompileru}\label{sec:usage}
 
-Kompiler se musí spustit z~příkazové řádky s~alespoň jedním argumentem: lokací vstupního souboru. (Kompiler umí kompilovat pouze jeden soubor najednou).
-(Např.: \code{./compiler code.txt}.) V~tomto případě se kód zkompiluje, příp. vyhodí chybové hlášky nebo varování a~vypíše \uv{\code{no output path specified}}.
+Kompiler se musí spustit z~příkazové řádky s~alespoň jedním argumentem: lokací vstupního souboru. (Kompiler umí kompilovat pouze jeden soubor najednou.)
+Např.: \code{./compiler code.txt}.
 
 Pokud chceme výsledek kompilace uložit do souboru, stačí použít \uv{\code{-o <výstupní soubor>}}.
+Pokud se nespecifikuje výstupní soubor, tak se pouze vypíší případné chybové hlášky nebo varování a~\uv{\code{no output path specified}}.
 
 Kompiler umí generovat i~assembly nebo LLVM kód, pokud dostane vlajku \uv{\code{-filetype=asm}}, respektive \uv{\code{-filetype=llvm}}.
-V~obou případech výpíše daný kód na standartní výstup, pokud nedostane lokaci výstupního souboru (vlajkou \uv{\code{-o}}).
+V~obou případech vypíše daný kód na standardní výstup, pokud nedostane lokaci výstupního souboru (vlajkou \uv{\code{-o}}).
 
 Stupeň optimalizace lze ovládat vlajkami \code{-O0} (žádná optimalizace), \code{-O1}, \code{-O2} a~\code{-O3} (nejvyšší stupeň optimalizace).
 
-\subsection{Popis jazyka} \label{sec:language}
+\subsection{Popis jazyka}\label{sec:language}
 Jazyk je velmi podobný jazyku C.
 Kód se na nejvyšší úrovni skládá ze seznamu funkcí, globálních proměnných a~definicemi typů.
 
 \subsubsection{Typy}
-Jazyk podporuje pět hlavních typy typů: celá čísla, destinná čísla, pointery (adresy do paměti), strukturovaný datový typ a~speciální typ \code{void}.
+Jazyk podporuje pět hlavních druhů typů: celá čísla, destinná čísla, pointery (adresy do paměti), strukturované datové typy a~speciální typ \code{void}.
 
 Celočíselné typy jsou buď se znaménkem (\code{i8, i16, i32, i64}) nebo bez znaménka (\code{u8, u16, u32, u64}). Číslo v~jejich názvu odpovídá jejich velikosti (počtu bitů).
-Speciální Celočíselné datový typ je navíc \code{bool}, který je vždy buď 1, nebo 0.
+Speciálním celočíselným datový typem je typ \code{bool}, který obsahuje buď 0, nebo 1.
 
 Destinné typy jsou dva: \code{f32} a~\code{f64}, které obsahují \code{float}, respektive \code{double}.
 
-Typ pointer lze vytvořit z~libovolného typu přidáním \code{*} na konec. Například typ \code{float*} bude obsahovat adresu, na které se vyskytuje \code{float}.
+Typ pointer lze vytvořit z~libovolného typu přidáním \code{*}. Například typ \code{f32*} bude obsahovat adresu, na které se vyskytuje \code{f32}.
 
 Speciální typ \code{void} lze použít pouze při definici funkce, která nevrací žádnou hodnotu, nebo jako obecný pointer \code{void*}.
 
@@ -433,7 +434,7 @@ Strukturované datové typy lze definovat pomocí klíčového slova \code{struc
 Např.: \code{struct \{i32 x; i32 y;\}}.
 Obsah proměnné se strukturovaným typem lze získat, stejně jako v~jazyku C, pomocí \uv{\code{.}} (tečka), nebo, pokud se jedná pointer k~strukturovanému typu, \uv{\code{->}}.
 
-Typům lze také dát jiné jméno, pomocí klíčového slova \code{typedef}, následovaný typem, nové jméno pro daný typ a~středníkem. Toto se hodí hlavně u~strukturovaných typů.
+Typům lze také dát jiné jméno, pomocí klíčového slova \code{typedef}, následované typem, nové jméno pro daný typ a~středníkem. Toto se hodí hlavně u~strukturovaných typů.
 Např.:
 \begin{lstlisting}
 typedef i32 int;
@@ -442,10 +443,13 @@ typedef struct {
 	int x;
 	int y;
 } vector2;
+
+vector2 vec;
+vec.x = 15;
 \end{lstlisting}
 
 \subsubsection{Proměnné}
-Lokální i~globální proměnné se definují typem proměnné, jménem, případně počáteční hodnotou (pouze u~lokálních proměnných) a~středníkemů.
+Lokální i~globální proměnné se definují typem proměnné, jménem, počáteční hodnotou a~středníkemů. Počáteční hodnotu lze vynechat.
 Např.: \code{u64 number;} nebo \code{u32 x = y*5};
 
 U~globalních proměnných nelze nastavit počáteční hodnotu.
@@ -480,11 +484,11 @@ i32 max(i32 x, i32 y){
 \end{lstlisting}
 
 \subsubsection{Podmínky}
-Podmínky se definuje pomocí klíčových slov \code{if} a~\code{else}.
+Podmínky se definují pomocí klíčových slov \code{if} a~\code{else}.
 Po \code{if} vždy následuje výraz v~kulatých závorkách podle kterého se program rozhodne, kterou část podmínky vyhodnotí.
-Poté se vyskutuje obsah \code{if}u, případně \code{else} a~další obsah.
+Poté se vyskutuje obsah \code{if} blokuu, případně \code{else} a~obsah \code{else} bloku.
 
-V~obou případech je tělo buď jeden řádek kódu (končící prvním středníkem), nebo libovolný počet řádků obalených ve složených závorkách.
+V~obou případech je obsah bloku buď jeden řádek kódu (končící středníkem), nebo libovolný počet řádků ve složených závorkách.
 Například:
 
 \begin{lstlisting}
@@ -500,7 +504,7 @@ Výrazem se myslí jakákoliv proměnná, číselná konstanta nebo složení dv
 
 Povolené operace jsou:
 \begin{itemize}
-	\item násobení, děleno a~modulo (\code{*}, \code{/}, \code{\%})
+	\item násobení, dělení a~modulo (\code{*}, \code{/}, \code{\%})
 	\item sčítání a~odčítání (\code{+}, \code{-})
 	\item bitový posun doleva a~doprava (\code{<<}, \code{>>})
 	\item porovnání (\code{==}, \code{!=}, \code{<}, \code{>}, \code{<=}, \code{>=})
@@ -510,7 +514,7 @@ Povolené operace jsou:
 	\item logický AND (\code{\&\&}) -- druhý argument se vyhodnotí pouze pokud se první vyhodnotí jako 1
 	\item logický OR (\code{||}) -- druhý argument se vyhodnotí pouze pokud se první vyhodnotí jako 0
 \end{itemize}
-Operace se vyhodnocují v~pořadí tohoto seznamu zeshora (tedy \code{a || b + c | d} se vyhodnotí jako \code{a || ((b+c) | d)}).
+Operace se mají přednost v~pořadí tohoto seznamu zeshora (tedy \code{a || b + c | d} se vyhodnotí jako \code{a || ((b+c) | d)}).
 Operace ve stejné skupině se vyhodnocují vždy zleva doprava.
 
 Navíc jsou povolené operace s~jedním argumentem:
@@ -523,19 +527,49 @@ Navíc jsou povolené operace s~jedním argumentem:
 
 Výrazy lze libovolně závorkovat.
 
+\subsubsection{Převody mezi typy}
+Jméno datového typu v~závorkách před výrazem převede výsledek výrazu na daný datový typ.
+Povolené převody jsou mezi dvěma typy stejného druhu (kromě strukturovaných typů),
+mezi pointerem a~celočíselným pointerem a~mezi desetiným číslem a~celým číslem.
+
 \subsubsection{Konstanty}
 Konstanta může být buď celočíselná, desetinná, nebo textový řetězec.
 Desetinná konstanta musí obsahovat desetinnou tečku nebo písmeno \uv{e} následované exponentem čísla (např. \code{15.0} nebo \code{1e9}).
-Textový řetězec začíná a končí uvozovkami \code{"}. Zpětná lomítka následovné uvozovkou místo ukončení řetězce do něj vloží uvozovku.
-Zpětné lomítko následované písmenem \uv{n} vloží nový řádek, \uv{r} vloží symbol CR (carriage return), \uv{x} následované dvěmi hexadecimálními číslicemi vloží daný byte.
 
-Celočíselné konstanty mohou být libovolně velké, a operace s nimi mohou mít libovolně velký výsledek.
-Pokud se celočíselná konstanta převede na specifický datový typ (například \code{u64}), ať už explicitně (použitím \code{(u64)} před výrazem) nebo implicitně (např. při sčítání s proměnou s typem),
-zůstane omezeně velká v limitech daného datového typu (pokud se při převodu změní hodnota čísla, vypíše kompiler varování).
+Textový řetězec začíná a~končí uvozovkami.
+Do textového řetězce lze vložit speciální znaky pomocí zpětného lomítka; zpětné lomítko následované písmenem \uv{n} vloží nový řádek,
+\uv{r} vloží symbol CR (carriage return), \uv{x} následované dvěmi hexadecimálními číslicemi vloží byte s~danou hodnotou.
+Zpětné lomítko následované dalším lomítkem nebo uvozovkou vloží daný znak.
+Textový řetězec má vždy typ \code{u8*}. Není povoleno do něj zapisovat.
+
+Celočíselné konstanty mohou být libovolně velké, a~operace s~nimi mohou mít libovolně velký výsledek.
+Pokud se celočíselná konstanta převede na specifický datový typ (například \code{u64}), ať už explicitně (použitím \code{(u64)} před výrazem) nebo implicitně (např. při sčítání s~proměnou s~typem),
+zůstane omezeně velká v~limitech daného datového typu (pokud se při převodu změní hodnota čísla, vypíše kompiler varování).
+
+
+\section{ZHODNOCENÍ DOSAŽENÝCH VÝSLEDKŮ}
+S~výsledky práce jsem spokojen, přestože jsem nestihl naprogramovat vše, co jsem na začátku chtěl.
+Nestihl jsem hlavně globální proměnné s~počáteční hodnotou a~možnost používat více souborů (podobně jako má jazyk C~\uv{\code{\#inlude}}).
+Další rozšíření projektu do budoucnosti by mohla být podpora assembly kódu vloženého přímo do jazyka; díky tomu by mohl jazyk komunikovat přímo s~operačním
+systémem a~nemusel by se spoléhat na \file{libc}.
+
+Kdybych projekt měl psát znovu, nebo v~něm pokračovat, napsal bych ho v~C++ protože umí lépe vytvářet abstrakce nad kusy kódu.
+
+
+\section{INSTALACE}
+Instalace není potřeba, stačí spustit soubor \file{compiler} (viz \fullref{sec:usage}).
+Případně lze program zkompilovat pomocí programu \code{Make}.
+
+\subsection{Nároky na software (používání projektu)}
+Aby výsledný program správně fungoval, musí běžet na operačním systému linux.
+V~systému musí být knihovny \file{/lib64/ld-linux-x86-64.so.2}, \file{/lib/x86\_64-linux-gnu/crt1.o} a~knihovna \file{libc}. (Tyto knihovny jsou v~linuxovém prostředí standardní.)
+
+\subsection{Nároky na software (kompilace projektu)}
+Jsou potřeba programy \code{gcc} (C kompiler), \code{bison}, \code{flex} a~\code{make}.
+Kompilace se spustí příkazem \code{make}.
 
 
 \section{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
-\TODO{SEZNAM POUŽITÝCH INFORMAČNÍCH ZDROJŮ}
 \printbibliography
 
 \showtodo
