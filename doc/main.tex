@@ -67,6 +67,7 @@
 \TODO{asi neni potreba citovat vlastni obrazek/diagram, ne?}
 \TODO{add citations}
 \TODO{proper baseline skip and make sure its normostrana}
+\TODO{citace pred nebo za teckou?}
 \setlength{\parindent}{0pt}
 \renewcommand{\baselinestretch}{1.5}
 \setlength{\parskip}{12pt}
@@ -144,19 +145,21 @@ podpis žáka \hspace*{4cm}
 
 
 \newpage
-\section{TEORETICKÁ ČÁST} \TODO{teoreticka cast}
+\section{TEORETICKÁ ČÁST}
 \subsection{Stavový automat}
-Stavový (či konečný) automat je programovací model, ve kterém je program representován seznamem možných stavů $S$ a~přechody mezi nimi.
+Stavový (či konečný) automat je programovací model, ve kterém je program representován seznamem stavů a~přechody mezi nimi.
 
-Stavový automat vždy začíná v~počátečním stavu $s \in S$ a~jako vstup dostane seznam symbolů.
+Vstup stavového automatu je seznam symbolů, podle kterých se rozhoduje, jak má přecházet mezi stavy.
 Množina všech vstupních symbolů, které daný stavový automat smí dostat se nazývá \textit{abeceda} a~formálně se značí jako $\Sigma$. \cite{wiki:dfa}
-Při každém \uv{kroku} vezme další symbol ze vstupu a~podle něj a~aktuálního stavu se přesune do dalšího stavu, případně zůstane ve stejném stavu.
-Tento krok opakuje, dokud se nedostane do jednoho z~konečných stavů, nebo dokud neprojde celý vstup.
 
-Protože stavové automaty operují s~seznamem symbolů, hodí se například na hledání v~textu (včetně regulárních výrazů) nebo pro parsery.
+Stavový automat má jeden počátečním stav, ve kterém začíná. Z~každého stavu vede jeden přechod pro každý symbol v~abecedě automatu.
+Při každém \uv{kroku} načte symbol ze vstupu a~změní stav podle odpovídajícího přechodu.
+Tento krok opakuje, dokud se nedostane do jednoho z~konečných stavů, nebo dokud nepřečte celý vstup.
+
+Protože stavové automaty operují se seznamem symbolů, hodí se například na hledání slov (nebo regulárních výrazů) v~textu nebo pro parsery.
 Níže je vykreslený stavový automat, který v~textu hledá slovo \uv{ananas}.
 Kruhy značí jednotlivé stavy (počáteční stav je označen šipkou \uv{start}), šipky mezi nimi značí přechody.
-Pro přehlednost nejou vykresleny všechny přechody. Ty které nejsou vykresleny míří vždy zpět do počátečního stavu. Stav označen \uv{F} je konečný stav.
+Pro přehlednost nejsou vykresleny všechny přechody, které vedou zpět do počátečního stavu. Stav označen \uv{F} je konečný stav.
 
 \begin{figure}[h]
 	\centering
@@ -181,28 +184,75 @@ Pro přehlednost nejou vykresleny všechny přechody. Ty které nejsou vykreslen
 		\draw[-{Latex[length=3mm]}] (anana) edge[bend left=20] node [below,midway] {a} (a);
 		\draw[-{Latex[length=3mm]}] (anana) edge[bend right=60] node [above,midway] {n} (anan);
 	\end{tikzpicture}
-	\caption{Stavový automat pro hledání slova \uv{ananas}}
+	\caption{Stavový automat pro hledání slova \uv{ananas}} % TODO: "obrazek"?!
 \end{figure}
 
-Důležité jsou zpětné hrany, díky kterým stačí každé písmeno v~textu projít pouze jednou. Využijí například při hledání v~textu \uv{anananas}.
+Důležité jsou zpětné hrany, díky kterým stačí každé písmeno v~textu projít pouze jednou.
+Využijí se například při hledání v~textu \uv{anananas}.
+
+Výhodou stavových automatů je jejich rychlost -- každý krok lze implementovat jako jednoduché čtení z~tabulky.
 
 \subsection{Parsery}
 Parser (též syntakticý analyzátor) dostane jako vstup seznam tokenů (typicky to jsou klíčová slova, názvy proměných, čísla a~znaménka \code{\{}, \code{+}, apod.),
-které následně podle daných pravidel poskládá do větších celků (takzvaných symbolů). Jedno takové pravidlo může být například \uv{dva výrazy oddělené znaménkem \code{+} je také výraz} nebo
+které následně podle daných pravidel poskládá do větších celků (takzvaných symbolů). Jedno takové pravidlo může být například \uv{dva výrazy oddělené znaménkem \code{>} jsou také výraz} nebo
 \uv{název proměnné, znaménko \code{=}, výraz a~středník je jedna instrukce}.
 
 Pravidla budu dále psát ve stejném formátu jako program GNU Bison.
 Každé pravidlo se skládá z~jména výsledného symbolu, dvojtečky a~seznamem symbolů, které lze nahradit za výsledný symbol
-(symboly reprezentující jeden znak budu značit daným snakem v~uvozovkách) \cite{bison:docs}.
+(symboly reprezentující jeden znak budu značit daným znakem v~uvozovkách) \cite{bison:docs}.
 Několik pravidel, které vytvoří stejný výsledný symbol budu psát za sebe, oddělené svislou čarou.
 
-Jednoduché pravidlo pro výrazy by mohlo vypadat následovně:
+Jednoduchá pravidla pro výraz by mohla vypadat následovně:
 
 \begin{lstlisting}[language=]
 vyraz:
-	vyraz '+' cislo
+	cislo
+|	vyraz '+' cislo
 |	vyraz '-' cislo
 \end{lstlisting}
+
+Pravidlo může být i~prázdné, parser v~tom případě smí výsledný symbol vytvořit kdykoliv. To se hodí například pro definování seznamů.
+Prázdná pravidla budu značit pomocí \uv{\code{\%empty}}.
+
+\begin{lstlisting}[language=]
+seznam:
+	%empty
+|	seznam cislo
+\end{lstlisting}
+
+Většinou budeme chtít, aby si výsledný parser ke každému symbolu pamatoval více něž jenom jeho typ (například hodnotu, lokaci v~kódu)
+a~aby při každém použití pravidla vyhodnotil nějaký kód (například sečetl hodnotu dvou čísel).
+Zde budu tento detail zanedbávat, protože není důležitý pro stavové automaty.
+
+\subsection{Stavové automaty pro parsery}
+Ze seznamu pravidel pro parser chceme vytvořit stavový automat, který podle daných pravidel umí parsovat seznam tokenů.
+Budeme postupně stavět menší stavové automaty, které parsují jednotlivé symboly, a~z~nich skládat větší automaty pro další symboly.
+Každý automat bude mít jeden počáteční stav, libovolný počet vnitřních stavů a~dva finální stavy -- jeden chybový, pokud symbol nelze vytvořit a~jeden akceptující, do kterého se dostane v~opačném případě.
+
+Začneme stavovým automatem pro jeden token.
+Ten nebude mít žádné vnitřní stavy a~z~počátečního stavu povede jeden přechod pro daný token do akceptujícího stavu a~všechny ostatní přechody povedou do chybového stavu.
+
+Pokud chceme parsovat pravidlo skládájící se z~několika symbolů, stačí stavové automaty pro jednotlivé symboly poskládat za sebe.
+Akceptující stav každého automatu (kromě posledního) nahradíme počátečním stavem dalšího automatu a~všechny chybové stavy sloučíme do jednoho.
+
+Každý symbol však může mít několik pravidel, kterými se může vyrobit.
+V~tom případě je potřeba prvně vytvořit stavový automat pro každé pravidlo, sloučit všechny jejich chybové a~akceptující stavy do jednoho a~jejich počáteční stavy sloučit následujícím způsobem:
+prvně vytvoříme nový počáteční stav. Pro každý token se podíváme, kam vedou přechody ze stavů, které slučujeme.
+Pokud všechny vedou do chybového stavu, tak musí přechod z~nového počátečního stavu pro tento token směřovat do chybového stavu.
+Pokud do chybového stavu vedou všechny kromě jednoho přechodu, nastavíme přechod z~nového počátku na stejný cíl.
+Ve všech ostatních případech musíme nejdřív stejným způsobem sloučit cíle přechodů ze slučovaných stavů (kromě chybového stavu) a~na jejich sloučení nastavíme přechod z~počátečního stavu.
+Nakonec můžeme odebrat ty stavy, do kterých nevedou žádné přechody (kromě nového počátečního).
+
+Tímto způsobem můžeme vyrobit parser pro jednoduchá pravidla, která neobsahují žádnou rekurzi. To však není moc užitečné, protože bez rekurze nezvládneme parsovat ani seznamy.
+Jednoduchý stavový stroj ale nezvládne parsovat všechna rekurzivní pravidla, například pravidlo \code{x: \%empty | 'a' x 'b'} (tedy libovlný počet písmen \uv{a} a~za ním stejný počet písmen \uv{b})
+potřebuje nějakou další paměť, protože si musí pamatovat kolik písmen \uv{a} už zprocesovalo.
+
+Generátor parserů GNU Bison tento problém řeší tak, že k~stavovému automatu přidá seznam všech předchozích stavů a~v~abecedě automatu má všechny symboly, nejen tokeny.
+Pokaždé, když dostane na vstupu nějaký token nebo symbol, vloží na seznam předchozích stavů daný symbol a~stav, ve kterém se nachází.
+Kdykoliv použije nějaké pravidlo (to nemusí být hned, kdy se na vstupu objeví seznam symbolů odpovídající nějakému pravidlu), odebere ze seznamu všechny symboly, které pravidlo použilo,
+vrátí se na stav, který je nyní na konci seznamu a~místo dalšího tokenu ze vstupu použije symbol, který dané pravidlo vytvořilo.
+(Ani to nestačí pro některá pravidla, v~tom případě umí generovat parsery, které zkouší všechny možnosti.) \cite{bison:docs}
+
 
 
 
