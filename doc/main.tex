@@ -274,7 +274,7 @@ Velká nevýhoda C~je nutnost explicitně rezervovat a~uvolňovat paměť. Pří
 
 \subsection{GNU Make}
 Make je program, který umožňuje jednoduše spouštět všechny potřebné příkazy pro kompilaci projektu.
-Pravidla v~souboru\file{makefile} definují, které soubory jsou potřeba k~vytvoření výsledného souboru (příp. mezivýsledného) a~příkazy jak ho vytvořit.
+Pravidla v~souboru \file{makefile} definují, které soubory jsou potřeba k~vytvoření výsledného souboru (příp. mezivýsledného) a~příkazy jak ho vytvořit.
 Make pak spustí pouze ty příkazy, které jsou potřeba (pokud se nezměnili zdrojové soubory, nepokusí se výsledný soubor vyrobit znovu).
 
 Ulehčuje a~zrychluje tím vývoj projektu, protože celou kompilaci lze spustit jedním jednoduchým příkazem.
@@ -610,6 +610,8 @@ Případně lze program zkompilovat pomocí programu \code{Make}.
 
 \subsection{Nároky na software (používání projektu)}
 Projekt funguje pouze na operačním systému Linux.
+(Testoval jsem pouze distribuci Debian 13, ale měla by stačit libovlná distribuce se správnýma knihovnama.)
+Je potřeba mít instalovanou knihovnu LLVM, specificky programy \file{opt} a~\file{llc}.
 V~systému musí být knihovna C~runtime, a~to v~lokaci \file{/lib/x86\_64-linux-gnu/crt1.o} a~knihovna \file{libc}.
 
 \subsection{Nároky na software (kompilace projektu)}
