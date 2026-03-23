@@ -1,5 +1,5 @@
 MAKEFLAGS += -rR
-GCCFLAGS = -Wall -Wextra -Wpedantic -g -O3
+GCCFLAGS = -Wall -Wextra -Wpedantic -Wno-stringop-overread -g -O3
 
 compiler: build/src/lex.y.c build/src/parse.tab.c src/ast/main.c src/ast2llvm.c src/llvm.c src/lib/bignum.c src/message.c src/parse/main.c src/ast/scope.c src/main.c
 	gcc $^ -o $@ -I build/h/ -I src/ $(GCCFLAGS)

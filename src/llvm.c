@@ -87,7 +87,7 @@ static void llvm_value_to_target(const llvm_value_t val, print_target_t* t){
 		case LLVM_VALUE_NULL_PTR: tprint(t, "null"); break;
 		case LLVM_VALUE_UNDEF: tprint(t, "undef"); break;
 		case LLVM_VALUE_POISON: tprint(t, "poison"); break;
-		case LLVM_VALUE_REG: tprintf(t, "%%%u", val.reg.idx); break;
+		case LLVM_VALUE_REG: tprintf(t, "%%r%u", val.reg.idx); break;
 		case LLVM_VALUE_DOUBLE_CONST: tprintf(t, "%#016lx", (union{double d;uint64_t i;}){.d=val.double_const}.i); break;
 		case LLVM_VALUE_GLOBAL: tprintf(t, "@%s", val.global_name); break;
 		case LLVM_VALUE_INT_CONST:
@@ -305,7 +305,7 @@ static void llvm_block_body_to_target(const llvm_basic_block_t* block, print_tar
 	for (unsigned int i = 0; i < block->instructions.len; i++){
 		if (block->instructions.data[i].type != LLVM_INST_STORE
 		 && block->instructions.data[i].type != LLVM_INST_VOID_CALL)
-			tprintf(t, "    %%%u = ", block->regbase + i);
+			tprintf(t, "    %%r%u = ", block->regbase + i);
 		else
 			tprint(t, "    ");
 		llvm_inst_body_to_target(block->instructions.data[i], t);
@@ -323,7 +323,7 @@ static void llvm_func_to_target(const llvm_function_t* f, print_target_t* t){
 	tprintf(t, " @%s(", f->name);
 	for (unsigned int i=0; i < f->arg_count; i++){
 		llvm_type_to_target(f->args[i], t);
-		tprintf(t, " %%%u", i);
+		tprintf(t, " %%r%u", i);
 		if (i+1 < f->arg_count)
 			tprint(t, ", ");
 	}
