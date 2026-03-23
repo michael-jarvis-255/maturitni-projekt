@@ -78,7 +78,7 @@
 
 
 % title page info
-\def\title{Název práce}
+\def\title{Kompiler}
 \def\author{Michael Jarvis}
 \def\year{2025/2026}
 \def\class{8.V}
@@ -242,7 +242,12 @@ Tímto způsobem můžeme vyrobit parser pro jednoduchá pravidla, která neobsa
 Jednoduchý stavový stroj ale nezvládne parsovat všechna rekurzivní pravidla, například pravidlo \code{x: \%empty | 'a' x 'b'} (tedy libovolný počet písmen \uv{a} a~za ním stejný počet písmen \uv{b})
 potřebuje nějakou další paměť, protože si musí pamatovat kolik písmen \uv{a} už zpracovalo.
 
-Generátor parserů GNU Bison tento problém řeší tak, že k~stavovému automatu přidá seznam všech předchozích stavů a~v~abecedě automatu má všechny symboly, nejen tokeny.
+Stavový automat zvládne pouze jednoduchou pravou nebo levou rekurzi, tedy pravidla tvary \code{x: y | a x} nebo \code{x: y | x a}.
+Prakticky se jedná o~jeden symbol \uv{y} a~libovolné množství symbolu \uv{a}.
+To lze implementovat ve stavovém automatu jednoduchou smyčkou, tedy finální stav symbolu \uv{a} sloučíme s~jeho počátečním
+(podobným způsobem, kterým se slučují pravidla; je však potřeba správně ošetřit případy s~několika rekurzemi).
+
+Generátor parserů GNU Bison problém rekurzivních pravidel řeší tak, že k~stavovému automatu přidá seznam všech předchozích stavů a~v~abecedě automatu má všechny symboly, nejen tokeny.
 Pokaždé, když dostane na vstupu nějaký token nebo symbol, vloží na seznam předchozích stavů daný symbol a~stav, ve kterém se nachází.
 Kdykoliv použije nějaké pravidlo (to nemusí být hned, kdy se na vstupu objeví seznam symbolů odpovídající nějakému pravidlu), odebere ze seznamu všechny symboly, které pravidlo použilo,
 vrátí se na stav, který je nyní na konci seznamu a~místo dalšího tokenu ze vstupu použije symbol, který dané pravidlo vytvořilo.
