@@ -3,6 +3,9 @@
 #include "ast2llvm.h"
 #include "message.h"
 #include <limits.h>
+#include "llvm-c/Core.h"
+#include "llvm-c/DataTypes.h"
+
 
 #define ptr_bits 64
 
@@ -313,6 +316,19 @@ static llvm_typed_value_t ast2llvm_read_lvalue(const var2reg_map_t* var2reg, con
 }
 
 static void ast2llvm_alloca_scope(const scope_t* scope, var2reg_map_t* var2reg, llvm_function_t* f){
+	for (scope_iterator_t iter = scope_iter(scope); iter.current; iter = scope_iter_next(iter)){
+		ast_id_t* id = iter.current->value;
+		if (id->type != AST_ID_VAR) continue;
+		ast_variable_t* var = &id->var;
+		llvm_reg_t reg = llvm_add_inst(f, (llvm_inst_t){
+			.type = LLVM_INST_ALLOCA,
+			.alloca.type = ast_type_to_llvm_type(var->type_ref)
+		});
+		var2reg_map_insert(var2reg, var, reg);
+	}
+}
+
+static void ast2llvm_alloca_scope2(const scope_t* scope, var2reg_map_t* var2reg, ){
 	for (scope_iterator_t iter = scope_iter(scope); iter.current; iter = scope_iter_next(iter)){
 		ast_id_t* id = iter.current->value;
 		if (id->type != AST_ID_VAR) continue;
@@ -1507,6 +1523,43 @@ static llvm_function_t ast2llvm_emit_func(ast_func_t func, ast_t ast, llvm_progr
 	return f;
 }
 
+static void ast2llvm_emit_func2(ast_func_t func, ast_t ast, LLVMContextRef ctx, LLVMModuleRef module, LLVMBuilderRef builder){
+	if (!func.body) return;
+
+	LLVMValueRef f = LLVMGetNamedFunction(module, func.name);
+	LLVMBasicBlockRef block = LLVMAppendBasicBlockInContext(ctx, f, "block0");
+	LLVMPositionBuilder(builder, block, 0);
+
+	var2reg_map_t var2reg = create_var2reg_map();
+
+	ast2llvm_alloca_scope2(func.local_scope, &var2reg, &f, builder);
+	for (unsigned int i=0; i < func.args.len; i++){
+		ast_variable_t* var = func.args.data[i];
+		llvm_add_inst(&f, (llvm_inst_t){
+			.type = LLVM_INST_STORE,
+			.store.type = ast_type_to_llvm_type(var->type_ref),
+			.store.value = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=(llvm_reg_t){ .idx=i } },
+			.store.ptr = (llvm_value_t){ .type=LLVM_VALUE_REG, .reg=var2reg_map_get(&var2reg, var, LLVM_INVALID_REG) }
+		});
+	}
+
+	ast2llvm_alloca_stmt(func.body, &var2reg, &f);
+	ast2llvm_emit_stmt(func.body, &var2reg, &f, func, ast, create_empty_loop_labels(), prog);
+	free_var2reg_map(&var2reg);
+
+	if (f.has_return){
+		f.blocks.data[f.blocks.len-1].term_inst = (llvm_term_inst_t){
+			.type = LLVM_TERM_INST_RET,
+			.ret.type = ast_type_to_llvm_type(func.return_type_ref),
+			.ret.value = (llvm_value_t){ .type=LLVM_VALUE_UNDEF }
+		};
+	}else{
+		f.blocks.data[f.blocks.len-1].term_inst = (llvm_term_inst_t){ .type = LLVM_TERM_INST_RET_VOID };
+	}
+	return f;
+}
+
+
 static llvm_global_def_t ast2llvm_emit_global(ast_global_t global){
 	return (llvm_global_def_t){
 		.name = strdup(global.var.name),
@@ -1514,7 +1567,63 @@ static llvm_global_def_t ast2llvm_emit_global(ast_global_t global){
 	};
 }
 
+static LLVMTypeRef ast_type_to_llvm_type2(const ast_datatype_t* t, LLVMContextRef ctx){
+	switch (t->kind){
+		case AST_DATATYPE_FLOAT:
+			switch (t->floating.bitwidth){
+				case 16: return LLVMHalfTypeInContext(ctx);
+				case 32: return LLVMFloatTypeInContext(ctx);
+				case 64: return LLVMDoubleTypeInContext(ctx);
+				case 128: return LLVMFP128TypeInContext(ctx);
+				default: INTERNAL_ERROR();
+			}
+		case AST_DATATYPE_INTEGRAL:
+			return LLVMIntTypeInContext(ctx, t->integral.bitwidth);
+		case AST_DATATYPE_STRUCTURED:
+		{
+			ast_variable_list_t members = t->structure.members;
+			LLVMTypeRef* member_types = malloc(sizeof(LLVMTypeRef)*members.len);
+			for (unsigned int i = 0; i < members.len; i++)
+				member_types[i] = ast_type_to_llvm_type2(members.data[i].type_ref, ctx);
+			return LLVMStructTypeInContext(ctx, member_types, members.len, false);
+		}
+		case AST_DATATYPE_POINTER:
+			return LLVMPointerTypeInContext(ctx, 0); // TODO: use non-opaque pointers?
+		case AST_DATATYPE_VOID:
+			return LLVMVoidTypeInContext(ctx);
+	}
+	INTERNAL_ERROR();
+}
+
+static LLVMTypeRef ast_func_get_llvm_type(const ast_func_t* f, LLVMContextRef ctx){
+	LLVMTypeRef* param_types = malloc(sizeof(LLVMTypeRef)*f->args.len);
+
+	for (unsigned int i = 0; i < f->args.len; i++)
+		param_types[i] = ast_type_to_llvm_type2(f->args.data[i]->type_ref, ctx);
+
+	return LLVMFunctionType(ast_type_to_llvm_type2(f->return_type_ref, ctx), param_types, f->args.len, false);
+}
+
 llvm_program_t ast2llvm(ast_t ast){
+	LLVMContextRef llvm_ctx = LLVMContextCreate();
+	LLVMModuleRef module = LLVMModuleCreateWithNameInContext(ast.source_path, llvm_ctx);
+	LLVMBuilderRef builder = LLVMCreateBuilderInContext(llvm_ctx);
+
+	for (scope_iterator_t iter = scope_iter(ast.global_scope); iter.current; iter = scope_iter_next(iter))
+		switch (iter.current->value->type){
+			case AST_ID_FUNC: {
+				const ast_func_t* f = &iter.current->value->func;
+				LLVMTypeRef func_type = ast_func_get_llvm_type(f, llvm_ctx);
+				LLVMAddFunction(module, f->name, func_type);
+			}
+			case AST_ID_GLOBAL: {
+				// todo
+			}
+			case AST_ID_VAR: break;
+			case AST_ID_TYPE: break;
+		}
+
+
 	llvm_program_t llvm;
 	llvm.source_path = strdup(ast.source_path);
 	llvm.function_count = 0;
@@ -1538,6 +1647,7 @@ llvm_program_t ast2llvm(ast_t ast){
 		switch (iter.current->value->type){
 			case AST_ID_FUNC:
 				llvm.functions[functions_emitted] = ast2llvm_emit_func(iter.current->value->func, ast, &llvm);
+				ast2llvm_emit_func2(iter.current->value->func, ast);
 				functions_emitted++;
 				break;
 			case AST_ID_GLOBAL:
